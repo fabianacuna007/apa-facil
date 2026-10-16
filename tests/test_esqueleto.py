@@ -1,6 +1,6 @@
 """
 Comprueba que todas las piezas del esqueleto (paso 0.3) existen y se
-pueden cargar, y que las reglas sin programar avisan en vez de no hacer nada.
+pueden cargar. Las reglas de la fase 1 ya están programadas y tienen sus pruebas.
 """
 
 import importlib
@@ -20,7 +20,7 @@ MODULOS = [
     "apa_facil.revision",
 ]
 
-REGLAS = ["paginacion"]
+REGLAS = ["margenes", "fuente", "interlineado", "alineacion", "sangria", "paginacion"]
 
 
 @pytest.mark.parametrize("nombre", MODULOS)
@@ -29,10 +29,8 @@ def test_modulo_se_carga(nombre):
 
 
 @pytest.mark.parametrize("nombre", REGLAS)
-def test_regla_sin_programar_da_error(nombre):
-    regla = importlib.import_module(f"apa_facil.reglas.{nombre}")
-    with pytest.raises(NotImplementedError, match="se programa en el paso 1"):
-        regla.aplicar(doc=None, opciones={}, informe=None)
+def test_regla_se_carga(nombre):
+    assert callable(importlib.import_module(f"apa_facil.reglas.{nombre}").aplicar)
 
 
 @pytest.mark.parametrize("ruta", ["herramientas/inspeccionar.py", "herramientas/verificar.py",

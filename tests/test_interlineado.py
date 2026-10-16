@@ -204,7 +204,7 @@ def test_documentos_de_prueba(original, tmp_path):
     assert {espaciado(copia, p) for p in cuerpo(copia)} == {DOBLE}
     lineas = {espaciado(copia, p)[0] for p in celdas(copia)}
     assert lineas == TABLAS.get(original.name[:2], set())
-    assert _otras_partes(copia) == otras_antes, "notas, encabezados y pies no cambian"
+    assert _otras_partes(copia) == otras_antes, "las notas no cambian (encabezados y pies, del paso 1.6)"
     assert any(c.startswith("Interlineado:") for c in informe.cambios)
 
 
@@ -212,7 +212,7 @@ def _otras_partes(doc):
     estilos, resultado = Estilos(doc), []
 
     def ver(nombre, raiz):
-        if not nombre.endswith("document.xml"):
+        if nombre.endswith(("footnotes.xml", "endnotes.xml")):   # encabezados y pies los rehace el paso 1.6
             resultado.extend((nombre, _efectivo(estilos, p)) for p in raiz.iter(w("p")))
     editar_partes_de_texto(doc, ver)
     return sorted(resultado)

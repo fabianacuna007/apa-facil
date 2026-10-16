@@ -206,9 +206,9 @@ def test_documentos_de_prueba(original, tmp_path):
     assert not [k for k in despues if k[1] in alineacion.JUSTIFICADOS]
     assert despues[("cuerpo", "right")] == DERECHA_ESPERADA.get(original.name[:2], 0)
     for clave, n in antes.items():
-        if clave[1] == "center":
+        if clave[1] == "center" and clave[0] in ("cuerpo", "tabla"):
             assert despues[clave] == n, f"lo centrado no cambia: {clave}"
-        if not clave[0] in ("cuerpo", "tabla"):
-            assert despues[clave] == n, f"encabezados, pies y notas no cambian: {clave}"
+        if clave[0].endswith(("footnotes.xml", "endnotes.xml")):   # encabezados y pies: paso 1.6
+            assert despues[clave] == n, f"las notas no cambian: {clave}"
     avisos_portada = [a for a in informe.avisos if "portada" in a]
     assert len(avisos_portada) == (1 if original.name.startswith("05") else 0)
