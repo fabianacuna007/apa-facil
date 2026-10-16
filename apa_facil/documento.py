@@ -13,6 +13,7 @@ from pathlib import Path
 
 import docx
 from docx.opc.exceptions import PackageNotFoundError
+from docx.oxml import OxmlElement, parse_xml
 from lxml import etree
 
 CARPETA_SALIDA = Path(__file__).resolve().parent.parent / "salida"
@@ -443,3 +444,78 @@ def dibujos_de(bloques):
             if tipo and extension is not None:
                 dibujos.append((tipo, _entero(extension.get("cx")) // EMU_POR_TWIP))
     return dibujos
+
+
+# --- Fuentes ------------------------------------------------------------------
+#
+# La fuente de un fragmento se indica en w:rFonts con cuatro atributos (letras
+# latinas, otras latinas, asiáticas y alfabetos complejos). Si además lleva
+# atributos de tema (asciiTheme…), Word usa la fuente del tema e ignora el
+# nombre escrito: por eso hay que quitarlos al poner una fuente.
+
+M = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+_ATRIBUTOS_FUENTE = [w(a) for a in ("ascii", "hAnsi", "eastAsia", "cs")]
+_ATRIBUTOS_TEMA = [w(a) for a in ("asciiTheme", "hAnsiTheme", "eastAsiaTheme", "cstheme")]
+_PARTES_DE_TEXTO = ("/word/document.xml", "/word/header", "/word/footer",
+                    "/word/footnotes.xml", "/word/endnotes.xml")
+
+
+def poner_fuente(rpr, nombre):
+    """Pone la fuente `nombre` en unas propiedades de texto (w:rPr)."""
+    fuentes = rpr.get_or_add_rFonts()
+    for atributo in _ATRIBUTOS_TEMA:
+        fuentes.attrib.pop(atributo, None)
+    for atributo in _ATRIBUTOS_FUENTE:
+        fuentes.set(atributo, nombre)
+
+
+def poner_tamano(rpr, puntos):
+    """Pone el tamaño en puntos (Word lo guarda en medios puntos, en sz y szCs)."""
+    medios = str(round(puntos * 2))
+    sz = rpr.get_or_add_sz()
+    sz.set(w("val"), medios)
+    szcs = rpr.find(w("szCs"))
+    if szcs is None:
+        szcs = OxmlElement("w:szCs")
+        sz.addnext(szcs)
+    szcs.set(w("val"), medios)
+
+
+def propiedades_por_defecto(documento):
+    """Las propiedades de texto por defecto del documento (w:docDefaults), creándolas si faltan."""
+    raiz = documento.styles.element
+    defectos = raiz.find(w("docDefaults"))
+    if defectos is None:
+        defectos = OxmlElement("w:docDefaults")
+        raiz.insert(0, defectos)
+    rpr_defecto = defectos.find(w("rPrDefault"))
+    if rpr_defecto is None:
+        rpr_defecto = OxmlElement("w:rPrDefault")
+        defectos.insert(0, rpr_defecto)
+    rpr = rpr_defecto.find(w("rPr"))
+    if rpr is None:
+        rpr = OxmlElement("w:rPr")
+        rpr_defecto.append(rpr)
+    return rpr
+
+
+def en_ecuacion(el):
+    return next(el.iterancestors(f"{{{M}}}oMath", f"{{{M}}}oMathPara"), None) is not None
+
+
+def editar_partes_de_texto(documento, funcion):
+    """
+    Llama a funcion(nombre_de_parte, raiz_xml) con cada parte que tiene texto:
+    cuerpo, encabezados, pies y notas. Las notas no las carga python-docx como
+    XML, así que se leen, se modifican y se vuelven a guardar en la parte.
+    """
+    for parte in documento.part.package.iter_parts():
+        nombre = str(parte.partname)
+        if not nombre.startswith(_PARTES_DE_TEXTO):
+            continue
+        if hasattr(parte, "element"):
+            funcion(nombre, parte.element)
+        else:
+            raiz = parse_xml(parte.blob)
+            funcion(nombre, raiz)
+            parte._blob = etree.tostring(raiz, xml_declaration=True, encoding="UTF-8", standalone=True)

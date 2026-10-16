@@ -58,7 +58,7 @@ def configurar_terminal():
 
 def mostrar_informe(informe):
     """Resumen provisional del informe. El definitivo llega en el paso 1.7."""
-    print("   Formato APA todavía incompleto: de momento solo se aplican los márgenes.")
+    print("   Formato APA todavía incompleto: de momento solo se aplican los márgenes y la fuente.")
     for titulo, mensajes in (("Cambios", informe.cambios), ("Revisa tú", informe.avisos),
                              ("No se ha podido hacer", informe.errores)):
         if mensajes:
