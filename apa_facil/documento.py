@@ -519,3 +519,39 @@ def editar_partes_de_texto(documento, funcion):
             raiz = parse_xml(parte.blob)
             funcion(nombre, raiz)
             parte._blob = etree.tostring(raiz, xml_declaration=True, encoding="UTF-8", standalone=True)
+
+
+# --- Espaciado de párrafo -------------------------------------------------------
+#
+# w:spacing guarda el interlineado (line, en 240 avos de línea si lineRule es
+# "auto": 240 = sencillo, 360 = 1,5, 480 = doble; en twips si es "exact" o
+# "atLeast") y el espacio antes y después del párrafo (before/after, en twips).
+# Hay otros atributos que mandan sobre before/after: las medidas en líneas
+# (beforeLines…) y el espaciado automático de los textos pegados de la web.
+
+_ESPACIADO_QUE_ANULA = [w(a) for a in ("beforeLines", "afterLines", "beforeAutospacing", "afterAutospacing")]
+
+
+def poner_espaciado(ppr, linea, regla="auto", antes=0, despues=0):
+    """Pone interlineado y espacio antes y después en unas propiedades de párrafo (w:pPr)."""
+    espaciado = ppr.get_or_add_spacing()
+    for atributo in _ESPACIADO_QUE_ANULA:
+        espaciado.attrib.pop(atributo, None)
+    espaciado.set(w("line"), str(linea))
+    espaciado.set(w("lineRule"), regla)
+    espaciado.set(w("before"), str(antes))
+    espaciado.set(w("after"), str(despues))
+
+
+def parrafo_por_defecto(documento):
+    """Las propiedades de párrafo por defecto del documento, creándolas si faltan."""
+    defectos = propiedades_por_defecto(documento).getparent().getparent()   # w:docDefaults
+    ppr_defecto = defectos.find(w("pPrDefault"))
+    if ppr_defecto is None:
+        ppr_defecto = OxmlElement("w:pPrDefault")
+        defectos.append(ppr_defecto)
+    ppr = ppr_defecto.find(w("pPr"))
+    if ppr is None:
+        ppr = OxmlElement("w:pPr")
+        ppr_defecto.append(ppr)
+    return ppr

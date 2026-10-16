@@ -8,9 +8,9 @@ Las reglas se van añadiendo a REGLAS a lo largo de la fase 1.
 from apa_facil import documento
 from apa_facil.documento import ErrorDocumento
 from apa_facil.informe import Informe
-from apa_facil.reglas import fuente, margenes
+from apa_facil.reglas import fuente, interlineado, margenes
 
-REGLAS = [margenes, fuente]   # en este orden
+REGLAS = [margenes, fuente, interlineado]   # en este orden
 
 
 def procesar(entrada, carpeta_salida=None, opciones=None):
