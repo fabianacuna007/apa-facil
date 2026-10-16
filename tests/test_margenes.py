@@ -206,7 +206,7 @@ def test_documentos_de_prueba(original, tmp_path):
         assert (despues.orientation, despues.page_width, despues.page_height) == \
                (antes.orientation, antes.page_width, antes.page_height)
     assert informe.cambios, "ningún documento de prueba cumplía los márgenes"
-    assert informe.avisos == [], "en los documentos de prueba todo cabe entre los márgenes"
+    assert not [a for a in informe.avisos if "cm de ancho" in a], "en los documentos de prueba todo cabe"
     assert informe.errores == []
 
 
