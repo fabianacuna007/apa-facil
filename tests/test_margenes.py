@@ -220,5 +220,5 @@ def test_la_seccion_horizontal_del_04_sigue_horizontal(tmp_path):
 def test_la_linea_de_comandos_muestra_los_cambios(tmp_path, capsys):
     assert main([str(PRUEBAS[0])], carpeta_salida=tmp_path) == 0
     salida = capsys.readouterr().out
-    assert "Cambios:" in salida
+    assert "Cambios (" in salida
     assert "Márgenes cambiados a 2,54 cm" in salida
