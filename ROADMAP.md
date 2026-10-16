@@ -94,7 +94,7 @@ apa-facil/
 - [x] **0.3 Esqueleto.** Crear la estructura de carpetas de arriba con archivos vacíos o mínimos.
 - [x] **0.4 Ida y vuelta.** Línea de comandos que abre un .docx y lo guarda en `salida/` **sin cambios**.
 - [x] **0.5 Prueba de integridad.** Una función que extrae todo el texto de un documento (párrafos, tablas y notas al pie), en orden. Una prueba compara el original con la copia del paso 0.4: el texto debe ser idéntico, y el número de tablas, imágenes, notas al pie y secciones también.
-- [ ] **0.6 Inspector.** `herramientas/inspeccionar.py`. Muestra, por documento:
+- [x] **0.6 Inspector.** `herramientas/inspeccionar.py`. Muestra, por documento:
   - márgenes por sección;
   - fuentes usadas y cuántas veces;
   - interlineados;
@@ -414,3 +414,4 @@ _(Una línea por paso terminado: fecha · paso · qué se hizo · commit.)_
 - 2026-10-16 · 0.3 · Estructura de carpetas creada: `apa_facil/` (con `reglas/` y `revision/`), `herramientas/` y `tests/`, con archivos mínimos que explican su función. Las reglas sin programar dan error si se usan. `pytest.ini` y primera prueba (18 comprobaciones en verde) · 6407ffc
 - 2026-10-16 · 0.4 · `python -m apa_facil archivo.docx` abre el documento y guarda una copia sin cambios en `salida/nombre_APA.docx` (`documento.py`: abrir, ruta_salida, guardar; `pipeline.procesar`). Errores explicados en español (archivo inexistente, .doc, no Word, dañado, temporal de Word, copia abierta en Word). Los 5 documentos hacen la ida y vuelta y Word abre las copias con las mismas páginas que el original. 32 pruebas en verde · ff9b588
 - 2026-10-16 · 0.5 · `documento.radiografia` (texto en orden de cuerpo, tablas y notas, y recuento de tablas, imágenes, notas y secciones) y `documento.comparar` (diferencias en español con su ubicación). `python -m apa_facil` verifica cada copia y no la entrega si el contenido cambia. 51 pruebas en verde · 3303625
+- 2026-10-16 · 0.6 · `herramientas/inspeccionar.py` muestra márgenes por sección, fuentes (% de letras), interlineado, espaciado, sangrías, alineación, estilos, y encabezados y pies con los campos en palabras. Formato efectivo (valores por defecto → estilos → formato directo, fuentes del tema incluidas) en `documento.Estilos`, para reutilizarlo en la fase 1. 67 pruebas en verde. **Fase 0 terminada** · PENDIENTE

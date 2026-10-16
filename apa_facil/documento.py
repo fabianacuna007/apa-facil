@@ -213,3 +213,148 @@ def comparar(antes, despues, maximo=10):
         resto = len(diferencias) - maximo
         diferencias = diferencias[:maximo] + [f"… y {resto} diferencia(s) más."]
     return diferencias
+
+
+# --- Formato efectivo ---------------------------------------------------------
+#
+# En Word, el aspecto de un texto sale de tres capas, y manda la de más arriba:
+#   1. los valores por defecto del documento;
+#   2. los estilos (cada estilo puede heredar de otro: "Título 1" de "Normal"…);
+#   3. el formato puesto a mano en el párrafo o en el fragmento de texto.
+# La clase Estilos recorre esas capas para saber qué se ve de verdad.
+
+FUENTE_POR_DEFECTO = "Times New Roman"   # lo que usa Word si nada indica otra cosa
+TAMANO_POR_DEFECTO = 20                  # en medios puntos: 10 pt
+
+A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+
+
+def _fuentes_del_tema(documento):
+    """Las fuentes del tema de Word (p. ej. Calibri para el texto y Calibri Light para títulos)."""
+    for parte in documento.part.package.iter_parts():
+        if str(parte.partname).startswith("/word/theme/"):
+            raiz = _raiz_de_parte(parte)
+            fuentes = {}
+            for clase in ("major", "minor"):
+                latina = raiz.find(f".//{{{A}}}{clase}Font/{{{A}}}latin")
+                if latina is not None and latina.get("typeface"):
+                    fuentes[clase] = latina.get("typeface")
+            return fuentes
+    return {}
+
+
+class Estilos:
+    """Calcula el formato efectivo de párrafos y fragmentos de texto."""
+
+    def __init__(self, documento):
+        self.raiz = documento.styles.element
+        self.por_id = {s.get(w("styleId")): s for s in self.raiz.iter(w("style"))}
+        self.parrafo_defecto = next(
+            (sid for sid, s in self.por_id.items()
+             if s.get(w("type")) == "paragraph" and s.get(w("default")) in ("1", "true")), None)
+        defectos = self.raiz.find(w("docDefaults"))
+        self.ppr_defecto = defectos.find(f"{w('pPrDefault')}/{w('pPr')}") if defectos is not None else None
+        self.rpr_defecto = defectos.find(f"{w('rPrDefault')}/{w('rPr')}") if defectos is not None else None
+        self.tema = _fuentes_del_tema(documento)
+
+    def cadena(self, sid):
+        """El estilo y todos aquellos de los que hereda, del más cercano al más lejano."""
+        vistos = set()
+        while sid and sid in self.por_id and sid not in vistos:
+            vistos.add(sid)
+            estilo = self.por_id[sid]
+            yield estilo
+            base = estilo.find(w("basedOn"))
+            sid = base.get(w("val")) if base is not None else None
+
+    def nombre(self, sid):
+        estilo = self.por_id.get(sid)
+        nombre = estilo.find(w("name")) if estilo is not None else None
+        return nombre.get(w("val")) if nombre is not None else (sid or "")
+
+    def estilo_de(self, p):
+        ps = p.find(f"{w('pPr')}/{w('pStyle')}")
+        return ps.get(w("val")) if ps is not None else self.parrafo_defecto
+
+    def _capas_parrafo(self, p):
+        yield p.find(w("pPr"))
+        for estilo in self.cadena(self.estilo_de(p)):
+            yield estilo.find(w("pPr"))
+        yield self.ppr_defecto
+
+    def _capas_texto(self, r, p):
+        rpr = r.find(w("rPr"))
+        yield rpr
+        estilo_r = rpr.find(w("rStyle")) if rpr is not None else None
+        if estilo_r is not None:
+            for estilo in self.cadena(estilo_r.get(w("val"))):
+                yield estilo.find(w("rPr"))
+        for estilo in self.cadena(self.estilo_de(p)):
+            yield estilo.find(w("rPr"))
+        yield self.rpr_defecto
+
+    def parrafo(self, p, etiqueta, atributo):
+        """Valor efectivo de un atributo de párrafo, p. ej. ("spacing", "line") o ("jc", "val")."""
+        for capa in self._capas_parrafo(p):
+            el = capa.find(w(etiqueta)) if capa is not None else None
+            if el is not None and el.get(w(atributo)) is not None:
+                return el.get(w(atributo))
+        return None
+
+    def fuente(self, r, p):
+        """Nombre de la fuente con que se ve un fragmento de texto."""
+        for capa in self._capas_texto(r, p):
+            fuentes = capa.find(w("rFonts")) if capa is not None else None
+            if fuentes is None:
+                continue
+            tema = fuentes.get(w("asciiTheme")) or fuentes.get(w("hAnsiTheme"))
+            if tema:  # el tema manda sobre el nombre escrito
+                clase = "major" if tema.startswith("major") else "minor"
+                return self.tema.get(clase, "(fuente del tema)")
+            nombre = fuentes.get(w("ascii")) or fuentes.get(w("hAnsi"))
+            if nombre:
+                return nombre
+        return FUENTE_POR_DEFECTO
+
+    def tamano(self, r, p):
+        """Tamaño en puntos con que se ve un fragmento de texto."""
+        for capa in self._capas_texto(r, p):
+            sz = capa.find(w("sz")) if capa is not None else None
+            if sz is not None and sz.get(w("val")):
+                return int(sz.get(w("val"))) / 2
+        return TAMANO_POR_DEFECTO / 2
+
+
+CAMPOS = {"PAGE": "[nº de página]", "NUMPAGES": "[total de páginas]",
+          "SECTIONPAGES": "[páginas de la sección]", "DATE": "[fecha]", "TOC": "[índice]"}
+
+
+def texto_legible(p):
+    """
+    El texto de un párrafo para mostrarlo a una persona: los campos de Word
+    se nombran con palabras ("[nº de página]") en vez de mostrar su código.
+    """
+    partes, en_resultado, esperando_codigo = [], False, False
+    for el in p.iter(w("t"), w("instrText"), w("fldChar"), w("fldSimple"), w("tab"), w("br")):
+        nombre = etree.QName(el).localname
+        if nombre == "fldChar":
+            tipo = el.get(w("fldCharType"))
+            esperando_codigo = tipo == "begin"
+            en_resultado = tipo == "separate"   # entre "separate" y "end" va el valor calculado
+        elif nombre == "instrText":
+            codigo = (el.text or "").split()
+            if esperando_codigo and codigo:     # el código puede venir partido en trozos
+                partes.append(CAMPOS.get(codigo[0].upper(), f"[campo {codigo[0]}]"))
+                esperando_codigo = False
+        elif nombre == "fldSimple":
+            codigo = (el.get(w("instr")) or "").split()
+            partes.append(CAMPOS.get(codigo[0].upper(), "[campo]") if codigo else "[campo]")
+        elif next(el.iterancestors(w("fldSimple")), None) is not None or en_resultado:
+            continue
+        elif nombre == "t":
+            partes.append(el.text or "")
+        elif nombre == "tab" and etree.QName(el.getparent()).localname == "r":
+            partes.append("\t")
+        elif nombre == "br":
+            partes.append("\n")
+    return "".join(partes)

@@ -45,13 +45,19 @@ def crear_ordenes():
     return ordenes
 
 
-def main(argv=None, carpeta_salida=None):
-    # En una terminal de Windows, Python ya escribe bien acentos y símbolos (✔, ✘).
-    # Si la salida va a otro programa o a un archivo, se fuerza UTF-8 para que
-    # no lleguen desfigurados.
+def configurar_terminal():
+    """
+    En una terminal de Windows, Python ya escribe bien acentos y símbolos (✔, ✘).
+    Si la salida va a otro programa o a un archivo, se fuerza UTF-8 para que
+    no lleguen desfigurados.
+    """
     for flujo in (sys.stdout, sys.stderr):
         if hasattr(flujo, "reconfigure") and not flujo.isatty():
             flujo.reconfigure(encoding="utf-8", errors="replace")
+
+
+def main(argv=None, carpeta_salida=None):
+    configurar_terminal()
     args = crear_ordenes().parse_args(argv)
 
     bien = 0

@@ -33,6 +33,14 @@ python apa.py pruebas\01_ensayo_basico.docx --fuente Arial
 
 El resultado se guarda en `salida/` con el nombre `nombre_APA.docx`.
 
+## Ver el formato de un documento
+
+El inspector muestra el formato que tiene ahora un Word (márgenes, fuentes, interlineado, sangrías, alineación, estilos, encabezados y pies), sin cambiar nada:
+
+```
+python herramientas\inspeccionar.py pruebas\04_formato_caotico.docx
+```
+
 ## Pruebas automáticas
 
 ```
