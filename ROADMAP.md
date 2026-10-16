@@ -69,6 +69,7 @@ apa-facil/
 │   ├── inspeccionar.py        # muestra el formato actual de un Word
 │   └── verificar.py           # comprueba si un Word cumple APA
 ├── tests/                     # pruebas automáticas (pytest)
+├── docs/                      # documentación de apoyo (comparativa de normas APA)
 ├── pruebas/                   # documentos de prueba: NO MODIFICAR
 └── salida/                    # documentos generados
 ```
@@ -114,11 +115,20 @@ apa-facil/
 
 - [x] **1.1 Márgenes.** 2,54 cm en los cuatro lados, en **todas** las secciones. Las páginas en horizontal conservan su orientación.
 - [ ] **1.2 Fuente.**
+  - Fuentes recomendadas por APA, cada una con su tamaño: Aptos 12, Calibri 11, Arial 11, Lucida Sans Unicode 10, Times New Roman 12, Georgia 11 y Computer Modern 10.
+  - Una sola fuente para todo el documento, títulos y portada incluidos. Se elige así (decisión del propietario):
+    - si la fuente principal del documento (la que tiene más letras) es una de las recomendadas, **se mantiene** y solo se ajusta el tamaño;
+    - si no, se cambia por la recomendada **más parecida**, con su tamaño;
+    - la opción `--fuente` (paso 1.7) tiene prioridad sobre las dos reglas anteriores.
   - Aplicarla en los estilos (Normal y los demás) **y** en el formato directo de cada fragmento de texto, incluidos los atributos de fuente para otros alfabetos (`ascii`, `hAnsi`, `eastAsia`, `cs`).
-  - Fuente elegible por opción: Times New Roman 12 (por defecto), Calibri 11, Arial 11, Georgia 11, Lucida Sans Unicode 10 o Computer Modern 10.
-  - Tablas: misma fuente (el tamaño puede ser algo menor).
+  - Tablas: misma fuente y **mismo tamaño** que el resto.
+  - Excepciones que no se tocan:
+    - código de programación en fuente monoespaciada (APA pide, por ejemplo, Courier New 10 o Lucida Console 10);
+    - fuentes de símbolos y ecuaciones;
+    - el tamaño de las notas al pie (formato por defecto de Word).
+  - El informe no dice que la fuente original "no está permitida" (APA presenta su lista como recomendaciones), sino que se ha cambiado por la recomendada más parecida.
 - [ ] **1.3 Interlineado.** Doble, con 0 pt de espacio antes y después del párrafo. Excepciones:
-  - dentro de tablas: sencillo;
+  - dentro de tablas: se respeta el interlineado que tengan si es sencillo, 1,5 o doble (APA admite los tres); si es otro, se pone sencillo. El número, el título y la nota de la tabla van a doble espacio;
   - notas al pie: formato por defecto de Word.
 - [ ] **1.4 Alineación.** Izquierda, sin justificar. Las tablas y las imágenes centradas se quedan como están.
 - [ ] **1.5 Sangría (versión simple).** 1,27 cm en la primera línea de los párrafos de cuerpo de texto, no en títulos, listas, tablas ni párrafos centrados. En la fase 3 se refina con el detector de estructura.
@@ -161,7 +171,7 @@ apa-facil/
 - [ ] **3.3 Modo diagnóstico.** La opción `--diagnostico` imprime una tabla con párrafo, tipo, confianza y extracto. Sirve para depurar el clasificador con los documentos de prueba.
 - [ ] **3.4 Sangría definitiva.** Rehacer la regla 1.5 usando el clasificador: solo los párrafos `cuerpo` llevan sangría de primera línea.
 - [ ] **3.5 Limpieza de formato.** Todo lo que se haga aquí queda registrado en el informe.
-  - Eliminar los párrafos vacíos usados como espaciado.
+  - Eliminar los párrafos vacíos usados como espaciado. **Excepción:** la línea en blanco entre el título y el autor de la portada es obligatoria y no se borra.
   - Eliminar los tabuladores y espacios al inicio de párrafo usados como sangría.
   - Quitar colores de texto, resaltados y subrayados decorativos. Los hipervínculos se mantienen.
 - [ ] **3.6 Problemas que solo se avisan, sin corregirlos.**
@@ -178,7 +188,7 @@ apa-facil/
 
 **Por qué:** los títulos son lo más visible después de la fuente, y dependen del clasificador de la fase 3.
 
-- [ ] **4.1 Estilos de título.** Modificar los estilos de título de Word (Título 1 a Título 5) con el formato APA y asignar cada título detectado a su estilo. Usar estilos en vez de formato directo mantiene el panel de navegación y el índice de Word.
+- [ ] **4.1 Estilos de título.** Modificar los estilos de título de Word (Título 1 a Título 5) con el formato APA y asignar cada título detectado a su estilo. Usar estilos en vez de formato directo mantiene el panel de navegación y el índice de Word, y es lo que recomienda APA por accesibilidad. Avisar cuando un apartado tenga un solo subapartado, porque APA lo desaconseja.
 - [ ] **4.2 Formato por nivel:**
   - Nivel 1: centrado, negrita.
   - Nivel 2: a la izquierda, negrita.
@@ -199,8 +209,8 @@ apa-facil/
 
 - [ ] **5.1 Datos de portada.** Los datos llegan por opciones o por un archivo `datos.json`: título, autor o autores, departamento y universidad, código y nombre de la asignatura, profesor y fecha de entrega.
 - [ ] **5.2 Generar la portada APA.**
-  - El título, centrado y en negrita, se coloca 3 o 4 líneas por debajo del margen superior.
-  - Después, una línea en blanco.
+  - El título, centrado, en negrita y con mayúscula inicial en las palabras principales, se coloca 3 o 4 líneas por debajo del margen superior.
+  - Después, una línea en blanco a doble espacio (obligatoria; ver la excepción del paso 3.5).
   - Debajo, centrados y a doble espacio: autor, afiliación, asignatura, profesor y fecha.
   - La fecha va en formato español: "16 de octubre de 2026".
   - La portada termina con un salto de página.
@@ -221,25 +231,37 @@ apa-facil/
   - Debajo de la tabla, si hay nota: "*Nota.*" seguido del texto.
   - Detectar las leyendas existentes, aunque estén debajo de la tabla, y recolocarlas.
   - Opcional: estilo de tabla APA, con bordes solo horizontales y sin colores de fondo.
-- [ ] **6.2 Figuras.** El mismo esquema: "Figura N" en negrita y el título en cursiva encima de la imagen.
+  - Si una tabla ocupa más de una página, repetir la fila de encabezados en cada página.
+  - El aviso de tabla demasiado ancha del paso 1.1 debe sugerir ponerla en una página horizontal, que es lo que recomienda APA.
+  - Avisar (sin cambiar nada) si falta la línea en blanco entre la tabla y el texto, o si la tabla queda en mitad de una página en vez de arriba o abajo.
+- [ ] **6.2 Figuras.** El mismo esquema: "Figura N" en negrita y el título en cursiva encima de la imagen. Los mismos avisos de colocación que en las tablas.
 - [ ] **6.3 Citas en bloque** (40 palabras o más).
   - Sangría izquierda de 1,27 cm en todo el bloque, sin sangría de primera línea y con doble espacio.
   - Quitar la cursiva decorativa.
   - Si la cita lleva comillas, solo se avisa: quitarlas modificaría el texto.
 - [ ] **6.4 Lista de referencias.**
   - Detectar la sección aunque se llame "Bibliografía", "Webgrafía" o "Fuentes".
-  - Empieza en página nueva, con el rótulo "Referencias" centrado y en negrita.
+  - Empieza en página nueva, con el rótulo "Referencias" centrado y en negrita ("Referencia" si solo hay una). APA no admite "Bibliografía", "Obras citadas" ni "Lista de referencias".
   - Sangría francesa de 1,27 cm y doble espacio.
+  - Los enlaces (DOI y URL) se dejan como estén: APA admite tanto el azul subrayado como el texto normal.
 - [ ] **6.5 Orden alfabético.** Reordenar las referencias es una opción activada por defecto y queda registrada. Si hay varias listas (por ejemplo, una bibliografía y una webgrafía), se avisa y se propone unirlas.
 - [ ] **6.6 Notas al pie.** Misma fuente que el documento; el resto del formato no se toca.
+- [ ] **6.7 Apéndices.**
+  - Cada apéndice empieza en página nueva, al final del trabajo.
+  - Rótulo centrado y en negrita: "Apéndice" si solo hay uno; "Apéndice A", "Apéndice B"… si hay varios.
+  - En la línea siguiente, el título del apéndice, también centrado y en negrita.
+  - Sus tablas y figuras se numeran con la letra del apéndice, sin punto: "Tabla A1", "Figura B2".
+  - Detectar la sección aunque se llame "Anexo" o "Anexos". Cambiar el rótulo modifica el texto, así que se trata como en el paso 4.3: por defecto solo se avisa.
 
-**Hecho cuando:** las tablas de los documentos 02, 04 y 05, las figuras del 03, la cita en bloque del 05 y las referencias de los cinco documentos quedan en formato APA, y la prueba de integridad sigue pasando (permitiendo el cambio de rótulo y el nuevo orden).
+**Hecho cuando:** las tablas de los documentos 02, 04 y 05, las figuras del 03, la cita en bloque del 05, las referencias de los cinco documentos y los apéndices que haya quedan en formato APA, y la prueba de integridad sigue pasando (permitiendo el cambio de rótulo y el nuevo orden).
 
 ---
 
 ## Fase 7: Revisión de citas y referencias (solo análisis)
 
 **Por qué:** es la segunda función del producto. Aquí la herramienta **no modifica nada**: solo detecta y explica.
+
+**Ojo:** los ejemplos de normas-apa.org **no sirven** como respuestas correctas para las pruebas, porque mezclan la 6.ª y la 7.ª edición y tienen errores (ver `docs/comparativa_normas_apa.md`). Usar los ejemplos de la web oficial de APA.
 
 - [ ] **7.1 Detector de citas en el texto.** Formatos a reconocer:
   - `(Autor, año)` y `Autor (año)`;
@@ -359,7 +381,7 @@ apa-facil/
 
 ## Decisiones pendientes (las toma el propietario del proyecto)
 
-- [ ] Fuente por defecto: Times New Roman 12 o Calibri 11.
+- [x] Fuente por defecto. **Decidido:** se mantiene la del documento si es una de las recomendadas por APA; si no, se cambia por la recomendada más parecida (ver el paso 1.2).
 - [ ] Si la portada original se sustituye o se mantiene por defecto.
 - [ ] Si el orden alfabético de las referencias se aplica automáticamente o solo se avisa.
 - [ ] Si los títulos en mayúsculas o numerados se corrigen por defecto.
@@ -369,18 +391,21 @@ apa-facil/
 
 ## Especificación APA 7 de estudiante (referencia)
 
+Fuente: la web oficial de APA (<https://apastyle.apa.org/>), que manda sobre cualquier otra. La comparación con normas-apa.org está en `docs/comparativa_normas_apa.md`.
+
 | Elemento | Regla |
 |---|---|
 | Márgenes | 2,54 cm en los cuatro lados |
-| Fuentes admitidas | Times New Roman 12, Calibri 11, Arial 11, Georgia 11, Lucida Sans Unicode 10, Computer Modern 10 |
+| Fuentes recomendadas | Aptos 12, Calibri 11, Arial 11, Lucida Sans Unicode 10, Times New Roman 12, Georgia 11, Computer Modern 10. La misma en todo el trabajo, también en títulos y tablas. |
+| Excepciones de fuente | Código de programación en fuente monoespaciada (p. ej., Courier New 10 o Lucida Console 10); texto dentro de las imágenes de figuras (sin serifa, de 8 a 14 pt); notas al pie con el formato por defecto |
 | Interlineado | Doble en todo el documento, incluidas la portada y las referencias. Sin espacio extra antes ni después de los párrafos. |
-| Excepciones de interlineado | Interior de tablas y figuras (sencillo, 1,5 o doble) y notas al pie |
+| Excepciones de interlineado | Interior de tablas y figuras (sencillo, 1,5 o doble; su número, título y nota, a doble espacio), notas al pie (formato por defecto), una línea en blanco entre el título y el autor en la portada, y más espacio alrededor de ecuaciones |
 | Alineación | Izquierda, con el borde derecho irregular. Sin justificar y sin guiones automáticos. |
 | Sangría | 1,27 cm en la primera línea de los párrafos de cuerpo |
 | Sin sangría | Portada, rótulos de sección, títulos de nivel 1 a 3, párrafo del resumen, títulos y notas de tablas y figuras |
 | Número de página | Arriba a la derecha, en todas las páginas, incluida la portada |
 | Encabezado de página | No se usa en trabajos de estudiante |
-| Portada | Título en negrita centrado, 3 o 4 líneas por debajo del margen superior. Debajo, centrados: autor, afiliación, asignatura, profesor y fecha. |
+| Portada | Título en negrita centrado, 3 o 4 líneas por debajo del margen superior; después, una línea en blanco a doble espacio. Debajo, centrados: autor, afiliación, asignatura, profesor y fecha. |
 | Título nivel 1 | Centrado, negrita |
 | Título nivel 2 | A la izquierda, negrita |
 | Título nivel 3 | A la izquierda, negrita y cursiva |
@@ -389,7 +414,9 @@ apa-facil/
 | Tablas | "Tabla N" en negrita encima; título en cursiva en la línea siguiente; "*Nota.*" debajo |
 | Figuras | "Figura N" en negrita encima; título en cursiva en la línea siguiente; "*Nota.*" debajo |
 | Cita en bloque | 40 palabras o más. Sangría izquierda de 1,27 cm en todo el bloque, sin comillas; la cita va después del punto final. |
-| Referencias | Página nueva; rótulo "Referencias" centrado y en negrita; orden alfabético; sangría francesa de 1,27 cm; doble espacio |
+| Referencias | Página nueva; rótulo "Referencias" (o "Referencia" si solo hay una) centrado y en negrita; orden alfabético; sangría francesa de 1,27 cm; doble espacio |
+| Apéndices | Cada uno en página nueva; rótulo "Apéndice" (o "Apéndice A", "B"…) centrado y en negrita; título en la línea siguiente, centrado y en negrita; tablas y figuras numeradas "Tabla A1", "Figura B2" |
+| Títulos | Sin números ni letras delante; sin líneas en blanco antes ni después |
 | APA en español | "y" entre autores (no "&"); "s. f." para obras sin fecha; "et al."; "p." y "pp."; DOI con formato `https://doi.org/...` |
 
 ---
