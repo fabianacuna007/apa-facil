@@ -93,7 +93,7 @@ apa-facil/
 - [x] **0.2 Entorno.** Entorno virtual de Python, `requirements.txt` con `python-docx`, `lxml` y `pytest`, e instrucciones de instalación en un `README.md` corto.
 - [x] **0.3 Esqueleto.** Crear la estructura de carpetas de arriba con archivos vacíos o mínimos.
 - [x] **0.4 Ida y vuelta.** Línea de comandos que abre un .docx y lo guarda en `salida/` **sin cambios**.
-- [ ] **0.5 Prueba de integridad.** Una función que extrae todo el texto de un documento (párrafos, tablas y notas al pie), en orden. Una prueba compara el original con la copia del paso 0.4: el texto debe ser idéntico, y el número de tablas, imágenes, notas al pie y secciones también.
+- [x] **0.5 Prueba de integridad.** Una función que extrae todo el texto de un documento (párrafos, tablas y notas al pie), en orden. Una prueba compara el original con la copia del paso 0.4: el texto debe ser idéntico, y el número de tablas, imágenes, notas al pie y secciones también.
 - [ ] **0.6 Inspector.** `herramientas/inspeccionar.py`. Muestra, por documento:
   - márgenes por sección;
   - fuentes usadas y cuántas veces;
@@ -403,6 +403,7 @@ _(Claude Code anota aquí lo que descubra y afecte a otros pasos.)_
   - 1.3: pone interlineado doble dentro de las tablas (debe ser sencillo) y fuerza interlineado sencillo en las notas al pie (debe quedar el formato por defecto de Word).
   - 1.6: conserva el texto que había en el encabezado y deja los números de página que ya hubiera en él (debe quitar las dos cosas y avisar).
 - **2.4 Revisión visual.** LibreOffice no está instalado en este equipo. Word sí, y se puede convertir a PDF por COM desde PowerShell, pero solo con llamadas dinámicas (`InvokeMember`): el acceso normal falla con el error `E_NOINTERFACE`.
+- **Integridad y cambios previstos (0.5).** `documento.comparar` exige que el texto y los elementos sean idénticos, y `pipeline.procesar` no entrega la copia si no lo son. Los encabezados y pies quedan fuera de la comparación porque 1.6 los cambia a propósito. Los pasos que sí cambian contenido (3.5 párrafos vacíos y tabuladores iniciales, 4.3 mayúsculas y numeración de títulos, 6.4 rótulo "Referencias", 6.5 orden de las referencias) tendrán que indicar a la comparación qué diferencias concretas se permiten, y registrarlas en el informe.
 
 ## Registro de avances
 
@@ -412,3 +413,4 @@ _(Una línea por paso terminado: fecha · paso · qué se hizo · commit.)_
 - 2026-10-16 · 0.2 · `requirements.txt` con versiones exactas (python-docx 1.2.0, lxml 6.1.3, pytest 9.1.1), `README.md` con instalación y uso, `.pytest_cache/` en `.gitignore`. Instalación probada desde cero en un entorno nuevo · 0bffc16
 - 2026-10-16 · 0.3 · Estructura de carpetas creada: `apa_facil/` (con `reglas/` y `revision/`), `herramientas/` y `tests/`, con archivos mínimos que explican su función. Las reglas sin programar dan error si se usan. `pytest.ini` y primera prueba (18 comprobaciones en verde) · 6407ffc
 - 2026-10-16 · 0.4 · `python -m apa_facil archivo.docx` abre el documento y guarda una copia sin cambios en `salida/nombre_APA.docx` (`documento.py`: abrir, ruta_salida, guardar; `pipeline.procesar`). Errores explicados en español (archivo inexistente, .doc, no Word, dañado, temporal de Word, copia abierta en Word). Los 5 documentos hacen la ida y vuelta y Word abre las copias con las mismas páginas que el original. 32 pruebas en verde · ff9b588
+- 2026-10-16 · 0.5 · `documento.radiografia` (texto en orden de cuerpo, tablas y notas, y recuento de tablas, imágenes, notas y secciones) y `documento.comparar` (diferencias en español con su ubicación). `python -m apa_facil` verifica cada copia y no la entrega si el contenido cambia. 51 pruebas en verde · PENDIENTE
