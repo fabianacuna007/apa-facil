@@ -92,7 +92,7 @@ apa-facil/
 - [x] **0.1 Repositorio.** `git init`, `.gitignore` (salida/, entornos virtuales, cachés) y primer commit.
 - [x] **0.2 Entorno.** Entorno virtual de Python, `requirements.txt` con `python-docx`, `lxml` y `pytest`, e instrucciones de instalación en un `README.md` corto.
 - [x] **0.3 Esqueleto.** Crear la estructura de carpetas de arriba con archivos vacíos o mínimos.
-- [ ] **0.4 Ida y vuelta.** Línea de comandos que abre un .docx y lo guarda en `salida/` **sin cambios**.
+- [x] **0.4 Ida y vuelta.** Línea de comandos que abre un .docx y lo guarda en `salida/` **sin cambios**.
 - [ ] **0.5 Prueba de integridad.** Una función que extrae todo el texto de un documento (párrafos, tablas y notas al pie), en orden. Una prueba compara el original con la copia del paso 0.4: el texto debe ser idéntico, y el número de tablas, imágenes, notas al pie y secciones también.
 - [ ] **0.6 Inspector.** `herramientas/inspeccionar.py`. Muestra, por documento:
   - márgenes por sección;
@@ -411,3 +411,4 @@ _(Una línea por paso terminado: fecha · paso · qué se hizo · commit.)_
 - 2026-10-16 · 0.1 · `git init`, `.gitignore` (salida/, .venv/, \_\_pycache\_\_/, archivos temporales de Word) y primer commit · 02a823f
 - 2026-10-16 · 0.2 · `requirements.txt` con versiones exactas (python-docx 1.2.0, lxml 6.1.3, pytest 9.1.1), `README.md` con instalación y uso, `.pytest_cache/` en `.gitignore`. Instalación probada desde cero en un entorno nuevo · 0bffc16
 - 2026-10-16 · 0.3 · Estructura de carpetas creada: `apa_facil/` (con `reglas/` y `revision/`), `herramientas/` y `tests/`, con archivos mínimos que explican su función. Las reglas sin programar dan error si se usan. `pytest.ini` y primera prueba (18 comprobaciones en verde) · 6407ffc
+- 2026-10-16 · 0.4 · `python -m apa_facil archivo.docx` abre el documento y guarda una copia sin cambios en `salida/nombre_APA.docx` (`documento.py`: abrir, ruta_salida, guardar; `pipeline.procesar`). Errores explicados en español (archivo inexistente, .doc, no Word, dañado, temporal de Word, copia abierta en Word). Los 5 documentos hacen la ida y vuelta y Word abre las copias con las mismas páginas que el original. 32 pruebas en verde · PENDIENTE

@@ -18,7 +18,13 @@ El primer comando crea un entorno aislado para el proyecto, el segundo lo activa
 
 ## Uso
 
-Mientras se construye el núcleo (`apa_facil/`), se usa el prototipo:
+El núcleo (`apa_facil/`) está en construcción. De momento abre el documento y guarda una copia **sin cambios** en `salida/`:
+
+```
+python -m apa_facil pruebas\01_ensayo_basico.docx
+```
+
+Para aplicar ya el formato APA, se usa el prototipo:
 
 ```
 python apa.py pruebas\01_ensayo_basico.docx

@@ -39,9 +39,3 @@ def test_regla_sin_programar_da_error(nombre):
                                   "pruebas", "tests"])
 def test_existe(ruta):
     assert (RAIZ / ruta).exists()
-
-
-def test_linea_de_comandos_arranca(capsys):
-    from apa_facil.__main__ import main
-    assert main() == 0
-    assert "en construcción" in capsys.readouterr().out
