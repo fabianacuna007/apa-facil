@@ -1,5 +1,5 @@
 """
-Paso 0.4: abrir un documento y guardarlo sin cambios.
+Paso 0.4: abrir un documento y guardar una copia sin perder nada.
 
 Las copias se guardan en una carpeta temporal (tmp_path) para no ensuciar
 salida/, y los archivos falsos para los errores también se crean ahí:
@@ -31,7 +31,7 @@ def test_estan_los_cinco_documentos():
 @pytest.mark.parametrize("original", PRUEBAS, ids=lambda p: p.stem)
 def test_ida_y_vuelta(original, tmp_path):
     antes = huella(original)
-    salida = pipeline.procesar(original, tmp_path)
+    salida, _ = pipeline.procesar(original, tmp_path)
 
     assert salida == tmp_path / f"{original.stem}_APA.docx"
     copia, orig = docx.Document(str(salida)), docx.Document(str(original))

@@ -56,6 +56,19 @@ def configurar_terminal():
             flujo.reconfigure(encoding="utf-8", errors="replace")
 
 
+def mostrar_informe(informe):
+    """Resumen provisional del informe. El definitivo llega en el paso 1.7."""
+    print("   Formato APA todavía incompleto: de momento solo se aplican los márgenes.")
+    for titulo, mensajes in (("Cambios", informe.cambios), ("Revisa tú", informe.avisos),
+                             ("No se ha podido hacer", informe.errores)):
+        if mensajes:
+            print(f"   {titulo}:")
+            for mensaje in mensajes:
+                print(f"     · {mensaje}")
+    if not informe.cambios:
+        print("   No ha hecho falta cambiar nada.")
+
+
 def main(argv=None, carpeta_salida=None):
     configurar_terminal()
     args = crear_ordenes().parse_args(argv)
@@ -64,7 +77,7 @@ def main(argv=None, carpeta_salida=None):
     for archivo in args.archivos:
         nombre = Path(archivo).name
         try:
-            salida = pipeline.procesar(archivo, carpeta_salida)
+            salida, informe = pipeline.procesar(archivo, carpeta_salida)
         except ErrorDocumento as e:
             print(f"✘ {nombre}: {e}")
             continue
@@ -72,7 +85,7 @@ def main(argv=None, carpeta_salida=None):
             print(f"✘ {nombre}: error inesperado al procesarlo ({type(e).__name__}: {e}).")
             continue
         print(f"✔ {nombre} → {salida.parent.name}/{salida.name}")
-        print("   Copia guardada sin cambios: todavía no se aplica el formato APA.")
+        mostrar_informe(informe)
         bien += 1
 
     total = len(args.archivos)

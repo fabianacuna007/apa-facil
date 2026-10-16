@@ -20,7 +20,7 @@ MODULOS = [
     "apa_facil.revision",
 ]
 
-REGLAS = ["margenes", "fuente", "interlineado", "alineacion", "sangria", "paginacion"]
+REGLAS = ["fuente", "interlineado", "alineacion", "sangria", "paginacion"]
 
 
 @pytest.mark.parametrize("nombre", MODULOS)

@@ -18,13 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from apa_facil import documento  # noqa: E402
 from apa_facil.__main__ import configurar_terminal  # noqa: E402
-from apa_facil.documento import ErrorDocumento, Estilos, texto_legible, texto_parrafo, w  # noqa: E402
-
-TWIPS_POR_CM = 567     # Word mide casi todo en "twips": veinteavos de punto
-
-
-def cm(twips):
-    return f"{int(twips) / TWIPS_POR_CM:.2f}".replace(".", ",")
+from apa_facil.documento import ErrorDocumento, Estilos, cm, texto_legible, texto_parrafo, w  # noqa: E402
 
 
 def numero(x):

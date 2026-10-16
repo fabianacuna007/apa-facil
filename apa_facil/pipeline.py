@@ -2,17 +2,28 @@
 Decide en qué orden se aplican las reglas APA a un documento:
 abrir, diagnosticar, detectar la estructura, aplicar las reglas y verificar.
 
-De momento solo abre, guarda y verifica: las reglas llegan en la fase 1.
+Las reglas se van añadiendo a REGLAS a lo largo de la fase 1.
 """
 
 from apa_facil import documento
 from apa_facil.documento import ErrorDocumento
+from apa_facil.informe import Informe
+from apa_facil.reglas import margenes
+
+REGLAS = [margenes]   # en este orden
 
 
-def procesar(entrada, carpeta_salida=None):
-    """Abre `entrada`, la procesa y guarda la copia. Devuelve la ruta de la copia."""
+def procesar(entrada, carpeta_salida=None, opciones=None):
+    """
+    Abre `entrada`, le aplica las reglas y guarda la copia.
+    Devuelve la ruta de la copia y el informe de lo que se hizo.
+    """
     doc = documento.abrir(entrada)
     antes = documento.radiografia(doc)  # siempre antes de tocar nada
+
+    informe = Informe()
+    for regla in REGLAS:
+        regla.aplicar(doc, opciones or {}, informe)
 
     salida = documento.ruta_salida(entrada, carpeta_salida)
     documento.guardar(doc, salida)
@@ -25,4 +36,4 @@ def procesar(entrada, carpeta_salida=None):
         detalle = "\n".join(f"     - {d}" for d in diferencias)
         raise ErrorDocumento("No se ha guardado la copia porque su contenido no coincide con el "
                              f"original. Por seguridad, no se entrega:\n{detalle}")
-    return salida
+    return salida, informe

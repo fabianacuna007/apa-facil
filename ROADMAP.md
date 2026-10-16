@@ -112,7 +112,7 @@ apa-facil/
 
 **Por qué:** es el núcleo del producto y lo que el usuario nota primero. Son reglas deterministas: se pueden programar y comprobar con exactitud.
 
-- [ ] **1.1 Márgenes.** 2,54 cm en los cuatro lados, en **todas** las secciones. Las páginas en horizontal conservan su orientación.
+- [x] **1.1 Márgenes.** 2,54 cm en los cuatro lados, en **todas** las secciones. Las páginas en horizontal conservan su orientación.
 - [ ] **1.2 Fuente.**
   - Aplicarla en los estilos (Normal y los demás) **y** en el formato directo de cada fragmento de texto, incluidos los atributos de fuente para otros alfabetos (`ascii`, `hAnsi`, `eastAsia`, `cs`).
   - Fuente elegible por opción: Times New Roman 12 (por defecto), Calibri 11, Arial 11, Georgia 11, Lucida Sans Unicode 10 o Computer Modern 10.
@@ -402,7 +402,7 @@ _(Claude Code anota aquí lo que descubra y afecte a otros pasos.)_
   - 1.2: falta Computer Modern 10.
   - 1.3: pone interlineado doble dentro de las tablas (debe ser sencillo) y fuerza interlineado sencillo en las notas al pie (debe quedar el formato por defecto de Word).
   - 1.6: conserva el texto que había en el encabezado y deja los números de página que ya hubiera en él (debe quitar las dos cosas y avisar).
-- **2.4 Revisión visual.** LibreOffice no está instalado en este equipo. Word sí, y se puede convertir a PDF por COM desde PowerShell, pero solo con llamadas dinámicas (`InvokeMember`): el acceso normal falla con el error `E_NOINTERFACE`.
+- **2.4 Revisión visual.** LibreOffice no está instalado en este equipo. Word sí, y se puede convertir a PDF por COM desde PowerShell, pero solo con llamadas dinámicas (`InvokeMember`): el acceso normal falla con el error `E_NOINTERFACE`. Funciona `[System.__ComObject].InvokeMember(...)`, sin pasar los objetos de Word por funciones de PowerShell (si no, `InvokeMember` no encuentra el método). Así se contaron las páginas en el paso 1.1.
 - **Integridad y cambios previstos (0.5).** `documento.comparar` exige que el texto y los elementos sean idénticos, y `pipeline.procesar` no entrega la copia si no lo son. Los encabezados y pies quedan fuera de la comparación porque 1.6 los cambia a propósito. Los pasos que sí cambian contenido (3.5 párrafos vacíos y tabuladores iniciales, 4.3 mayúsculas y numeración de títulos, 6.4 rótulo "Referencias", 6.5 orden de las referencias) tendrán que indicar a la comparación qué diferencias concretas se permiten, y registrarlas en el informe.
 
 ## Registro de avances
@@ -415,3 +415,4 @@ _(Una línea por paso terminado: fecha · paso · qué se hizo · commit.)_
 - 2026-10-16 · 0.4 · `python -m apa_facil archivo.docx` abre el documento y guarda una copia sin cambios en `salida/nombre_APA.docx` (`documento.py`: abrir, ruta_salida, guardar; `pipeline.procesar`). Errores explicados en español (archivo inexistente, .doc, no Word, dañado, temporal de Word, copia abierta en Word). Los 5 documentos hacen la ida y vuelta y Word abre las copias con las mismas páginas que el original. 32 pruebas en verde · ff9b588
 - 2026-10-16 · 0.5 · `documento.radiografia` (texto en orden de cuerpo, tablas y notas, y recuento de tablas, imágenes, notas y secciones) y `documento.comparar` (diferencias en español con su ubicación). `python -m apa_facil` verifica cada copia y no la entrega si el contenido cambia. 51 pruebas en verde · 3303625
 - 2026-10-16 · 0.6 · `herramientas/inspeccionar.py` muestra márgenes por sección, fuentes (% de letras), interlineado, espaciado, sangrías, alineación, estilos, y encabezados y pies con los campos en palabras. Formato efectivo (valores por defecto → estilos → formato directo, fuentes del tema incluidas) en `documento.Estilos`, para reutilizarlo en la fase 1. 67 pruebas en verde. **Fase 0 terminada** · 2f1fe47
+- 2026-10-16 · 1.1 · `reglas/margenes.py`: 2,54 cm en los cuatro lados de cada sección y encuadernación a 0, sin tocar tamaño, orientación ni distancia del encabezado. Avisa (sin cambiar tamaños) de tablas, imágenes y gráficos más anchos que el nuevo espacio para el texto. Primer `Informe` (cambios, avisos, errores); `pipeline.procesar` aplica las reglas y devuelve la copia y el informe, y la línea de comandos lo muestra (provisional hasta 1.7). Los 5 documentos quedan a 2,54 cm (la sección horizontal del 04 sigue horizontal), Word los abre con las mismas páginas que el original y nada se sale de los márgenes. 86 pruebas en verde ·

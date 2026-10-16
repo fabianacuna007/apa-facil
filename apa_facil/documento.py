@@ -358,3 +358,88 @@ def texto_legible(p):
         elif nombre == "br":
             partes.append("\n")
     return "".join(partes)
+
+
+# --- Secciones y anchos -------------------------------------------------------
+#
+# Word mide casi todo en "twips" (veinteavos de punto: 1 cm ≈ 567 twips) y las
+# imágenes en EMU (1 twip = 635 EMU). Cada sección acaba en un párrafo que
+# lleva sus ajustes (w:sectPr); la última sección los lleva al final del cuerpo.
+
+TWIPS_POR_CM = 567
+EMU_POR_TWIP = 635
+
+WP = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+TIPOS_DE_DIBUJO = {"picture": "imagen", "chart": "gráfico"}
+
+
+def cm(twips):
+    """1440 → "2,54"."""
+    return f"{int(twips) / TWIPS_POR_CM:.2f}".replace(".", ",")
+
+
+def bloques_por_seccion(documento):
+    """
+    Los bloques del cuerpo (párrafos, tablas…) de cada sección, en el mismo
+    orden que documento.sections.
+    """
+    secciones, actual = [], []
+    for bloque in documento.element.body:
+        if bloque.tag == w("sectPr"):
+            continue
+        actual.append(bloque)
+        if bloque.tag == w("p") and bloque.find(f"{w('pPr')}/{w('sectPr')}") is not None:
+            secciones.append(actual)
+            actual = []
+    secciones.append(actual)
+    return secciones
+
+
+def _entero(valor):
+    try:
+        return int(valor)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _dentro_de(el, *etiquetas):
+    return next(el.iterancestors(*etiquetas), None) is not None
+
+
+def tablas_de(bloques):
+    """Las tablas de primer nivel (no las que van dentro de otra tabla)."""
+    return [t for b in bloques for t in b.iter(w("tbl")) if not _dentro_de(t, w("tbl"))]
+
+
+def ancho_tabla(tbl):
+    """Ancho de una tabla en twips, o None si es relativo (en %) o no se sabe."""
+    ancho = tbl.find(f"{w('tblPr')}/{w('tblW')}")
+    if ancho is not None and ancho.get(w("type")) == "pct":
+        return None   # se adapta sola al espacio disponible
+    columnas = sum(_entero(c.get(w("w"))) for c in tbl.iterfind(f"{w('tblGrid')}/{w('gridCol')}"))
+    if columnas:
+        return columnas
+    if ancho is not None and ancho.get(w("type")) == "dxa":
+        return _entero(ancho.get(w("w"))) or None
+    return None
+
+
+def dibujos_de(bloques):
+    """
+    Imágenes y gráficos que ocupan sitio en la página: (tipo, ancho en twips).
+    Se omiten los de dentro de tablas (ya cuenta la tabla) y de cuadros de
+    texto, y las copias de compatibilidad que Word guarda para versiones antiguas.
+    """
+    dibujos = []
+    for b in bloques:
+        for el in b.iter(f"{{{WP}}}inline", f"{{{WP}}}anchor"):
+            if _dentro_de(el, w("tc"), w("txbxContent"), f"{{{MC}}}Fallback"):
+                continue
+            datos = el.find(f"{{{A}}}graphic/{{{A}}}graphicData")
+            uri = datos.get("uri", "") if datos is not None else ""
+            tipo = next((t for clave, t in TIPOS_DE_DIBUJO.items() if uri.endswith(clave)), None)
+            extension = el.find(f"{{{WP}}}extent")
+            if tipo and extension is not None:
+                dibujos.append((tipo, _entero(extension.get("cx")) // EMU_POR_TWIP))
+    return dibujos
