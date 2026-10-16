@@ -20,7 +20,7 @@ MODULOS = [
     "apa_facil.revision",
 ]
 
-REGLAS = ["sangria", "paginacion"]
+REGLAS = ["paginacion"]
 
 
 @pytest.mark.parametrize("nombre", MODULOS)

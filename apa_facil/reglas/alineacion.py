@@ -7,7 +7,7 @@ Regla 1.4: texto alineado a la izquierda, sin justificar y sin guiones automáti
   pasos posteriores deciden qué debe ir centrado.
 - Alineado a la derecha → a la izquierda, salvo en lo que parece una portada
   (antes del primer salto de página o de sección y antes del primer párrafo
-  largo): eso se deja y se avisa, porque la portada se trata en el paso 5.3.
+  de 25 palabras o más): eso se deja y se avisa, porque la portada se trata en el paso 5.3.
 - Los guiones automáticos se desactivan. Los guiones opcionales del texto solo
   se avisan: quitarlos modificaría el texto.
 - Encabezados y pies no se tocan (paso 1.6).
@@ -18,7 +18,7 @@ from apa_facil.documento import Estilos, texto_parrafo, w
 
 JUSTIFICADOS = {"both", "distribute", "lowKashida", "mediumKashida", "highKashida", "thaiDistribute"}
 A_LA_DERECHA = {"right", "end"}
-PALABRAS_DE_PARRAFO_LARGO = 40   # el mismo umbral que APA usa para las citas en bloque
+PALABRAS_DE_PARRAFO_LARGO = 25   # un renglón de portada casi nunca llega a 20 palabras
 PARTES_QUE_NO_SE_TOCAN = ("/word/header", "/word/footer")
 PARTES_DE_NOTAS = ("/word/footnotes.xml", "/word/endnotes.xml")
 
@@ -55,7 +55,7 @@ def _salto_en(p):
 
 
 def parece_portada(parrafos, estilos):
-    """Los párrafos del principio que parecen una portada: hasta el primer salto o párrafo largo."""
+    """Los párrafos del principio que parecen una portada: hasta el primer salto o el primer párrafo de 25 palabras o más."""
     portada = []
     for p in parrafos:
         if _salto_antes(estilos, p) or len(texto_parrafo(p).split()) >= PALABRAS_DE_PARRAFO_LARGO:
