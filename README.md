@@ -53,6 +53,14 @@ El inspector muestra el formato que tiene ahora un Word (márgenes, fuentes, int
 python herramientas\inspeccionar.py pruebas\04_formato_caotico.docx
 ```
 
+## Comprobar si un documento cumple APA
+
+El verificador comprueba las reglas de formato básico (márgenes, fuente, interlineado, alineación, sangría y número de página) y lista cada incumplimiento con su sección, su número de párrafo y un extracto del texto. Lo que la herramienta deja así a propósito (la portada de la universidad, el código de programación…) aparece aparte, como excepción admitida. Termina con código 0 si todo cumple y 1 si no:
+
+```
+python herramientas\verificar.py salida\04_formato_caotico_APA.docx
+```
+
 ## Pruebas automáticas
 
 ```
