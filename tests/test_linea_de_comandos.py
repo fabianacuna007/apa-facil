@@ -80,9 +80,9 @@ def test_resumen_con_grupos_y_cantidades(capsys):
     informe.error("Esto no se pudo.")
     mostrar_informe(informe)
     assert capsys.readouterr().out.splitlines() == [
-        "   Cambios (2):", "     · Uno.", "     · Dos.",
-        "   Revisa tú (1):", "     · Revisa esto.",
-        "   No se ha podido hacer (1):", "     · Esto no se pudo.",
+        "   Lo que hemos cambiado (2):", "     · Uno.", "     · Dos.",
+        "   Lo que debes revisar tú (1):", "     · Revisa esto.",
+        "   Lo que no se ha podido hacer (1):", "     · Esto no se pudo.",
     ]
 
 
@@ -95,8 +95,9 @@ def test_salida_completa_de_un_documento(tmp_path, capsys):
     original = next(p for p in PRUEBAS if p.name.startswith("03"))
     assert main([str(original)], carpeta_salida=tmp_path) == 0
     salida = capsys.readouterr().out
-    assert salida.startswith(f"✔ {original.name} → {tmp_path.name}/{original.stem}_APA.docx\n   Cambios (")
-    assert "   Revisa tú (1):" in salida
+    assert salida.startswith(f"✔ {original.name} → {tmp_path.name}/{original.stem}_APA.docx\n   Lo que hemos cambiado (")
+    assert "   Lo que debes revisar tú (1):" in salida
+    assert f"   Informe completo: {tmp_path.name}/{original.stem}_APA.json" in salida
     assert "todavía incompleto" not in salida
     assert salida.rstrip().endswith("1 de 1 documento(s) procesado(s).")
 
@@ -122,6 +123,7 @@ def test_salida_a_nul(tmp_path):
         assert generada.exists()
     finally:
         generada.unlink(missing_ok=True)
+        generada.with_suffix(".json").unlink(missing_ok=True)
 
 
 # --- Los cinco documentos -----------------------------------------------------------------------

@@ -5,6 +5,9 @@ abrir, diagnosticar, detectar la estructura, aplicar las reglas y verificar.
 Las reglas se van añadiendo a REGLAS a lo largo de la fase 1.
 """
 
+from datetime import datetime
+from pathlib import Path
+
 from apa_facil import documento
 from apa_facil.documento import ErrorDocumento
 from apa_facil.informe import Informe
@@ -15,25 +18,35 @@ REGLAS = [margenes, fuente, interlineado, alineacion, sangria, paginacion]   # e
 
 def procesar(entrada, carpeta_salida=None, opciones=None):
     """
-    Abre `entrada`, le aplica las reglas y guarda la copia.
+    Abre `entrada`, le aplica las reglas y guarda la copia y su informe en JSON
+    (salida/nombre_APA.docx y salida/nombre_APA.json).
     Devuelve la ruta de la copia y el informe de lo que se hizo.
     """
+    opciones = opciones or {}
     doc = documento.abrir(entrada)
     antes = documento.radiografia(doc)  # siempre antes de tocar nada
 
-    informe = Informe()
-    for regla in REGLAS:
-        regla.aplicar(doc, opciones or {}, informe)
-
     salida = documento.ruta_salida(entrada, carpeta_salida)
+    informe = Informe(archivo=Path(entrada).name, copia=salida.name, opciones=dict(opciones),
+                      fecha=datetime.now().isoformat(timespec="seconds"))
+    for regla in REGLAS:
+        informe.regla = regla.__name__.rsplit(".", 1)[-1]   # cada mensaje sabe de qué regla viene
+        regla.aplicar(doc, opciones, informe)
+    informe.regla = None
+
     documento.guardar(doc, salida)
+    ruta_informe = salida.with_suffix(".json")
 
     # Verificación: se vuelve a abrir la copia ya guardada y se compara con el
-    # original. Si el contenido no coincide, la copia no se entrega.
+    # original. Si el contenido no coincide, la copia no se entrega (ni su informe,
+    # ni el de una vez anterior).
     diferencias = documento.comparar(antes, documento.radiografia(documento.abrir(salida)))
     if diferencias:
         salida.unlink(missing_ok=True)
+        ruta_informe.unlink(missing_ok=True)
         detalle = "\n".join(f"     - {d}" for d in diferencias)
         raise ErrorDocumento("No se ha guardado la copia porque su contenido no coincide con el "
                              f"original. Por seguridad, no se entrega:\n{detalle}")
+
+    informe.guardar_json(ruta_informe)
     return salida, informe

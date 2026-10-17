@@ -6,7 +6,8 @@ salida/) y sobre esa copia se comprueba:
 1. que se procesa sin errores;
 2. que el contenido es idéntico al del original (texto, tablas, imágenes,
    notas y secciones), leyendo la copia desde el disco;
-3. que el verificador no encuentra ningún incumplimiento de la fase 1;
+3. que el verificador no encuentra ningún incumplimiento de la fase 1, y que se
+   genera su informe en JSON (paso 2.3);
 4. que el original no se ha modificado;
 5. que las excepciones admitidas son exactamente las esperadas. Si un detector
    empezara a "perdonar" párrafos de más, el verificador seguiría diciendo
@@ -14,6 +15,7 @@ salida/) y sobre esa copia se comprueba:
 """
 
 import hashlib
+import json
 from pathlib import Path
 
 import docx
@@ -80,6 +82,15 @@ def test_excepciones_esperadas(procesado):
                     f"herramientas/verificar.py y apúntalas en {Path(__file__).name}.")
     halladas = {(h.regla, h.parrafo) for h in procesado["verificacion"].excepciones}
     assert halladas == EXCEPCIONES[nombre], mostrar(procesado["verificacion"])
+
+
+def test_genera_su_informe(procesado):
+    ruta = procesado["salida"].with_suffix(".json")
+    datos = json.loads(ruta.read_text(encoding="utf-8"))
+    assert datos["archivo"] == procesado["original"].name
+    assert datos["resumen"] == {"cambios": len(procesado["informe"].cambios),
+                                "avisos": len(procesado["informe"].avisos), "errores": 0}
+    assert datos["resumen"]["cambios"] > 0   # ningún original cumplía APA
 
 
 def test_estan_todos_los_documentos_de_la_lista():

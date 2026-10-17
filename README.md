@@ -43,7 +43,7 @@ Las fuentes recomendadas por APA, con su tamaño, son Aptos 12, Calibri 11, Aria
 - **Sangría de 1,27 cm** en la primera línea de los párrafos de texto (no en títulos, listas, referencias, citas en bloque…).
 - **Número de página** arriba a la derecha en todas las páginas, también en la portada, y nada más en el encabezado.
 
-Al terminar, muestra para cada documento qué ha cambiado y qué conviene revisar a mano. Antes de entregar la copia comprueba que el texto, las tablas, las imágenes, las notas y las secciones son exactamente los del original; si no, no la entrega.
+Al terminar, muestra para cada documento qué ha cambiado y qué conviene revisar a mano, y guarda ese mismo informe en JSON junto a la copia (`salida\nombre_APA.json`), con la regla de la que viene cada mensaje. Antes de entregar la copia comprueba que el texto, las tablas, las imágenes, las notas y las secciones son exactamente los del original; si no, no la entrega.
 
 ## Ver el formato de un documento
 

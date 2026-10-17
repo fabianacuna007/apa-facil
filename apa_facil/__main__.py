@@ -82,14 +82,7 @@ def configurar_terminal():
 
 def mostrar_informe(informe):
     """Resumen del informe en la terminal: cambios, lo que hay que revisar y lo que no se pudo hacer."""
-    for titulo, mensajes in (("Cambios", informe.cambios), ("Revisa tú", informe.avisos),
-                             ("No se ha podido hacer", informe.errores)):
-        if mensajes:
-            print(f"   {titulo} ({len(mensajes)}):")
-            for mensaje in mensajes:
-                print(f"     · {mensaje}")
-    if not informe.cambios:
-        print("   No ha hecho falta cambiar nada: el formato ya cumplía APA.")
+    print(informe.como_texto())
 
 
 def expandir_comodines(archivos):
@@ -124,6 +117,8 @@ def main(argv=None, carpeta_salida=None):
             continue
         print(f"✔ {nombre} → {salida.parent.name}/{salida.name}")
         mostrar_informe(informe)
+        json = salida.with_suffix(".json")
+        print(f"   Informe completo: {json.parent.name}/{json.name}")
         bien += 1
 
     total = len(archivos)
