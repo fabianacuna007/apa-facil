@@ -45,7 +45,7 @@ def _es_horizontal(seccion):
     return ancho is not None and alto is not None and ancho > alto
 
 
-def aplicar(doc, opciones, informe):
+def aplicar(doc, opciones, informe, estructura=None):
     cambios = {}   # mensaje → secciones a las que se aplica (para no repetirlo)
     for numero, seccion in enumerate(doc.sections, start=1):
         antes = tuple(_twips(m) for m in (seccion.top_margin, seccion.bottom_margin,

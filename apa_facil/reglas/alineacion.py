@@ -70,7 +70,7 @@ def _dentro_de(p, *etiquetas):
     return next(p.iterancestors(*etiquetas), None) is not None
 
 
-def aplicar(doc, opciones, informe):
+def aplicar(doc, opciones, informe, estructura=None):
     estilos = Estilos(doc)
     cuerpo = [p for p in doc.element.body.iter(w("p")) if not _dentro_de(p, w("tc"), w("txbxContent"))]
     portada = set(parece_portada(cuerpo, estilos))

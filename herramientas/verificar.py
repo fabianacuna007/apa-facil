@@ -11,9 +11,16 @@ Cómo comprueba:
 - Respeta las mismas excepciones que las reglas (portada, código, párrafos con
   tabulador…), usando los mismos detectores. Lo que entra por excepción no es
   un incumplimiento: se lista aparte, como "excepción admitida".
-- Limitación: si un detector de excepciones se equivoca (por ejemplo, toma un
-  párrafo de texto por un título), el verificador no lo ve. Eso lo resuelve el
-  clasificador de la fase 3.
+- Qué párrafos deben llevar sangría lo decide el clasificador de párrafos
+  (apa_facil/estructura.py), igual que en la regla. El verificador solo tiene
+  la copia, así que la clasifica a ella; el programa, en cambio, clasificó el
+  original. Pueden diferir en títulos que solo se distinguían por el tamaño de
+  letra, que la regla de fuente iguala: en los 5 documentos de prueba coincide
+  qué párrafos son de texto, y si alguna vez no, aparecería como incumplimiento.
+  La fase 4 lo resuelve al dar estilos de Word a los títulos.
+- Limitación: si el clasificador se equivoca (por ejemplo, toma un párrafo de
+  texto por un título), el verificador no lo ve. Para eso están las pruebas del
+  clasificador con la clasificación esperada de los documentos de prueba.
 
 Uso:
     python herramientas/verificar.py archivo.docx [otro.docx ...]

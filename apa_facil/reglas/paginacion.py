@@ -136,7 +136,7 @@ def _numeracion_continua(doc):
     return reinicios, romanos
 
 
-def aplicar(doc, opciones, informe):
+def aplicar(doc, opciones, informe, estructura=None):
     secciones = list(doc.sections)
 
     # 1. Qué había en los encabezados (para avisar) antes de borrarlo.

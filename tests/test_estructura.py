@@ -21,6 +21,7 @@ from apa_facil import documento, estructura
 from apa_facil.estructura import ALTA, BAJA, MEDIA, TIPOS, ZONAS, clasificar
 
 from clasificacion_esperada import ESPERADO
+from herramientas.verificar import Verificacion
 
 PRUEBAS = sorted((Path(__file__).resolve().parent.parent / "pruebas").glob("*.docx"))
 PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
@@ -667,7 +668,16 @@ def test_tabla_con_una_fila_por_parrafo_y_separadores_de_zona():
     assert lineas[0].split() == ["Nº", "Tipo", "Confianza", "Texto"]
     separadores = [linea.split()[1] for linea in lineas if linea.startswith("── ")]
     assert separadores == ["Portada", "Cuerpo", "Referencias"]
-    assert [fila.split()[0] for fila in filas(texto)] == [str(i) for i in range(7)]
+    assert [fila.split()[0] for fila in filas(texto)] == [str(i) for i in range(1, 8)]
+
+
+@pytest.mark.parametrize("ruta", PRUEBAS, ids=lambda r: r.name)
+def test_mismo_numero_de_parrafo_que_el_verificador(ruta):
+    """El 02 y el 05 tienen tablas: sus párrafos cuentan en la numeración, aunque no se clasifiquen."""
+    doc = documento.abrir(ruta)
+    verificacion = Verificacion(doc, ruta.name)
+    for c in clasificar(doc):
+        assert c.numero == verificacion.por_elemento[c.elemento].numero
 
 
 def test_tabla_nombra_los_tipos_en_espanol():

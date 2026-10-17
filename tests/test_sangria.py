@@ -7,13 +7,14 @@ comprueba la regla con los 5 documentos de pruebas/ (que no se modifican).
 """
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import docx
 import pytest
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
-from docx.shared import Cm
+from docx.shared import Cm, Pt
 
-from apa_facil import pipeline
+from apa_facil import estructura, pipeline
 from apa_facil.documento import Estilos, texto_parrafo, w
 from apa_facil.informe import Informe
 from apa_facil.reglas import sangria
@@ -94,22 +95,24 @@ def test_si_ya_la_tiene_no_hay_cambio():
 # --- Lo que no lleva sangría ------------------------------------------------------------
 
 @pytest.mark.parametrize("texto, esperado", [
-    ("Introducción", "título"),                                 # corto y sin punto
-    ("1. Cambios en la organización del trabajo", "lista"),     # sin negrita: parece una lista
+    ("Introducción", "título"),                                 # corto, sin punto y seguido de texto
+    ("1. Cambios en la organización del trabajo", "título"),    # numerado y seguido de texto (paso 3.2)
     ("Datos de uso por red social", "título"),
     ("•\tComparación social con imágenes retocadas", "lista"),
     ("-  Ciberacoso", "lista"),
     ("a) Primera condición del experimento, que se describe con detalle.", "lista"),
-    ("Tabla 1. Evolución de la población", "leyenda o nota"),
-    ("Fuente: elaboración propia a partir del padrón municipal.", "leyenda o nota"),
-    ("Nota. Los datos son provisionales.", "leyenda o nota"),
+    ("Tabla 1. Evolución de la población", "leyenda de tabla"),
+    ("Fuente: elaboración propia a partir del padrón municipal.", "leyenda de tabla"),
+    ("Nota. Los datos son provisionales.", "leyenda de tabla"),
     ("\t" + TEXTO, "tabulador"),
     ("   " + TEXTO, "tabulador"),
     ("", "vacío"),
 ])
 def test_exclusiones_por_el_texto(texto, esperado):
+    """Cada caso va seguido de un párrafo de texto, como en un trabajo de verdad."""
     doc = documento_con_portada()
     p = doc.add_paragraph(texto)
+    doc.add_paragraph(TEXTO)
     aplicar(doc)
     assert motivo(doc, p) == esperado
     assert primera_linea(doc, p)[0] == 0
@@ -172,13 +175,23 @@ def test_referencias_despues_del_rotulo_hasta_el_siguiente_titulo():
     assert primera_linea(doc, despues)[0] == 720
 
 
-def test_sangria_francesa_es_referencia():
+def test_sangria_francesa_con_autor_y_ano_es_referencia():
+    doc = documento_con_portada()
+    p = doc.add_paragraph("Molina, R. (2017). Turismo y territorio: límites del desarrollo rural. Editorial.")
+    p.paragraph_format.left_indent, p.paragraph_format.first_line_indent = Cm(1.27), Cm(-1.27)
+    aplicar(doc)
+    assert motivo(doc, p) == "referencia"
+    assert primera_linea(doc, p)[1] > 0, "la sangría francesa se conserva"
+
+
+def test_sangria_francesa_sin_autor_ni_ano_se_conserva():
+    """Fuera de la lista y sin autor y año, es una referencia dudosa: mejor no tocarla."""
     doc = documento_con_portada()
     p = doc.add_paragraph(TEXTO)
     p.paragraph_format.left_indent, p.paragraph_format.first_line_indent = Cm(1.27), Cm(-1.27)
     aplicar(doc)
     assert motivo(doc, p) == "referencia"
-    assert primera_linea(doc, p)[1] > 0, "la sangría francesa se conserva"
+    assert primera_linea(doc, p) == (0, 720)
 
 
 def test_resumen():
@@ -187,7 +200,7 @@ def test_resumen():
     resumen = doc.add_paragraph(TEXTO)
     siguiente = doc.add_paragraph(TEXTO)
     aplicar(doc)
-    assert motivo(doc, resumen) == "resumen"
+    assert motivo(doc, resumen) == "primer párrafo del resumen"
     assert primera_linea(doc, siguiente)[0] == 720
 
 
@@ -197,6 +210,66 @@ def test_portada():
     doc.add_paragraph(TEXTO * 2)
     aplicar(doc)
     assert motivo(doc, portada) == "portada"
+
+
+def test_resumen_con_palabras_clave():
+    doc = documento_con_portada()
+    doc.add_paragraph().add_run("Resumen").bold = True
+    resumen = doc.add_paragraph(TEXTO)
+    claves = doc.add_paragraph("Palabras clave: sueño, memoria, rendimiento académico.")
+    aplicar(doc)
+    assert primera_linea(doc, resumen)[0] == 0
+    assert primera_linea(doc, claves)[0] == 720, "APA: la línea de palabras clave lleva sangría"
+
+
+# --- La estructura se decide sobre el original (paso 3.4) --------------------------------
+
+def titulo_solo_por_tamano(doc):
+    """«Resultados:» acaba en dos puntos y no va en negrita: solo su tamaño (14 pt) dice que es un título."""
+    titulo = doc.add_paragraph()
+    titulo.add_run("Resultados:").font.size = Pt(14)
+    doc.add_paragraph().add_run(TEXTO).font.size = Pt(11)
+    return titulo
+
+
+def igualar_tamanos(doc, puntos=11):
+    """Lo que hace la regla de fuente: el mismo tamaño en todo el texto."""
+    for p in doc.paragraphs:
+        for r in p.runs:
+            r.font.size = Pt(puntos)
+
+
+def test_con_la_estructura_del_original_el_titulo_no_lleva_sangria():
+    doc = documento_con_portada()
+    titulo = titulo_solo_por_tamano(doc)
+    del_original = estructura.clasificar(doc)
+    igualar_tamanos(doc)
+    sangria.aplicar(doc, {}, Informe(), del_original)
+    assert primera_linea(doc, titulo)[0] == 0
+
+
+def test_sin_la_estructura_del_original_el_titulo_se_tomaria_por_texto():
+    """Por eso el pipeline clasifica antes de aplicar ninguna regla."""
+    doc = documento_con_portada()
+    titulo = titulo_solo_por_tamano(doc)
+    igualar_tamanos(doc)
+    sangria.aplicar(doc, {}, Informe())
+    assert primera_linea(doc, titulo)[0] == 720
+
+
+def test_las_reglas_reciben_la_estructura_del_original(tmp_path, monkeypatch):
+    """En el 04, la copia formateada se clasificaría distinto (sin la letra más grande de sus títulos)."""
+    original = next(p for p in PRUEBAS if p.name.startswith("04"))
+    recibidas = []
+    espia = SimpleNamespace(__name__="espia", aplicar=lambda doc, opciones, informe, estructura: recibidas.append(
+        [(c.tipo, c.nivel) for c in estructura]))
+    monkeypatch.setattr(pipeline, "REGLAS", [espia] + pipeline.REGLAS + [espia])
+    pipeline.procesar(original, tmp_path)
+    del_original = [(c.tipo, c.nivel) for c in estructura.clasificar(docx.Document(str(original)))]
+    assert recibidas == [del_original, del_original], "la misma estructura antes y después de las reglas"
+    copia = docx.Document(str(tmp_path / "04_formato_caotico_APA.docx"))
+    de_la_copia = [(c.tipo, c.nivel) for c in estructura.clasificar(copia)]
+    assert de_la_copia != del_original
 
 
 def test_aviso_de_tabulador():
@@ -209,15 +282,15 @@ def test_aviso_de_tabulador():
 
 # --- Documentos de prueba --------------------------------------------------------------
 
-CON_SANGRIA = {"01": 8, "02": 8, "03": 6, "04": 3, "05": 13}
+CON_SANGRIA = {"01": 8, "02": 8, "03": 6, "04": 4, "05": 13}   # 04: «Más información en…» es texto (paso 3.4)
 EMPIEZAN_POR = {   # algunos párrafos que NO deben llevar sangría, con el motivo
-    "01": [("BIBLIOGRAFÍA", "título"), ("Ramírez Soto", "referencia"), ("1. Cambios", "título")],
-    "02": [("Este informe analiza", "resumen"), ("Castro, P.", "referencia")],
+    "01": [("BIBLIOGRAFÍA", "rótulo de referencias"), ("Ramírez Soto", "referencia"), ("1. Cambios", "título")],
+    "02": [("Este informe analiza", "primer párrafo del resumen"), ("Castro, P.", "referencia")],
     "03": [("Mejorar el aislamiento", "lista"), ("Herrero, C.", "referencia")],
-    "04": [("•", "lista"), ("Webgrafía", "título"), ("Martínez, J.", "referencia"),
+    "04": [("•", "lista"), ("Webgrafía", "rótulo de referencias"), ("Martínez, J.", "referencia"),
            ("Las redes sociales son", "tabulador"), ("Efectos sobre", "título")],
-    "05": [("Este trabajo analiza", "resumen"), ('"El turismo rural', "cita en bloque"),
-           ("Fuente:", "leyenda o nota"), ("1. ¿Desde", "lista"), ("Molina, R.", "referencia")],
+    "05": [("Este trabajo analiza", "primer párrafo del resumen"), ('"El turismo rural', "cita en bloque"),
+           ("Fuente:", "leyenda de tabla"), ("1. ¿Desde", "lista"), ("Molina, R.", "referencia")],
 }
 
 

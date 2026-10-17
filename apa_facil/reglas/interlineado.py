@@ -65,7 +65,7 @@ def _dentro_de(p, *etiquetas):
     return next(p.iterancestors(*etiquetas), None) is not None
 
 
-def aplicar(doc, opciones, informe):
+def aplicar(doc, opciones, informe, estructura=None):
     estilos = Estilos(doc)
     cuerpo = doc.element.body
 

@@ -215,7 +215,7 @@ def _aplicar_en_texto(doc, estilos, nombre, puntos):
 
 # --- La regla ---------------------------------------------------------------------
 
-def aplicar(doc, opciones, informe):
+def aplicar(doc, opciones, informe, estructura=None):
     estilos = Estilos(doc)
     familias, tamanos, codigo = _analizar(doc, estilos)
     principal = familias.most_common(1)[0][0] if familias else None

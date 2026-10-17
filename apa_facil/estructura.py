@@ -81,7 +81,7 @@ ESTILOS_DE_TITULO_DEL_TRABAJO = ("title", "subtitle", "título", "titulo", "subt
 @dataclass
 class Parrafo:
     """Un párrafo clasificado."""
-    posicion: int                 # 0, 1, 2… en el orden del documento
+    posicion: int                 # 0, 1, 2… entre los párrafos clasificados
     elemento: object              # el w:p del XML
     texto: str                    # en una sola línea, sin espacios repetidos
     tipo: str                     # uno de TIPOS
@@ -89,6 +89,9 @@ class Parrafo:
     motivo: str                   # por qué, en español
     zona: str                     # uno de ZONAS
     nivel: Optional[int] = None   # solo en los títulos: de 1 a 5
+    # El número con que se nombra el párrafo en el diagnóstico, el verificador y la
+    # radiografía: desde 1 y contando también los párrafos de las tablas.
+    numero: int = 0
 
 
 # --- 1. Rasgos ------------------------------------------------------------------------
@@ -442,6 +445,7 @@ class _Clasificador:
         self.portada, self.portada_con_salto = _portada(self.parrafos, self.rasgos)
         portada = set(self.portada)
         self.tamano_del_texto = _tamano_del_texto([self.rasgos[p] for p in self.parrafos if p not in portada])
+        self.numeros = {p: i for i, p in enumerate(doc.element.body.iter(w("p")), start=1)}
         self.resultado = []
         self.falsos = {}   # posición de cada título falso → indicios que lo delatan
 
@@ -463,7 +467,7 @@ class _Clasificador:
                 if r.salto_despues and zona in ("indice", "resumen"):
                     zona = "cuerpo"   # el índice y el resumen acaban en el salto de página
             self.resultado.append(Parrafo(posicion, p, r.texto, tipo, confianza, motivo,
-                                          zona_del_parrafo, nivel))
+                                          zona_del_parrafo, nivel, self.numeros[p]))
         self._niveles_de_titulos_falsos()
         return self.resultado
 
@@ -634,8 +638,11 @@ class _Clasificador:
                 return "cita_bloque", ALTA, f"tiene sangría a la izquierda y {r.palabras} palabras", None
             return "cita_bloque", MEDIA, (f"tiene sangría a la izquierda, pero solo {r.palabras} palabras "
                                           f"(una cita en bloque tiene {PALABRAS_DE_CITA_EN_BLOQUE} o más)"), None
-        if r.francesa > 0 and AUTOR_Y_FECHA.match(r.texto):
-            return "referencia", MEDIA, "tiene sangría francesa y empieza por autor y año, fuera de la lista", None
+        if r.francesa > 0:
+            # En un trabajo, la sangría francesa es casi siempre de una referencia: mejor no tocarla.
+            if AUTOR_Y_FECHA.match(r.texto):
+                return "referencia", MEDIA, "tiene sangría francesa y empieza por autor y año, fuera de la lista", None
+            return "referencia", BAJA, "tiene sangría francesa, pero está fuera de la lista y sin autor y año", None
         if FINAL_DE_FRASE.search(r.texto):
             return "cuerpo", ALTA, f"texto de {r.palabras} palabras que acaba como una frase", None
         return "cuerpo", MEDIA, f"texto de {r.palabras} palabras", None
@@ -746,7 +753,7 @@ def como_texto(clasificados, ancho=100):
     """
     if not clasificados:
         return "El documento no tiene párrafos de texto."
-    numero = max(2, len(str(clasificados[-1].posicion)))
+    numero = max(2, len(str(clasificados[-1].numero)))
     columnas = numero + 2 + ANCHO_DEL_TIPO + 2 + ANCHO_DE_LA_CONFIANZA + 2
     texto = max(ancho - columnas, ANCHO_MINIMO_DEL_TEXTO)
     ancho = columnas + texto
@@ -761,7 +768,7 @@ def como_texto(clasificados, ancho=100):
         extracto = c.texto or "(sin texto)"
         if len(extracto) > texto:
             extracto = extracto[:texto - 1].rstrip() + "…"
-        lineas.append(f"{c.posicion:>{numero}}  {nombre_de_tipo(c):<{ANCHO_DEL_TIPO}}  "
+        lineas.append(f"{c.numero:>{numero}}  {nombre_de_tipo(c):<{ANCHO_DEL_TIPO}}  "
                       f"{c.confianza:<{ANCHO_DE_LA_CONFIANZA}}  {extracto}")
         if c.confianza != ALTA:
             lineas.append(textwrap.fill(c.motivo, width=ancho, initial_indent=" " * (numero + 2) + "↳ ",
