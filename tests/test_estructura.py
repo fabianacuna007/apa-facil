@@ -12,12 +12,12 @@ from pathlib import Path
 
 import docx
 import pytest
-from docx.enum.text import WD_BREAK
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.oxml import parse_xml
 from docx.shared import Cm, Pt
 from lxml import etree
 
-from apa_facil import documento
+from apa_facil import documento, estructura
 from apa_facil.estructura import ALTA, BAJA, MEDIA, TIPOS, ZONAS, clasificar
 
 from clasificacion_esperada import ESPERADO
@@ -29,11 +29,9 @@ TEXTO = ("Este es un párrafo normal de texto con bastantes palabras para que no
 CITA = " ".join(["Una cita larga copiada de otra obra con muchas palabras seguidas."] * 5)
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
-# Diferencias admitidas en el paso 3.1 porque las resuelve un paso posterior:
-# (documento, párrafo) → qué falta.
-PENDIENTES = {
-    ("04_formato_caotico.docx", 13): "nivel 2 de «Factores de riesgo:», por tamaño de letra (paso 3.2)",
-}
+# Diferencias admitidas porque las resuelve un paso posterior: (documento, párrafo) → qué falta.
+# Ahora no hay ninguna (el nivel de «Factores de riesgo:» del 04 se resolvió en el paso 3.2).
+PENDIENTES = {}
 
 
 def documento_con_portada():
@@ -198,6 +196,226 @@ def test_frase_corta_con_enlace_no_es_titulo():
     doc = documento_con_portada()
     p = doc.add_paragraph("Más información en: www.example.org/redes")
     assert de(doc, p).tipo == "cuerpo"
+
+
+# --- Títulos falsos: detección por indicios (paso 3.2) ----------------------------------
+
+def parrafo(doc, texto, tamano=11, negrita=False, cursiva=False, centrado=False):
+    p = doc.add_paragraph()
+    fragmento = p.add_run(texto)
+    fragmento.font.size, fragmento.bold, fragmento.italic = Pt(tamano), negrita, cursiva
+    if centrado:
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    return p
+
+
+def titulo_y_texto(doc, texto, **formato):
+    """Un título falso seguido de un párrafo de texto normal (11 pt)."""
+    p = parrafo(doc, texto, **formato)
+    parrafo(doc, TEXTO)
+    return p
+
+
+def test_titulo_solo_con_letra_mas_grande():
+    """Caso del documento 04: sin negrita, pero con letra más grande que el texto."""
+    doc = documento_con_portada()
+    p = titulo_y_texto(doc, "Efectos sobre la autoestima", tamano=13)
+    c = de(doc, p)
+    assert (c.tipo, c.confianza) == ("titulo", ALTA)
+    assert "más grande que el texto (13 pt frente a 11 pt)" in c.motivo
+
+
+def test_titulo_numerado_sin_negrita():
+    doc = documento_con_portada()
+    p = titulo_y_texto(doc, "1. Introducción")
+    c = de(doc, p)
+    assert (c.tipo, c.nivel, c.confianza) == ("titulo", 1, ALTA)
+    assert "numerado como un apartado" in c.motivo
+
+
+def test_apartado_seguido_de_su_subapartado():
+    """«1. Marco teórico» seguido directamente de «1.1. Antecedentes»: los dos son títulos."""
+    doc = documento_con_portada()
+    apartado = parrafo(doc, "1. Marco teórico")
+    subapartado = titulo_y_texto(doc, "1.1. Antecedentes")
+    assert [(de(doc, p).tipo, de(doc, p).nivel) for p in (apartado, subapartado)] == [("titulo", 1), ("titulo", 2)]
+
+
+@pytest.mark.parametrize("lineas", [["1. Primera idea", "2. Segunda idea", "3. Tercera idea"],
+                                    ["1. ¿Desde cuándo funciona su negocio?", "2. ¿Cómo ha evolucionado?"],
+                                    ["a) Primera opción", "b) Segunda opción"]])
+def test_lineas_numeradas_seguidas_son_una_lista(lineas):
+    """Caso del anexo del documento 05: aunque la última vaya seguida de texto, es una lista."""
+    doc = documento_con_portada()
+    parrafos = [parrafo(doc, linea) for linea in lineas]
+    parrafo(doc, TEXTO)
+    assert [de(doc, p).tipo for p in parrafos] == ["lista"] * len(lineas)
+
+
+def test_vineta_en_negrita_no_es_titulo():
+    doc = documento_con_portada()
+    p = titulo_y_texto(doc, "• Idea clave", negrita=True)
+    assert de(doc, p).tipo == "lista"
+
+
+def test_linea_sin_formato_seguida_de_texto_es_titulo_dudoso():
+    doc = documento_con_portada()
+    p = titulo_y_texto(doc, "Introducción")
+    assert (de(doc, p).tipo, de(doc, p).confianza) == ("titulo", BAJA)
+
+
+def test_linea_sin_formato_entre_lineas_cortas_no_es_titulo():
+    doc = documento_con_portada()
+    p = parrafo(doc, "Gracias por su atención")
+    parrafo(doc, "Madrid, junio de 2026")
+    assert de(doc, p).tipo == "cuerpo"
+
+
+def test_frase_corta_en_negrita_con_punto_es_titulo_dudoso():
+    doc = documento_con_portada()
+    p = titulo_y_texto(doc, "Esto es importante.", negrita=True)
+    assert (de(doc, p).tipo, de(doc, p).confianza) == ("titulo", BAJA)
+    assert "aunque acaba en punto" in de(doc, p).motivo
+
+
+def test_frase_corta_sin_formato_con_punto_no_es_titulo():
+    doc = documento_con_portada()
+    p = titulo_y_texto(doc, "Esto es importante.")
+    assert de(doc, p).tipo == "cuerpo"
+
+
+def test_el_tamano_del_texto_no_cuenta_la_portada():
+    """La portada suele tener letra grande: no debe cambiar el tamaño del texto normal."""
+    doc = docx.Document()
+    portada = parrafo(doc, "Título del trabajo en grande", tamano=20)
+    portada.runs[0].add_break(WD_BREAK.PAGE)
+    p = titulo_y_texto(doc, "Método", tamano=14)
+    assert "14 pt frente a 11 pt" in de(doc, p).motivo
+
+
+@pytest.mark.parametrize("texto, esperado", [
+    ("1. Introducción", ("arábiga", "1", 1)),
+    ("2.3. Resultados", ("arábiga", "2.3", 2)),
+    ("1.1.1 Objetivo general", ("arábiga", "1.1.1", 3)),
+    ("3) Propuestas", ("arábiga", "3", 1)),
+    ("II. Marco teórico", ("romana", "II", 1)),
+    ("a) Evolución demográfica", ("letra", "a", None)),
+    ("B. Segundo grupo", ("letra", "B", None)),
+    ("2026 fue un año difícil", None),
+    ("Introducción", None),
+])
+def test_numeracion_de_apartado(texto, esperado):
+    assert estructura._numeracion(texto) == esperado
+
+
+# --- Títulos falsos: niveles (paso 3.2) -------------------------------------------------
+
+def niveles(doc, parrafos):
+    return [de(doc, p).nivel for p in parrafos]
+
+
+def test_nivel_por_tamano():
+    """Caso del documento 04: los de 13 pt son nivel 1; el de 11 pt en negrita, nivel 2."""
+    doc = documento_con_portada()
+    titulos = [titulo_y_texto(doc, "Efectos sobre la autoestima", tamano=13),
+               titulo_y_texto(doc, "Factores de riesgo", negrita=True),
+               titulo_y_texto(doc, "Conclusión", tamano=13)]
+    assert niveles(doc, titulos) == [1, 2, 1]
+    assert "menos destacado que el de los títulos de nivel 1" in de(doc, titulos[1]).motivo
+
+
+def test_tres_niveles_por_formato():
+    doc = documento_con_portada()
+    titulos = [titulo_y_texto(doc, "Marco teórico", tamano=16, negrita=True),
+               titulo_y_texto(doc, "Antecedentes", tamano=13, negrita=True),
+               titulo_y_texto(doc, "Estudios previos", negrita=True, cursiva=True)]
+    assert niveles(doc, titulos) == [1, 2, 3]
+
+
+def test_mismo_tamano_centrado_negrita_y_cursiva():
+    """Como en APA: centrado y negrita (1), a la izquierda en negrita (2), negrita y cursiva (3)."""
+    doc = documento_con_portada()
+    titulos = [titulo_y_texto(doc, "Método", negrita=True, centrado=True),
+               titulo_y_texto(doc, "Participantes", negrita=True),
+               titulo_y_texto(doc, "Criterios de inclusión", negrita=True, cursiva=True)]
+    assert niveles(doc, titulos) == [1, 2, 3]
+
+
+def test_un_solo_formato_es_nivel_1():
+    doc = documento_con_portada()
+    titulos = [titulo_y_texto(doc, "Introducción", negrita=True), titulo_y_texto(doc, "Conclusión", negrita=True)]
+    assert niveles(doc, titulos) == [1, 1]
+    assert "único formato de título" in de(doc, titulos[0]).motivo
+
+
+def test_mismo_formato_que_un_titulo_numerado():
+    """Caso del documento 01: «Introducción» se ve igual que «1. Cambios…», que es nivel 1."""
+    doc = documento_con_portada()
+    titulos = [titulo_y_texto(doc, "Introducción", tamano=12, negrita=True),
+               titulo_y_texto(doc, "1. Cambios en el trabajo", tamano=12, negrita=True),
+               titulo_y_texto(doc, "1.1. Los talleres", negrita=True),
+               titulo_y_texto(doc, "Otro detalle", negrita=True)]
+    assert niveles(doc, titulos) == [1, 1, 2, 2]
+    assert "mismo formato que los demás títulos de nivel 1" in de(doc, titulos[0]).motivo
+    assert "mismo formato que los demás títulos de nivel 2" in de(doc, titulos[3]).motivo
+
+
+def test_mismo_formato_que_un_titulo_de_word():
+    """En la plantilla, «Título 2» de Word es de 13 pt en negrita: un título falso igual es nivel 2."""
+    doc = documento_con_portada()
+    doc.add_heading("Método", level=1)
+    doc.add_heading("Participantes", level=2)
+    parrafo(doc, TEXTO)
+    falso = titulo_y_texto(doc, "Instrumentos", tamano=13, negrita=True)
+    assert de(doc, falso).nivel == 2
+
+
+def test_formato_menos_destacado_que_los_de_word():
+    doc = documento_con_portada()
+    doc.add_heading("Método", level=1)          # 14 pt en negrita
+    parrafo(doc, TEXTO)
+    falso = titulo_y_texto(doc, "Participantes", tamano=12, negrita=True)
+    assert de(doc, falso).nivel == 2
+
+
+def test_letra_va_por_debajo_del_titulo_anterior():
+    doc = documento_con_portada()
+    titulos = [titulo_y_texto(doc, "1. Resultados", negrita=True),
+               titulo_y_texto(doc, "a) Primer grupo", negrita=True),
+               titulo_y_texto(doc, "b) Segundo grupo", negrita=True)]
+    assert niveles(doc, titulos) == [1, 2, 2]
+
+
+def test_numeros_romanos_por_encima_de_los_arabigos():
+    doc = documento_con_portada()
+    titulos = [titulo_y_texto(doc, "I. Marco teórico", negrita=True),
+               titulo_y_texto(doc, "1. Antecedentes", negrita=True)]
+    assert niveles(doc, titulos) == [1, 2]
+
+
+def test_no_se_salta_ningun_nivel():
+    doc = documento_con_portada()
+    titulos = [titulo_y_texto(doc, "1. Introducción", negrita=True),
+               titulo_y_texto(doc, "1.1.1. Detalle", negrita=True)]
+    assert niveles(doc, titulos) == [1, 2]
+    c = de(doc, titulos[1])
+    assert c.confianza == BAJA
+    assert "no se puede saltar un nivel" in c.motivo
+
+
+def test_el_primer_titulo_puede_no_ser_de_nivel_1():
+    """Sin título anterior no hay salto que corregir."""
+    doc = documento_con_portada()
+    p = titulo_y_texto(doc, "1.2. Cambios en la organización", negrita=True)
+    assert de(doc, p).nivel == 2
+
+
+def test_los_titulos_de_word_no_cambian_de_nivel():
+    doc = documento_con_portada()
+    doc.add_heading("Método", level=1)
+    parrafo(doc, TEXTO)
+    p = doc.add_heading("Detalle", level=3)
+    assert de(doc, p).nivel == 3
 
 
 # --- Listas -----------------------------------------------------------------------------

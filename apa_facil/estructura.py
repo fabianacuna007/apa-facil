@@ -1,16 +1,22 @@
 """
-Clasificador de párrafos (paso 3.1): decide qué es cada párrafo del cuerpo
-(portada, título, cuerpo, lista, referencia…) y con qué confianza, aunque el
-estudiante no haya usado los estilos de Word.
+Clasificador de párrafos (pasos 3.1 y 3.2): decide qué es cada párrafo del
+cuerpo (portada, título, cuerpo, lista, referencia…) y con qué confianza,
+aunque el estudiante no haya usado los estilos de Word.
 
-Funciona en tres pasos:
+Funciona en cuatro pasos:
   1. Rasgos: lo que se puede medir en cada párrafo (texto, estilo de Word,
      negrita, tamaño, sangrías, imágenes, saltos, campos de índice…) y qué
-     tiene al lado (una tabla, una imagen).
+     tiene al lado (una tabla, una imagen, el párrafo anterior y el siguiente).
   2. Portada: los párrafos del principio, hasta el primer salto, el primer
      título o el primer párrafo largo.
   3. Recorrido en orden: cada párrafo recibe su tipo y la zona del trabajo
      en la que está (portada, índice, resumen, cuerpo, referencias, anexos).
+     Los títulos que no usan los estilos de Word ("títulos falsos") se
+     reconocen sumando indicios: negrita, mayúsculas, letra más grande que el
+     texto, numeración de apartado, sin punto final, seguidos de texto…
+  4. Niveles de los títulos falsos: por la numeración ("1.1." es nivel 2) o,
+     si no la tienen, por su formato comparado con el de los demás títulos.
+     Un título falso no puede bajar más de un nivel respecto al anterior.
 
 La confianza dice de dónde sale la decisión:
   - alta: una señal explícita de Word (estilo, lista, campo, imagen) o un
@@ -24,7 +30,8 @@ cuadros de texto. El clasificador no cambia nada del documento.
 """
 
 import re
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 from typing import Optional
 
 from apa_facil.documento import MC, WP, Estilos, texto_parrafo, w
@@ -55,7 +62,12 @@ LEYENDA_DE_FIGURA = re.compile(r"^(figura|gráfico|grafico|imagen|ilustración|i
                                r"fotografía|fotografia|diagrama|esquema)\s+[A-Z]?\d", re.IGNORECASE)
 NOTA = re.compile(r"^(nota\s*\.|fuente\s*:|fuentes\s*:)", re.IGNORECASE)
 FINAL_DE_FRASE = re.compile(r"[.…:][\"'»”)]*$")
-NUMERACION = re.compile(r"^(\d+(?:\.\d+)*)\.?\s")   # "1.", "1.1.", "2.3.1"
+ACABA_EN_PUNTO = re.compile(r"[.…][\"'»”)]*$")
+VINETA = re.compile(r"^\s*[•·▪◦‣●○■□\-–—*]\s")
+# Numeración de apartado: "1.", "1.1.", "2.3.1", "1)", "I.", "II.", "A.", "a)"
+NUMERACION_ARABIGA = re.compile(r"^(\d{1,2}(?:\.\d{1,2})*)[.)]?\s")
+NUMERACION_ROMANA = re.compile(r"^([IVX]+)[.)]\s")
+NUMERACION_CON_LETRA = re.compile(r"^([A-Za-z])[.)]\s")
 URL = re.compile(r"https?://|www\.|doi\.org|\bdoi:", re.IGNORECASE)
 AUTOR_Y_FECHA = re.compile(r"^[^\W\d][^,(]{0,80},.*(\(\s*(\d{4}|s\.\s?f\.)|\b\d{4}\b)", re.IGNORECASE)
 CON_FECHA = re.compile(r"\(\s*(\d{4}[a-z]?|s\.\s?f\.)\s*[),]|\b(1[5-9]|20)\d{2}\b")
@@ -89,6 +101,7 @@ class _Rasgos:
     nivel_de_word: Optional[int]
     lista_de_word: bool
     negrita: bool
+    cursiva: bool
     mayusculas: bool
     tamano: Optional[float]  # el más frecuente, en puntos
     alineacion: str
@@ -100,6 +113,9 @@ class _Rasgos:
     de_indice: bool          # campo o control de índice de Word, o estilo de índice
     antes: Optional[str] = None    # lo que hay justo antes: "tabla", "imagen" o "texto"
     despues: Optional[str] = None
+    # Los párrafos con texto de justo antes y justo después (None si hay una tabla o una imagen).
+    anterior: Optional["_Rasgos"] = field(default=None, repr=False)
+    siguiente: Optional["_Rasgos"] = field(default=None, repr=False)
 
 
 def _capa(estilos, p, etiqueta):
@@ -144,13 +160,14 @@ def _fragmentos_con_texto(p):
             and "".join(t.text or "" for t in r.iter(w("t"))).strip()]
 
 
-def _todo_en_negrita(estilos, p, fragmentos):
+def _todo_con(estilos, p, fragmentos, etiqueta):
+    """¿Va todo el texto del párrafo en negrita (etiqueta "b") o en cursiva ("i")?"""
     if not fragmentos:
         return False
     for r in fragmentos:
-        negrita = next((capa.find(w("b")) for capa in estilos._capas_texto(r, p)
-                        if capa is not None and capa.find(w("b")) is not None), None)
-        if negrita is None or negrita.get(w("val")) in ("0", "false", "off"):
+        valor = next((capa.find(w(etiqueta)) for capa in estilos._capas_texto(r, p)
+                      if capa is not None and capa.find(w(etiqueta)) is not None), None)
+        if valor is None or valor.get(w("val")) in ("0", "false", "off"):
             return False
     return True
 
@@ -230,7 +247,8 @@ def _rasgos(estilos, p, indice):
         estilos=nombres,
         nivel_de_word=_nivel_de_word(estilos, p, nombres),
         lista_de_word=_es_lista_de_word(estilos, p),
-        negrita=_todo_en_negrita(estilos, p, fragmentos),
+        negrita=_todo_con(estilos, p, fragmentos, "b"),
+        cursiva=_todo_con(estilos, p, fragmentos, "i"),
         mayusculas=bool(letras) and all(c.isupper() for c in letras),
         tamano=_tamano(estilos, p, fragmentos),
         alineacion=estilos.parrafo(p, "jc", "val") or "left",
@@ -253,12 +271,29 @@ def _vecinos(bloques, rasgos):
             return "imagen"
         return "texto" if r.texto else None
 
+    def de_texto(i):
+        if 0 <= i < len(utiles) and utiles[i][1] == "texto":
+            return rasgos[utiles[i][0]]
+        return None
+
     utiles = [(el, que_es(el)) for el in bloques]
     utiles = [(el, cosa) for el, cosa in utiles if cosa]
     for i, (el, _) in enumerate(utiles):
         if el.tag == w("p"):
             rasgos[el].antes = utiles[i - 1][1] if i > 0 else None
             rasgos[el].despues = utiles[i + 1][1] if i + 1 < len(utiles) else None
+            rasgos[el].anterior, rasgos[el].siguiente = de_texto(i - 1), de_texto(i + 1)
+
+
+def _tamano_del_texto(rasgos):
+    """El tamaño de letra del texto normal: el de los párrafos largos, contando letras."""
+    letras = Counter()
+    for r in rasgos:
+        if r.tamano and r.palabras >= PALABRAS_DE_PARRAFO_LARGO:
+            letras[r.tamano] += len(r.texto)
+    if not letras:
+        letras.update({r.tamano: len(r.texto) for r in rasgos if r.tamano})
+    return letras.most_common(1)[0][0] if letras else None
 
 
 # --- 2. Portada -----------------------------------------------------------------------
@@ -320,11 +355,68 @@ def _parece_referencia(r):
     return bool(CON_FECHA.search(r.texto) or URL.search(r.texto))
 
 
-def _nivel_por_numeracion(texto):
-    numeracion = NUMERACION.match(texto)
-    if not numeracion:
-        return 1
-    return min(len(numeracion.group(1).split(".")), NIVEL_MAXIMO)
+def _numeracion(texto):
+    """
+    La numeración de apartado con que empieza el texto, como (clase, número, nivel):
+    ("arábiga", "1.1", 2), ("romana", "II", 1), ("letra", "a", None), o None si no tiene.
+    """
+    for clase, patron in (("arábiga", NUMERACION_ARABIGA), ("romana", NUMERACION_ROMANA),
+                          ("letra", NUMERACION_CON_LETRA)):
+        encontrada = patron.match(texto)
+        if encontrada:
+            numero = encontrada.group(1)
+            nivel = {"arábiga": min(len(numero.split(".")), NIVEL_MAXIMO), "romana": 1}.get(clase)
+            return clase, numero, nivel
+    return None
+
+
+def _marca(texto):
+    """Con qué empieza una línea de lista o de apartado: viñeta, o clase y profundidad de la numeración."""
+    if VINETA.match(texto):
+        return ("viñeta",)
+    numeracion = _numeracion(texto)
+    return (numeracion[0], numeracion[2]) if numeracion else None
+
+
+def _en_serie(r):
+    """¿Es una línea más de una lista escrita a mano? (el párrafo de antes o el de después empieza igual)"""
+    marca = _marca(r.texto)
+    return marca is not None and any(vecino is not None and _marca(vecino.texto) == marca
+                                     for vecino in (r.anterior, r.siguiente))
+
+
+def _seguido_de_texto(r):
+    """¿Va justo antes de un párrafo de texto normal (y no de otra línea corta o de una lista)?"""
+    s = r.siguiente
+    return (s is not None and not s.nivel_de_word and not s.lista_de_word and not LISTA_A_MANO.match(s.texto)
+            and (s.palabras >= PALABRAS_DE_TITULO or bool(ACABA_EN_PUNTO.search(s.texto))))
+
+
+def _formato(r):
+    """El aspecto de un título: (tamaño, centrado, mayúsculas, negrita, cursiva)."""
+    return (r.tamano or 0, r.alineacion == "center", r.mayusculas, r.negrita, r.cursiva)
+
+
+def _destacado(formato):
+    """Para ordenar formatos del más destacado al menos: más grande, centrado, mayúsculas, negrita, sin cursiva."""
+    tamano, centrado, mayusculas, negrita, cursiva = formato
+    return (-tamano, not centrado, not mayusculas, not negrita, cursiva)
+
+
+def _describir(formato):
+    tamano, centrado, mayusculas, negrita, cursiva = formato
+    partes = [_pt(tamano)] if tamano else []
+    partes += [nombre for nombre, tiene in (("centrado", centrado), ("en mayúsculas", mayusculas),
+                                            ("en negrita", negrita), ("en cursiva", cursiva)) if tiene]
+    return ", ".join(partes) or "sin formato especial"
+
+
+def _pt(tamano):
+    return f"{tamano:g} pt".replace(".", ",")
+
+
+def _lista_de_palabras(partes):
+    return partes[0] if len(partes) == 1 else ", ".join(partes[:-1]) + " y " + partes[-1]
 
 
 def _extracto(texto, largo=20):
@@ -347,7 +439,10 @@ class _Clasificador:
         self.rasgos = {p: _rasgos(self.estilos, p, indice) for p in self.parrafos}
         _vecinos(bloques, self.rasgos)
         self.portada, self.portada_con_salto = _portada(self.parrafos, self.rasgos)
+        portada = set(self.portada)
+        self.tamano_del_texto = _tamano_del_texto([self.rasgos[p] for p in self.parrafos if p not in portada])
         self.resultado = []
+        self.falsos = {}   # posición de cada título falso → indicios que lo delatan
 
     def clasificar(self):
         zona = "cuerpo"
@@ -362,11 +457,86 @@ class _Clasificador:
                     zona = "cuerpo"
                 zona, (tipo, confianza, motivo, nivel) = self._decidir(r, zona)
                 zona_del_parrafo = zona
+                if tipo == "titulo" and nivel is None:
+                    self.falsos[posicion], motivo = motivo, ""   # el motivo se escribe con el nivel
                 if r.salto_despues and zona in ("indice", "resumen"):
                     zona = "cuerpo"   # el índice y el resumen acaban en el salto de página
             self.resultado.append(Parrafo(posicion, p, r.texto, tipo, confianza, motivo,
                                           zona_del_parrafo, nivel))
+        self._niveles_de_titulos_falsos()
         return self.resultado
+
+    # Niveles de los títulos falsos -----------------------------------------------------
+
+    def _niveles_de_titulos_falsos(self):
+        """
+        1. Por la numeración: "1." nivel 1, "1.1." nivel 2… ("I." es nivel 1 y, si el
+           documento usa números romanos, "1." pasa a nivel 2); "a)" va un nivel
+           por debajo del título anterior.
+        2. Sin numeración, por el formato: los títulos de Word y los numerados dicen
+           qué formato tiene cada nivel; un formato que no sale en ellos se coloca
+           según lo destacado que es (tamaño, centrado, mayúsculas, negrita, cursiva).
+        3. Un título falso no baja más de un nivel respecto al título anterior.
+        """
+        titulos = [c for c in self.resultado if c.tipo == "titulo"]
+        romanos = any((_numeracion(c.texto) or ("",))[0] == "romana"
+                      for c in titulos if c.posicion in self.falsos)
+
+        def por_numeracion(c):
+            numeracion = _numeracion(c.texto)
+            if not numeracion or numeracion[0] == "letra":
+                return None
+            clase, _, nivel = numeracion
+            return min(nivel + 1, NIVEL_MAXIMO) if clase == "arábiga" and romanos else nivel
+
+        # Qué formato tiene cada nivel según los títulos de Word y los numerados.
+        votos = {}
+        for c in titulos:
+            r = self.rasgos[c.elemento]
+            nivel = por_numeracion(c) if c.posicion in self.falsos else r.nivel_de_word
+            if nivel:
+                votos.setdefault(_formato(r), Counter())[nivel] += 1
+        anclados = {formato: cuenta.most_common(1)[0][0] for formato, cuenta in votos.items()}
+
+        # Los formatos sin nivel conocido se colocan entre los demás, del más destacado al menos.
+        formatos = set(anclados) | {_formato(self.rasgos[c.elemento]) for c in titulos if c.posicion in self.falsos}
+        por_formato, actual = {}, 0
+        for formato in sorted(formatos, key=_destacado):
+            actual = anclados.get(formato, min(actual + 1, NIVEL_MAXIMO))
+            por_formato[formato] = actual
+
+        anterior = sin_letra = None   # el nivel del título anterior, y del último que no es "a)", "b)"…
+        for c in titulos:
+            if c.posicion in self.falsos:
+                c.nivel, explicacion = self._nivel_de_titulo_falso(c, sin_letra, por_numeracion(c),
+                                                                   por_formato, anclados)
+                if anterior is not None and c.nivel > anterior + 1:
+                    explicacion += (f"; se sube a nivel {anterior + 1} porque el título anterior es de nivel "
+                                    f"{anterior} y no se puede saltar un nivel")
+                    c.nivel, c.confianza = anterior + 1, BAJA
+                c.motivo = (f"título sin estilo de Word: {_lista_de_palabras(self.falsos[c.posicion])}. "
+                            f"{explicacion[0].upper()}{explicacion[1:]}.")
+            anterior = c.nivel
+            if c.posicion not in self.falsos or (_numeracion(c.texto) or ("",))[0] != "letra":
+                sin_letra = c.nivel
+
+    def _nivel_de_titulo_falso(self, c, sin_letra, por_numeracion, por_formato, anclados):
+        numeracion = _numeracion(c.texto)
+        if por_numeracion:
+            return por_numeracion, f"nivel {por_numeracion} por la numeración «{numeracion[1]}»"
+        if numeracion:   # "a)", "b)": un nivel por debajo del último título sin letra
+            nivel = min((sin_letra or 0) + 1, NIVEL_MAXIMO)
+            return nivel, f"nivel {nivel}: la letra «{numeracion[1]}» va por debajo del título anterior"
+        formato = _formato(self.rasgos[c.elemento])
+        nivel = por_formato[formato]
+        if formato in anclados:
+            return nivel, f"nivel {nivel}: mismo formato que los demás títulos de nivel {nivel}"
+        if len(por_formato) == 1:
+            return nivel, "nivel 1: es el único formato de título del documento"
+        if nivel == 1:
+            return nivel, f"nivel 1: su formato ({_describir(formato)}) es el más destacado de los títulos"
+        return nivel, (f"nivel {nivel}: su formato ({_describir(formato)}) es menos destacado que el de los "
+                       f"títulos de nivel {nivel - 1}")
 
     # Portada ---------------------------------------------------------------------------
 
@@ -433,8 +603,8 @@ class _Clasificador:
             return "referencias", ("referencia", MEDIA, "está en la lista de referencias y tiene un año o un enlace",
                                    None)
         if _parece_titulo(r) and (r.negrita or r.mayusculas) and r.palabras <= 5:
-            return "cuerpo", ("titulo", MEDIA, f"{_forma_de_titulo(r)}: acaba la lista de referencias",
-                              _nivel_por_numeracion(r.texto))
+            indicios = [n for n, t in (("en negrita", r.negrita), ("en mayúsculas", r.mayusculas)) if t]
+            return "cuerpo", ("titulo", MEDIA, indicios + ["acaba la lista de referencias"], None)
         return "referencias", ("referencia", BAJA, "está en la lista de referencias, pero no tiene año ni enlace",
                                None)
 
@@ -449,13 +619,15 @@ class _Clasificador:
             return "leyenda_tabla", MEDIA, f"{_forma_de_titulo(r)}, justo encima de una tabla", None
         if _parece_titulo(r) and (r.antes == "imagen" or r.despues == "imagen"):
             return "leyenda_figura", MEDIA, f"{_forma_de_titulo(r)}, junto a una imagen", None
-        if _parece_titulo(r) and (r.negrita or r.mayusculas):
-            # "1. Cambios en…" en negrita es un título, no una lista
-            return "titulo", MEDIA, self._motivo_de_titulo(r), _nivel_por_numeracion(r.texto)
+        titulo = self._titulo_falso(r)
+        if titulo:
+            confianza, indicios = titulo
+            return "titulo", confianza, indicios, None   # el nivel se decide al final
         if LISTA_A_MANO.match(r.texto):
-            return "lista", MEDIA, "empieza con una viñeta o un número escrito a mano", None
-        if _parece_titulo(r):
-            return "titulo", MEDIA, self._motivo_de_titulo(r), _nivel_por_numeracion(r.texto)
+            motivo = "empieza con una viñeta o un número escrito a mano"
+            if _en_serie(r):
+                motivo += ", igual que la línea de al lado"
+            return "lista", MEDIA, motivo, None
         if r.izquierda > 0 and r.francesa == 0:
             if r.palabras >= PALABRAS_DE_CITA_EN_BLOQUE:
                 return "cita_bloque", ALTA, f"tiene sangría a la izquierda y {r.palabras} palabras", None
@@ -467,11 +639,46 @@ class _Clasificador:
             return "cuerpo", ALTA, f"texto de {r.palabras} palabras que acaba como una frase", None
         return "cuerpo", MEDIA, f"texto de {r.palabras} palabras", None
 
-    def _motivo_de_titulo(self, r):
-        numeracion = NUMERACION.match(r.texto)
-        nivel = (f"nivel {_nivel_por_numeracion(r.texto)} por la numeración «{numeracion.group(1)}»" if numeracion
-                 else "nivel 1 provisional")
-        return f"{_forma_de_titulo(r)} ({nivel}; se afina en el paso 3.2)"
+    def _titulo_falso(self, r):
+        """
+        ¿Es un título aunque no use los estilos de Word? Se suman indicios.
+        Devuelve (confianza, indicios) o None si no parece un título.
+        Indicios fuertes: negrita, mayúsculas, letra más grande que el texto y
+        numeración de apartado seguida de texto. Débiles: sin punto final,
+        cursiva, centrado y seguido de un párrafo de texto.
+        """
+        if r.palabras >= PALABRAS_DE_TITULO or URL.search(r.texto) or VINETA.match(r.texto):
+            return None
+        if _en_serie(r):
+            return None   # una línea más de una lista numerada a mano
+        seguido = _seguido_de_texto(r)
+        numeracion = _numeracion(r.texto)
+        # "1. Marco teórico" seguido directamente de "1.1. Antecedentes" también es un apartado.
+        del_siguiente = _numeracion(r.siguiente.texto) if r.siguiente else None
+        subapartado = bool(numeracion and del_siguiente and numeracion[0] == del_siguiente[0] == "arábiga"
+                           and del_siguiente[2] == numeracion[2] + 1)
+        mas_grande = bool(r.tamano and self.tamano_del_texto and r.tamano > self.tamano_del_texto)
+        fuertes = [nombre for nombre, tiene in (
+            ("en negrita", r.negrita),
+            ("en mayúsculas", r.mayusculas),
+            (f"con letra más grande que el texto ({_pt(r.tamano or 0)} frente a {_pt(self.tamano_del_texto or 0)})",
+             mas_grande),
+            ("numerado como un apartado", numeracion is not None and (seguido or subapartado))) if tiene]
+        debiles = [nombre for nombre, tiene in (
+            ("sin punto final", not FINAL_DE_FRASE.search(r.texto)),
+            ("en cursiva", r.cursiva),
+            ("centrado", r.alineacion == "center"),
+            ("seguido de un párrafo de texto", seguido)) if tiene]
+        indicios = fuertes + debiles
+
+        if ACABA_EN_PUNTO.search(r.texto):
+            # Una frase corta en negrita o en mayúsculas: puede ser un título, pero es dudoso.
+            return (BAJA, indicios + ["aunque acaba en punto"]) if r.negrita or r.mayusculas else None
+        if fuertes:
+            return ALTA if len(indicios) >= 3 else MEDIA, indicios
+        if "sin punto final" in debiles and (seguido or r.alineacion == "center"):
+            return BAJA, indicios
+        return None
 
     def _leyenda(self, r):
         de_word = any(c in e for e in r.estilos for c in ESTILOS_DE_LEYENDA)
