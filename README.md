@@ -61,6 +61,14 @@ El verificador comprueba las reglas de formato básico (márgenes, fuente, inter
 python herramientas\verificar.py salida\04_formato_caotico_APA.docx
 ```
 
+## Revisar en PDF
+
+Convierte documentos a PDF para revisarlos sin abrir Word. Usa Word si está instalado (el resultado es el que verá el estudiante) y, si no, LibreOffice. Los PDF se guardan siempre en `salida\`, aunque el documento venga de `pruebas\`, y los documentos no se modifican:
+
+```
+python herramientas\a_pdf.py salida\*.docx
+```
+
 ## Pruebas automáticas
 
 ```
