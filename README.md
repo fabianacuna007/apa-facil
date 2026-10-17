@@ -53,6 +53,16 @@ El inspector muestra el formato que tiene ahora un Word (márgenes, fuentes, int
 python herramientas\inspeccionar.py pruebas\04_formato_caotico.docx
 ```
 
+## Ver cómo se entiende un documento (diagnóstico)
+
+Antes de aplicar títulos, sangrías o referencias, la herramienta decide qué es cada párrafo: portada, título (con su nivel), texto, lista, leyenda, cita en bloque, referencia… El modo diagnóstico muestra esa decisión en una tabla, sin generar ninguna copia:
+
+```
+python -m apa_facil pruebas\04_formato_caotico.docx --diagnostico
+```
+
+Cada fila lleva el número de párrafo, el tipo, la confianza (alta, media o baja) y el principio del texto; una línea separa cada parte del trabajo (portada, resumen, índice, cuerpo, referencias, anexos). En los párrafos dudosos (confianza media o baja) se explica debajo por qué se han clasificado así. Al final, cuántos párrafos hay de cada tipo y con cada confianza.
+
 ## Comprobar si un documento cumple APA
 
 El verificador comprueba las reglas de formato básico (márgenes, fuente, interlineado, alineación, sangría y número de página) y lista cada incumplimiento con su sección, su número de párrafo y un extracto del texto. Lo que la herramienta deja así a propósito (la portada de la universidad, el código de programación…) aparece aparte, como excepción admitida. Termina con código 0 si todo cumple y 1 si no:

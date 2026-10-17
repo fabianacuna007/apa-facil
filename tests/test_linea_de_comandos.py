@@ -138,3 +138,41 @@ def test_los_cinco_en_georgia(tmp_path):
     assert main([str(p) for p in PRUEBAS] + ["--fuente", "Georgia"], carpeta_salida=tmp_path) == 0
     for original in PRUEBAS:
         assert fuentes(tmp_path / f"{original.stem}_APA.docx") == {("Georgia", 11)}, original.name
+
+
+# --- Modo diagnóstico (paso 3.3) ------------------------------------------------------------------
+
+def test_diagnostico_no_genera_copias(tmp_path, capsys):
+    antes = sorted((RAIZ / "salida").iterdir()) if (RAIZ / "salida").exists() else []
+    assert main([str(PRUEBAS[3]), "--diagnostico"], carpeta_salida=tmp_path) == 0
+    salida = capsys.readouterr().out
+    assert f"Diagnóstico de {PRUEBAS[3].name} (33 párrafos)" in salida
+    assert "── Portada " in salida and "título (nivel 2)" in salida
+    assert salida.rstrip().endswith("1 de 1 documento(s) diagnosticado(s). No se ha generado ninguna copia.")
+    assert list(tmp_path.iterdir()) == []
+    assert (sorted((RAIZ / "salida").iterdir()) if (RAIZ / "salida").exists() else []) == antes
+
+
+def test_diagnostico_de_los_cinco_con_comodin(capsys):
+    assert main([str(RAIZ / "pruebas" / "*.docx"), "--diagnostico"]) == 0
+    salida = capsys.readouterr().out
+    assert salida.count("Diagnóstico de ") == 5
+    assert "5 de 5 documento(s) diagnosticado(s)." in salida
+
+
+def test_diagnostico_de_un_archivo_que_no_existe(capsys):
+    assert main(["no_existe.docx", "--diagnostico"]) == 1
+    assert "✘ no_existe.docx: No se encuentra el archivo" in capsys.readouterr().out
+
+
+def test_diagnostico_avisa_de_que_no_usa_la_fuente(capsys):
+    assert main([str(PRUEBAS[0]), "--diagnostico", "--fuente", "Arial"]) == 0
+    assert capsys.readouterr().out.startswith(
+        "Aviso: la opción --fuente no se usa en el modo diagnóstico, que no cambia nada.")
+
+
+def test_la_ayuda_explica_el_diagnostico(capsys):
+    with pytest.raises(SystemExit):
+        main(["-h"])
+    ayuda = capsys.readouterr().out
+    assert "--diagnostico" in ayuda and "no genera ninguna copia" in ayuda

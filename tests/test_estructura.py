@@ -636,3 +636,100 @@ def test_pendientes_siguen_pendientes(documento_y_parrafo):
     nombre, i = documento_y_parrafo
     c = clasificar(documento.abrir(PRUEBAS[0].parent / nombre))[i]
     assert (c.tipo, c.nivel, c.zona) != ESPERADO[nombre][i]
+
+
+# --- Modo diagnóstico: la tabla (paso 3.3) ----------------------------------------------
+
+def tabla(doc, ancho=100):
+    return estructura.como_texto(clasificar(doc), ancho)
+
+
+def documento_variado():
+    doc = docx.Document()
+    doc.add_paragraph("Mi trabajo").runs[0].add_break(WD_BREAK.PAGE)
+    doc.add_heading("Método", level=1)
+    doc.add_heading("Participantes", level=2)
+    doc.add_paragraph()
+    doc.add_paragraph(TEXTO)
+    doc.add_paragraph("Referencias")
+    doc.add_paragraph("Ortega, L. (2018). El tiempo de la fábrica.")
+    return doc
+
+
+def filas(texto):
+    """Las líneas de la tabla que corresponden a un párrafo (empiezan por su número)."""
+    return [linea for linea in texto.splitlines() if linea[:3].strip().isdigit()]
+
+
+def test_tabla_con_una_fila_por_parrafo_y_separadores_de_zona():
+    texto = tabla(documento_variado())
+    lineas = texto.splitlines()
+    assert lineas[0].split() == ["Nº", "Tipo", "Confianza", "Texto"]
+    separadores = [linea.split()[1] for linea in lineas if linea.startswith("── ")]
+    assert separadores == ["Portada", "Cuerpo", "Referencias"]
+    assert [fila.split()[0] for fila in filas(texto)] == [str(i) for i in range(7)]
+
+
+def test_tabla_nombra_los_tipos_en_espanol():
+    texto = tabla(documento_variado())
+    for esperado in ("título (nivel 1)", "título (nivel 2)", "vacío", "rótulo de referencias", "referencia"):
+        assert esperado in texto
+    assert "(sin texto)" in filas(texto)[3]
+
+
+def test_tabla_recorta_el_texto_al_ancho():
+    doc = documento_con_portada()
+    doc.add_paragraph(TEXTO + " " + TEXTO)
+    texto = tabla(doc, ancho=70)
+    assert max(len(linea) for linea in texto.splitlines()) <= 70
+    assert filas(texto)[-1].endswith("…")
+
+
+def test_tabla_estrecha_deja_al_menos_20_letras_de_texto():
+    doc = documento_con_portada()
+    doc.add_paragraph(TEXTO)
+    fila = filas(tabla(doc, ancho=30))[-1]
+    extracto = fila.split("alta", 1)[1].strip()
+    assert 18 <= len(extracto) <= 20 and extracto.endswith("…")
+    assert len(fila) > 30   # mejor pasarse del ancho que no dejar ver el texto
+
+
+def test_motivo_solo_en_los_parrafos_dudosos():
+    doc = documento_con_portada()          # la portada es de confianza alta
+    doc.add_paragraph("• Una idea escrita a mano")   # lista de confianza media
+    lineas = tabla(doc).splitlines()
+    fila_alta = next(i for i, linea in enumerate(lineas) if "Portada" in linea and linea[:3].strip().isdigit())
+    fila_media = next(i for i, linea in enumerate(lineas) if "Una idea" in linea)
+    assert not lineas[fila_alta + 1].lstrip().startswith("↳")
+    assert lineas[fila_media + 1].lstrip().startswith("↳ empieza con una viñeta")
+
+
+def test_motivo_largo_en_varias_lineas_sin_pasarse_del_ancho():
+    doc = documento_con_portada()
+    doc.add_paragraph().add_run("Factores de riesgo:").bold = True
+    texto = tabla(doc, ancho=60)
+    assert max(len(linea) for linea in texto.splitlines()) <= 60
+    assert sum(1 for linea in texto.splitlines() if linea.startswith("      ")) >= 1   # continuación del motivo
+
+
+def test_resumen_con_recuentos():
+    doc = documento_variado()
+    clasificados = clasificar(doc)
+    texto = estructura.como_texto(clasificados)
+    alta = sum(c.confianza == ALTA for c in clasificados)
+    assert f"Resumen: 7 párrafos · confianza alta {alta}, media {7 - alta}, baja 0" in texto
+    assert "título 2" in texto.split("Tipos:")[1]
+
+
+def test_documento_sin_parrafos():
+    assert estructura.como_texto([]) == "El documento no tiene párrafos de texto."
+
+
+@pytest.mark.parametrize("ruta", PRUEBAS, ids=lambda r: r.name)
+def test_tabla_de_los_documentos_de_prueba(ruta):
+    clasificados = clasificar(documento.abrir(ruta))
+    texto = estructura.como_texto(clasificados, 100)
+    assert max(len(linea) for linea in texto.splitlines()) <= 100
+    assert len(filas(texto)) == len(clasificados)
+    for fila, c in zip(filas(texto), clasificados):
+        assert estructura.nombre_de_tipo(c) in fila and c.confianza in fila

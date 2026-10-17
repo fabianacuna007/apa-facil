@@ -2,17 +2,22 @@
 Línea de comandos:
 
     python -m apa_facil mi_trabajo.docx [otro.docx ...] [--fuente "Arial"]
+    python -m apa_facil mi_trabajo.docx --diagnostico
 
 Guarda cada copia en salida/ como nombre_APA.docx y muestra un resumen de lo
 que se ha cambiado y de lo que el estudiante debe revisar.
+
+Con --diagnostico no se genera ninguna copia: solo se muestra qué es cada
+párrafo (título, cuerpo, lista…) según el clasificador, para revisarlo.
 """
 
 import argparse
 import glob
+import shutil
 import sys
 from pathlib import Path
 
-from apa_facil import pipeline
+from apa_facil import documento, estructura, pipeline
 from apa_facil.documento import ErrorDocumento
 from apa_facil.reglas import fuente
 
@@ -62,6 +67,9 @@ def crear_ordenes():
     ordenes.add_argument("--fuente", type=_fuente, metavar='"NOMBRE"',
                          help=f"fuente para todo el trabajo, con su tamaño: {tamanos}. Si no se indica, se "
                               "mantiene la del documento si es una de estas, o se usa la más parecida")
+    ordenes.add_argument("--diagnostico", action="store_true",
+                         help="no genera ninguna copia: muestra qué es cada párrafo (título, cuerpo, lista…), "
+                              "con qué confianza y por qué, para revisar cómo se ha entendido el documento")
     ordenes.add_argument("-h", "--help", action="help", help="muestra esta ayuda")
     return ordenes
 
@@ -98,12 +106,39 @@ def expandir_comodines(archivos):
     return resultado
 
 
+def diagnosticar(archivos, ancho=None):
+    """Muestra la clasificación de los párrafos de cada documento, sin generar copias."""
+    ancho = ancho or shutil.get_terminal_size((100, 24)).columns - 1
+    bien = 0
+    for archivo in archivos:
+        nombre = Path(archivo).name
+        try:
+            clasificados = estructura.clasificar(documento.abrir(archivo))
+        except ErrorDocumento as e:
+            print(f"✘ {nombre}: {e}")
+            continue
+        except Exception as e:  # un fallo inesperado no debe parar los demás archivos
+            print(f"✘ {nombre}: error inesperado al leerlo ({type(e).__name__}: {e}).")
+            continue
+        print(f"\nDiagnóstico de {nombre} ({len(clasificados)} párrafos)\n")
+        print(estructura.como_texto(clasificados, ancho))
+        bien += 1
+
+    total = len(archivos)
+    print(f"\n{bien} de {total} documento(s) diagnosticado(s). No se ha generado ninguna copia.")
+    return 0 if bien == total else 1
+
+
 def main(argv=None, carpeta_salida=None):
     configurar_terminal()
     args = crear_ordenes().parse_args(argv)
     opciones = {"fuente": args.fuente} if args.fuente else {}
 
     archivos = expandir_comodines(args.archivos)
+    if args.diagnostico:
+        if args.fuente:
+            print("Aviso: la opción --fuente no se usa en el modo diagnóstico, que no cambia nada.")
+        return diagnosticar(archivos)
     bien = 0
     for archivo in archivos:
         nombre = Path(archivo).name

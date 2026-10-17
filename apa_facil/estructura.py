@@ -30,6 +30,7 @@ cuadros de texto. El clasificador no cambia nada del documento.
 """
 
 import re
+import textwrap
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Optional
@@ -715,3 +716,72 @@ def clasificar(doc, estilos=None):
     Devuelve una lista de Parrafo en el orden del documento.
     """
     return _Clasificador(doc, estilos).clasificar()
+
+
+# --- Modo diagnóstico (paso 3.3) ------------------------------------------------------
+
+NOMBRES_DE_TIPO = {"portada": "portada", "indice": "índice", "titulo": "título", "cuerpo": "cuerpo",
+                   "lista": "lista", "leyenda_tabla": "leyenda de tabla", "leyenda_figura": "leyenda de figura",
+                   "cita_bloque": "cita en bloque", "titulo_referencias": "rótulo de referencias",
+                   "referencia": "referencia", "anexo": "rótulo de anexo", "imagen": "imagen", "vacio": "vacío"}
+NOMBRES_DE_ZONA = {"portada": "Portada", "indice": "Índice", "resumen": "Resumen", "cuerpo": "Cuerpo",
+                   "referencias": "Referencias", "anexos": "Anexos"}
+ANCHO_DEL_TIPO = max(len(nombre) for nombre in NOMBRES_DE_TIPO.values())
+ANCHO_DE_LA_CONFIANZA = len("Confianza")
+ANCHO_MINIMO_DEL_TEXTO = 20
+
+
+def nombre_de_tipo(c):
+    """"título (nivel 2)", "leyenda de tabla"…"""
+    nombre = NOMBRES_DE_TIPO[c.tipo]
+    return f"{nombre} (nivel {c.nivel})" if c.nivel else nombre
+
+
+def como_texto(clasificados, ancho=100):
+    """
+    La clasificación en forma de tabla para la terminal: número de párrafo,
+    tipo, confianza y el principio del texto, con una línea cada vez que
+    empieza una zona. Los párrafos de confianza media o baja llevan debajo el
+    motivo (son los dudosos, los que hay que revisar). Al final, los recuentos.
+    """
+    if not clasificados:
+        return "El documento no tiene párrafos de texto."
+    numero = max(2, len(str(clasificados[-1].posicion)))
+    columnas = numero + 2 + ANCHO_DEL_TIPO + 2 + ANCHO_DE_LA_CONFIANZA + 2
+    texto = max(ancho - columnas, ANCHO_MINIMO_DEL_TEXTO)
+    ancho = columnas + texto
+
+    lineas = [f"{'Nº':>{numero}}  {'Tipo':<{ANCHO_DEL_TIPO}}  {'Confianza':<{ANCHO_DE_LA_CONFIANZA}}  Texto"]
+    zona = None
+    for c in clasificados:
+        if c.zona != zona:
+            zona = c.zona
+            rotulo = f"── {NOMBRES_DE_ZONA[zona]} "
+            lineas.append(rotulo + "─" * (ancho - len(rotulo)))
+        extracto = c.texto or "(sin texto)"
+        if len(extracto) > texto:
+            extracto = extracto[:texto - 1].rstrip() + "…"
+        lineas.append(f"{c.posicion:>{numero}}  {nombre_de_tipo(c):<{ANCHO_DEL_TIPO}}  "
+                      f"{c.confianza:<{ANCHO_DE_LA_CONFIANZA}}  {extracto}")
+        if c.confianza != ALTA:
+            lineas.append(textwrap.fill(c.motivo, width=ancho, initial_indent=" " * (numero + 2) + "↳ ",
+                                        subsequent_indent=" " * (numero + 4)))
+
+    confianzas = Counter(c.confianza for c in clasificados)
+    tipos = Counter(NOMBRES_DE_TIPO[c.tipo] for c in clasificados)
+    lineas += ["", f"Resumen: {len(clasificados)} párrafos · confianza alta {confianzas[ALTA]}, "
+                   f"media {confianzas[MEDIA]}, baja {confianzas[BAJA]}",
+               *_en_lineas("Tipos: ", [f"{nombre} {n}" for nombre, n in tipos.most_common()], ancho)]
+    return "\n".join(lineas)
+
+
+def _en_lineas(prefijo, partes, ancho, separador=" · "):
+    """Une las partes en líneas de `ancho` como mucho, sin partir ninguna parte."""
+    lineas, actual = [], prefijo + partes[0]
+    for parte in partes[1:]:
+        if len(actual) + len(separador) + len(parte) > ancho:
+            lineas.append(actual + separador.rstrip())
+            actual = " " * len(prefijo) + parte
+        else:
+            actual += separador + parte
+    return lineas + [actual]
