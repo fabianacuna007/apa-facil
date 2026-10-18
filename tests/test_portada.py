@@ -217,7 +217,7 @@ def test_titulo_tal_cual(sin_portada, tmp_path):
     _, informe = pipeline.procesar(sin_portada, tmp_path, {"portada": combinar(DATOS_01), "titulo_tal_cual": True})
     doc = docx.Document(str(tmp_path / "01_sin_portada_APA.docx"))
     assert textos(doc, 11)[3] == textos(doc, 11)[10] == TITULO_01
-    assert not any("mayúscula inicial en las palabras principales" in c for c in informe.cambios)
+    assert not any(c.startswith("Portada: el título lleva ahora mayúscula inicial") for c in informe.cambios)
 
 
 def test_datos_que_faltan_y_palabras_dudosas(sin_portada, tmp_path):
@@ -226,7 +226,7 @@ def test_datos_que_faltan_y_palabras_dudosas(sin_portada, tmp_path):
     doc = docx.Document(str(salida))
     assert textos(doc, 7) == ["", "", "", "Lo que Cambió la Industria", "", "Ana Pérez e Inés Gil",
                               "Lo que Cambió la Industria"]
-    assert any(a.startswith("En el título se ha dejado como la escribiste «que»") for a in informe.avisos)
+    assert any(a.startswith("En el título de la portada se ha dejado como estaba «que»") for a in informe.avisos)
     assert any(a.startswith("Faltan datos para la portada: el departamento") for a in informe.avisos)
     assert verificar(str(salida)).incumplimientos == []
 

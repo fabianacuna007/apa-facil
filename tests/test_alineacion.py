@@ -212,10 +212,12 @@ def test_documentos_de_prueba(original, tmp_path):
 
     assert not [k for k in despues if k[1] in alineacion.JUSTIFICADOS]
     assert despues[("cuerpo", "right")] == DERECHA_ESPERADA.get(original.name[:2], 0)
-    # Lo centrado sigue centrado; lo único que se centra son los títulos de nivel 1 (paso 4.1).
-    centrados_antes, centrados_despues = _centrados(docx.Document(str(original))), _centrados(docx.Document(str(salida)))
+    # Lo centrado sigue centrado; lo único que se centra son los títulos de nivel 1 (paso 4.1). Los textos se
+    # comparan sin mayúsculas: el paso 4.6 cambia las de los títulos.
+    centrados_antes = {t.lower() for t in _centrados(docx.Document(str(original)))}
+    centrados_despues = {t.lower() for t in _centrados(docx.Document(str(salida)))}
     assert not centrados_antes - centrados_despues, "lo centrado no cambia"
-    nivel_1 = {" ".join(c.texto.split()) for c in estructura.clasificar(docx.Document(str(salida)))
+    nivel_1 = {" ".join(c.texto.split()).lower() for c in estructura.clasificar(docx.Document(str(salida)))
                if c.tipo in ("titulo", "titulo_referencias", "anexo") and (c.nivel or 1) == 1}
     assert set(centrados_despues - centrados_antes) <= nivel_1
     for clave, n in antes.items():

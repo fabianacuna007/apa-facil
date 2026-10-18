@@ -2,7 +2,7 @@
 Línea de comandos:
 
     python -m apa_facil mi_trabajo.docx [otro.docx ...] [--fuente "Arial"]
-                        [--quitar-numeracion] [--quitar-mayusculas] [--quitar-introduccion]
+                        [--quitar-numeracion] [--titulos-tal-cual] [--quitar-introduccion]
                         [--datos datos.json] [--titulo "…"] [--autor "…"] … [--fecha 16/10/2026]
                         [--titulo-tal-cual]
     python -m apa_facil mi_trabajo.docx --diagnostico
@@ -79,10 +79,11 @@ def crear_ordenes():
     ordenes.add_argument("--quitar-numeracion", action="store_true",
                          help="quita la numeración de los títulos («1.1. Objetivos» → «Objetivos»), como pide APA. "
                               "Sin esta opción solo se avisa, porque muchas universidades exigen numerarlos")
-    ordenes.add_argument("--quitar-mayusculas", action="store_true",
-                         help="pasa a minúsculas los títulos escritos en mayúsculas («RESUMEN» → «Resumen»), "
-                              "respetando los nombres propios y las siglas que el trabajo escribe así en el texto. "
-                              "Sin esta opción solo se avisa")
+    ordenes.add_argument("--titulos-tal-cual", action="store_true",
+                         help="deja las mayúsculas de los títulos de los apartados como están. Sin esta opción "
+                              "llevan mayúscula inicial en las palabras principales, como pide APA («RESUMEN» → "
+                              "«Resumen», «Marco teórico» → «Marco Teórico»), respetando los nombres propios y las "
+                              "siglas que el trabajo escribe así en el texto")
     ordenes.add_argument("--quitar-introduccion", action="store_true",
                          help="quita el rótulo «Introducción» del primer apartado, que APA no usa (el título del "
                               "trabajo hace sus veces), si el apartado no tiene subapartados. Sin esta opción solo "
@@ -179,14 +180,14 @@ def main(argv=None, carpeta_salida=None):
     ordenes = crear_ordenes()
     args = ordenes.parse_args(argv)
     opciones = {"fuente": args.fuente} if args.fuente else {}
-    for opcion in ("quitar_numeracion", "quitar_mayusculas", "quitar_introduccion", "titulo_tal_cual"):
+    for opcion in ("quitar_numeracion", "titulos_tal_cual", "quitar_introduccion", "titulo_tal_cual"):
         if getattr(args, opcion):
             opciones[opcion] = True
 
     archivos = expandir_comodines(args.archivos)
     if args.diagnostico:
         for nombre, usada in (("--fuente", args.fuente), ("--quitar-numeracion", args.quitar_numeracion),
-                              ("--quitar-mayusculas", args.quitar_mayusculas),
+                              ("--titulos-tal-cual", args.titulos_tal_cual),
                               ("--quitar-introduccion", args.quitar_introduccion),
                               ("--titulo-tal-cual", args.titulo_tal_cual)):
             if usada:

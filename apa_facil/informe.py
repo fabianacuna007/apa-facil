@@ -24,8 +24,9 @@ from dataclasses import dataclass, field
 
 from apa_facil.documento import CambioPrevisto, ErrorDocumento
 
-VERSION = 5   # versión del formato del JSON: se sube si cambia su estructura (2 y 3: opciones de los títulos;
-              # 4: datos de la portada; 5: --titulo-tal-cual)
+VERSION = 6   # versión del formato del JSON: se sube si cambia su estructura (2 y 3: opciones de los títulos;
+              # 4: datos de la portada; 5: --titulo-tal-cual; 6: --titulos-tal-cual en vez de
+              # --quitar-mayusculas)
 
 # Nombre legible de cada regla (el módulo de apa_facil/reglas/ que la aplica).
 NOMBRES = {
@@ -107,7 +108,7 @@ class Informe:
             "fecha": self.fecha,
             "opciones": {"fuente": self.opciones.get("fuente"),
                          "quitar_numeracion": bool(self.opciones.get("quitar_numeracion")),
-                         "quitar_mayusculas": bool(self.opciones.get("quitar_mayusculas")),
+                         "titulos_tal_cual": bool(self.opciones.get("titulos_tal_cual")),
                          "quitar_introduccion": bool(self.opciones.get("quitar_introduccion")),
                          "titulo_tal_cual": bool(self.opciones.get("titulo_tal_cual")),
                          "portada": self._portada()},

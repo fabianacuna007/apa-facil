@@ -52,9 +52,10 @@ FORMATO_TITULOS = "4.2 Formato de los títulos"
 TEXTO_TITULOS = "4.3 Numeración y mayúsculas de los títulos"
 TITULO_TRABAJO = "4.4 Título del trabajo"
 TITULOS_EN_LINEA = "4.5 Títulos de nivel 4 y 5 en línea"
+MAYUSCULAS_TITULOS = "4.6 Mayúsculas de los títulos"
 PORTADA = "5.2 Portada"
 REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS, TEXTO_TITULOS,
-          TITULO_TRABAJO, TITULOS_EN_LINEA, PORTADA]
+          TITULO_TRABAJO, TITULOS_EN_LINEA, MAYUSCULAS_TITULOS, PORTADA]
 
 MAXIMO_POR_REGLA = 8   # incumplimientos que se muestran de cada regla; del resto, solo cuántos son
 
@@ -160,7 +161,7 @@ class Verificacion:
         for comprobacion in (self.margenes, self.fuente, self.interlineado, self.alineacion,
                              self.sangria, self.paginacion, self.titulos, self.formato_de_titulos,
                              self.texto_de_titulos, self.titulo_del_trabajo, self.titulos_en_linea,
-                             self.portada):
+                             self.mayusculas_de_titulos, self.portada):
             comprobacion()
         return self.resultado
 
@@ -584,10 +585,10 @@ class Verificacion:
 
     def texto_de_titulos(self):
         """
-        APA no numera los títulos ni los escribe en mayúsculas, pero cambiarlo
-        modifica el texto: por defecto se deja y se avisa (solo se cambia con
-        --quitar-numeracion y --quitar-mayusculas). Por eso no son
-        incumplimientos, sino excepciones admitidas.
+        APA no numera los títulos, pero quitar la numeración modifica el texto:
+        por defecto se deja y se avisa (solo se quita con --quitar-numeracion).
+        Por eso no es un incumplimiento, sino una excepción admitida. Las
+        mayúsculas las comprueba 4.6.
         """
         for c in self.clasificados:
             if c.tipo != "titulo" or c.confianza == estructura.BAJA or self._es_titulo_del_trabajo(c):
@@ -596,9 +597,6 @@ class Verificacion:
             if titulos.numeracion(texto):
                 self.excepcion_en(TEXTO_TITULOS, info, "Título numerado: APA no numera los títulos, pero se deja "
                                                        "(se avisa en el informe; --quitar-numeracion lo quita).")
-            if titulos.en_mayusculas(texto):
-                self.excepcion_en(TEXTO_TITULOS, info, "Título en mayúsculas: se deja (se avisa en el informe; "
-                                                       "--quitar-mayusculas lo cambia).")
 
     # --- 4.4 Título del trabajo ---------------------------------------------------------------
 
@@ -611,23 +609,22 @@ class Verificacion:
     def titulo_del_trabajo(self):
         """
         El texto empieza con el título del trabajo: el párrafo con el estilo «Title» y
-        el mismo texto que la portada (su formato lo comprueban 4.1 y 4.2). Si no hay
-        portada, no se puede saber cuál es. El rótulo «Introducción» y el título en
-        mayúsculas se dejan a propósito: son excepciones admitidas.
+        el mismo texto que la portada, salvo mayúsculas y minúsculas (su formato lo
+        comprueban 4.1 y 4.2, y sus mayúsculas, 4.6). Si no hay portada, no se puede
+        saber cuál es. El rótulo «Introducción» se deja a propósito: es una excepción
+        admitida.
         """
-        portada = [texto_parrafo(c.elemento) for c in self.clasificados if c.zona == "portada" and c.texto]
+        portada = [texto_parrafo(c.elemento).strip().lower() for c in self.clasificados
+                   if c.zona == "portada" and c.texto]
         primero = next((c for c in self.clasificados if c.zona == "cuerpo" and c.tipo != "vacio"), None)
         if not portada or primero is None:
             return
         info = self.por_elemento[primero.elemento]
-        lineas = texto_parrafo(primero.elemento).split("\n")
+        lineas = texto_parrafo(primero.elemento).lower().split("\n")
         en_la_portada = any(portada[i:i + len(lineas)] == lineas for i in range(len(portada)))
         if not self._es_titulo_del_trabajo(primero) or not en_la_portada:
             self.fallo_en(TITULO_TRABAJO, info, "El texto no empieza con el título del trabajo (el de la portada, "
                                                 "con el estilo «Título» de Word).")
-        elif any(titulos.en_mayusculas(linea) for linea in lineas):
-            self.excepcion_en(TITULO_TRABAJO, info, "El título del trabajo está en mayúsculas, como en la portada: "
-                                                    "se deja (se avisa en el informe).")
         rotulo = next((c for c in self.clasificados if c.zona == "cuerpo" and c.tipo == "titulo"
                        and not self._es_titulo_del_trabajo(c)), None)
         if rotulo is not None and rotulo.nivel == 1 and documento.es_rotulo_de_introduccion(texto_parrafo(rotulo.elemento)):
@@ -670,6 +667,28 @@ class Verificacion:
                 problemas.append("no termina en punto")
             if problemas:
                 self.fallo_en(TITULOS_EN_LINEA, info, f"Título de nivel {c.nivel}: {'; '.join(problemas)}.")
+
+    # --- 4.6 Mayúsculas de los títulos --------------------------------------------------------
+
+    def mayusculas_de_titulos(self):
+        """
+        Los títulos (niveles 1 a 5 y el del trabajo al principio del texto) llevan
+        mayúscula inicial en las palabras principales, como pide la web oficial de APA
+        (Title case capitalization): son tal como los deja titulos.mayusculas_apa. Las
+        palabras dudosas («que», «lo», «vía») se admiten de las dos formas.
+        """
+        for c in self.clasificados:
+            es_del_trabajo = self._es_titulo_del_trabajo(c) and c.zona == "cuerpo"
+            if not es_del_trabajo and (c.tipo != "titulo" or c.confianza == estructura.BAJA):
+                continue
+            mal = []
+            for linea in texto_parrafo(c.elemento).split("\n"):
+                esperada = titulos.mayusculas_apa(linea, self.clasificados)[0]
+                if esperada != linea:
+                    mal.append(esperada.strip())
+            if mal:
+                self.fallo_en(MAYUSCULAS_TITULOS, self.por_elemento[c.elemento],
+                              f"No lleva las mayúsculas de APA (sería «{' / '.join(mal)}»).")
 
     # --- 5.2 Portada -------------------------------------------------------------------------
 

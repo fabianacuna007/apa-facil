@@ -181,17 +181,36 @@ def test_la_ayuda_explica_el_diagnostico(capsys):
 
 def test_opciones_de_los_titulos(tmp_path, capsys):
     original = next(p for p in PRUEBAS if p.name.startswith("05"))
-    assert main([str(original), "--quitar-numeracion", "--quitar-mayusculas"], carpeta_salida=tmp_path) == 0
+    assert main([str(original), "--quitar-numeracion"], carpeta_salida=tmp_path) == 0
     salida = capsys.readouterr().out
     assert "Títulos: se ha quitado la numeración de 12 títulos" in salida
-    assert "Títulos: 1 título pasa de mayúsculas a minúsculas («RESUMEN» → «Resumen»)" in salida
-    assert "--quitar-numeracion" not in salida and "--quitar-mayusculas" not in salida, "sin los avisos"
+    # Las mayúsculas de APA, por defecto (paso 4.6).
+    assert "Títulos: 8 títulos llevan ahora mayúscula inicial en las palabras principales, como pide APA " \
+           "(«RESUMEN» → «Resumen»" in salida
+    assert "--quitar-numeracion" not in salida, "sin el aviso"
     datos = json.loads((tmp_path / f"{original.stem}_APA.json").read_text(encoding="utf-8"))
-    assert datos["opciones"] == {"fuente": None, "quitar_numeracion": True, "quitar_mayusculas": True,
+    assert datos["opciones"] == {"fuente": None, "quitar_numeracion": True, "titulos_tal_cual": False,
                                  "quitar_introduccion": False,
                                  "titulo_tal_cual": False, "portada": None}
 
 
+def test_titulos_tal_cual(tmp_path, capsys):
+    original = next(p for p in PRUEBAS if p.name.startswith("05"))
+    assert main([str(original), "--titulos-tal-cual"], carpeta_salida=tmp_path) == 0
+    salida = capsys.readouterr().out
+    assert "títulos llevan ahora mayúscula inicial" not in salida
+    assert "no llevan las mayúsculas de APA («RESUMEN»" in salida
+    datos = json.loads((tmp_path / f"{original.stem}_APA.json").read_text(encoding="utf-8"))
+    assert datos["opciones"]["titulos_tal_cual"] is True
+
+
+def test_quitar_mayusculas_ya_no_existe(capsys):
+    # Desde el paso 4.6 las mayúsculas de APA se ponen por defecto: la opción antigua no se reconoce.
+    with pytest.raises(SystemExit):
+        main([str(PRUEBAS[0]), "--quitar-mayusculas"])
+    assert "Opción no reconocida: --quitar-mayusculas" in capsys.readouterr().err
+
+
 def test_opciones_de_los_titulos_en_el_diagnostico(capsys):
-    assert main([str(PRUEBAS[0]), "--diagnostico", "--quitar-mayusculas"]) == 0
-    assert "Aviso: la opción --quitar-mayusculas no se usa en el modo diagnóstico" in capsys.readouterr().out
+    assert main([str(PRUEBAS[0]), "--diagnostico", "--titulos-tal-cual"]) == 0
+    assert "Aviso: la opción --titulos-tal-cual no se usa en el modo diagnóstico" in capsys.readouterr().out

@@ -18,7 +18,8 @@ from apa_facil import estructura, pipeline
 from apa_facil.documento import CambioPrevisto, Estilos, comparar, radiografia, texto_parrafo, w
 from apa_facil.informe import Informe
 from apa_facil.reglas import titulos
-from herramientas.verificar import FORMATO_TITULOS, TITULO_TRABAJO, TITULOS, TITULOS_EN_LINEA, verificar
+from herramientas.verificar import (FORMATO_TITULOS, MAYUSCULAS_TITULOS, TITULO_TRABAJO, TITULOS, TITULOS_EN_LINEA,
+                                   verificar)
 
 PRUEBAS = sorted((Path(__file__).resolve().parent.parent / "pruebas").glob("*.docx"))
 TEXTO = ("Este es un párrafo normal de texto con bastantes palabras para que no parezca un título "
@@ -410,14 +411,14 @@ def el_parrafo(doc, inicio):
 @pytest.mark.parametrize("original, queda", [
     ("Niños", "Niños. "),                      # se añade el punto y un espacio
     ("Niñas.", "Niñas. "),                     # ya tenía el punto: solo el espacio
-    ("¿Por qué leen?", "¿Por qué leen? "),     # con interrogación, APA no añade punto
-    ("Los «nativos digitales»", "Los «nativos digitales». "),
+    ("¿Por qué leen?", "¿Por Qué Leen? "),     # con interrogación, APA no añade punto (y 4.6: mayúsculas)
+    ("Los «nativos digitales»", "Los «Nativos Digitales». "),
 ])
 def test_nivel_4_en_la_misma_linea_con_su_punto(original, queda):
     doc = con_niveles((original, 4))
     antes = radiografia(doc)
     informe = aplicar(doc)
-    p = parrafo_que_empieza(doc, original)
+    p = parrafo_que_empieza(doc, original[:4])
     assert texto_parrafo(p) == queda
     assert titulos.en_linea(p), "la marca de párrafo, oculta (separador de estilo de Word)"
     assert texto_parrafo(p.getnext()) == TEXTO, "el texto de debajo no cambia"
@@ -442,7 +443,7 @@ def test_con_dos_puntos_se_une_pero_se_avisa():
     doc = con_niveles(("Factores de riesgo:", 4))
     informe = aplicar(doc)
     p = parrafo_que_empieza(doc, "Factores")
-    assert texto_parrafo(p) == "Factores de riesgo: " and titulos.en_linea(p)
+    assert texto_parrafo(p) == "Factores de Riesgo: " and titulos.en_linea(p)
     assert any("termina en dos puntos o punto y coma" in a for a in informe.avisos)
     assert [h.regla for h in verificar(doc).excepciones if h.regla == TITULOS_EN_LINEA] == [TITULOS_EN_LINEA]
 
@@ -502,7 +503,7 @@ def test_el_verificador_ve_un_nivel_4_que_no_va_en_linea():
 
 # --- 4.3 Numeración y mayúsculas --------------------------------------------------------------
 
-QUITAR_TODO = {"quitar_numeracion": True, "quitar_mayusculas": True}
+TAL_CUAL = {"titulos_tal_cual": True}   # para probar la numeración sin las mayúsculas de APA (paso 4.6)
 
 
 def aplicar_con(doc, opciones):
@@ -531,38 +532,53 @@ def test_que_numeracion_se_quita(titulo_original, sin_numeracion):
     doc = documento_con_portada()
     p = titulo(doc, titulo_original, 1)
     antes = radiografia(doc)
-    informe = aplicar_con(doc, {"quitar_numeracion": True})
+    informe = aplicar_con(doc, {"quitar_numeracion": True, **TAL_CUAL})
     assert texto(p) == sin_numeracion
     assert comparar(antes, radiografia(doc), informe.cambios_previstos) == []
 
 
-def test_por_defecto_solo_se_avisa():
+def test_por_defecto_la_numeracion_solo_se_avisa_y_las_mayusculas_se_cambian():
     doc = documento_con_portada()
     p1 = titulo(doc, "1. Introducción", 1)
     p2 = titulo(doc, "2. MÉTODO", 1)
+    p3 = titulo(doc, "3. Análisis de los datos", 1)
     antes = radiografia(doc)
     informe = aplicar(doc)
-    assert (texto(p1), texto(p2)) == ("1. Introducción", "2. MÉTODO")
+    assert (texto(p1), texto(p2), texto(p3)) == ("1. Introducción", "2. Método", "3. Análisis de los Datos")
     assert comparar(antes, radiografia(doc), informe.cambios_previstos) == []
-    assert previstos_sin_el_titulo(informe) == []
-    assert [a for a in informe.avisos if "numeración" in a or "mayúsculas" in a] == [
-        "2 títulos empiezan con una numeración («1. Introducción», «2. MÉTODO»). APA no numera los títulos, pero "
-        "muchas universidades lo exigen, así que se ha dejado como estaba. Si la tuya no lo pide, la herramienta "
-        "puede quitarla: usa la opción --quitar-numeracion.",
-        "1 título está escrito en mayúsculas («2. MÉTODO»). APA escribe los títulos con mayúscula solo al principio "
-        "y en los nombres propios. Cámbialo tú o usa la opción --quitar-mayusculas.",
-    ]
+    assert [c.accion for c in previstos_sin_el_titulo(informe)] == ["mayusculas_apa", "mayusculas_apa"]
+    assert [a for a in informe.avisos if "numeración" in a] == [
+        "3 títulos empiezan con una numeración («1. Introducción», «2. MÉTODO», «3. Análisis de los datos»). APA no "
+        "numera los títulos, pero muchas universidades lo exigen, así que se ha dejado como estaba. Si la tuya no lo "
+        "pide, la herramienta puede quitarla: usa la opción --quitar-numeracion."]
+    assert ("Títulos: 2 títulos llevan ahora mayúscula inicial en las palabras principales, como pide APA "
+            "(«2. MÉTODO» → «2. Método», «3. Análisis de los datos» → «3. Análisis de los Datos»). Se han respetado "
+            "los nombres propios y las siglas que el trabajo escribe así en el texto; revisa que hayan quedado bien. "
+            "Si prefieres dejar los títulos como estaban, usa la opción --titulos-tal-cual.") in informe.cambios
 
 
-def test_las_dos_opciones_son_independientes():
+def test_titulos_tal_cual():
+    doc = documento_con_portada()
+    p = titulo(doc, "2. Marco teórico", 1)
+    informe = aplicar_con(doc, TAL_CUAL)
+    assert texto(p) == "2. Marco teórico" and previstos_sin_el_titulo(informe) == []
+    assert any(a.startswith("1 título no lleva las mayúsculas de APA («2. Marco teórico»)") and
+               "--titulos-tal-cual" in a for a in informe.avisos)
+
+
+def test_las_dos_cosas_son_independientes():
     doc = documento_con_portada()
     p = titulo(doc, "2. MÉTODO", 1)
-    aplicar_con(doc, {"quitar_mayusculas": True})
+    aplicar_con(doc, {})
     assert texto(p) == "2. Método"
     doc = documento_con_portada()
     p = titulo(doc, "2. MÉTODO", 1)
-    aplicar_con(doc, {"quitar_numeracion": True})
+    aplicar_con(doc, {"quitar_numeracion": True, **TAL_CUAL})
     assert texto(p) == "MÉTODO"
+    doc = documento_con_portada()
+    p = titulo(doc, "2. MÉTODO", 1)
+    aplicar_con(doc, {"quitar_numeracion": True})
+    assert texto(p) == "Método"
 
 
 def test_numeracion_repartida_en_varios_fragmentos():
@@ -573,7 +589,7 @@ def test_numeracion_repartida_en_varios_fragmentos():
     p.runs[3].italic = True
     doc.add_paragraph(TEXTO)
     antes = radiografia(doc)
-    informe = aplicar_con(doc, {"quitar_numeracion": True})
+    informe = aplicar_con(doc, {"quitar_numeracion": True, **TAL_CUAL})
     assert texto(p) == "Antecedentes"
     assert [r.text for r in p.runs] == ["", "", "", "Antece", "dentes"] and p.runs[3].italic, "el formato no se mueve"
     assert comparar(antes, radiografia(doc), informe.cambios_previstos) == []
@@ -585,12 +601,8 @@ def test_mayusculas_conservan_nombres_propios_siglas_y_romanos():
     doc.add_paragraph("Desde que España entró en la UE, el país ha cambiado. " + TEXTO)
     doc.add_paragraph("Hoy el estado de la cuestión es distinto. " + TEXTO)
     antes = radiografia(doc)
-    informe = aplicar_con(doc, {"quitar_mayusculas": True})
-    assert texto(p) == "La UE y España en el siglo XXI"
-    assert sin_el_titulo(informe.cambios)[-1] == ("Títulos: 1 título pasa de mayúsculas a minúsculas («LA UE Y ESPAÑA EN EL "
-                                   "SIGLO XXI» → «La UE y España en el siglo XXI»). Se han respetado los nombres "
-                                   "propios y las siglas que el trabajo escribe así en el texto; revisa que hayan "
-                                   "quedado bien.")
+    informe = aplicar_con(doc, {})
+    assert texto(p) == "La UE y España en el Siglo XXI"
     assert comparar(antes, radiografia(doc), informe.cambios_previstos) == []
 
 
@@ -600,15 +612,49 @@ def test_mayusculas_en_varios_fragmentos_sin_mover_el_formato():
     p.add_run("MARCO ")
     p.add_run("TEÓRICO").italic = True
     doc.add_paragraph(TEXTO)
-    aplicar_con(doc, {"quitar_mayusculas": True})
-    assert [r.text for r in p.runs] == ["Marco ", "teórico"] and p.runs[1].italic
+    aplicar_con(doc, {})
+    assert [r.text for r in p.runs] == ["Marco ", "Teórico"] and p.runs[1].italic
 
 
-def test_solo_titulos_enteros_en_mayusculas():
+def test_titulo_que_ya_cumple_no_cambia():
     doc = documento_con_portada()
-    p = titulo(doc, "El caso de la ONU", 1)
-    informe = aplicar_con(doc, QUITAR_TODO)
-    assert texto(p) == "El caso de la ONU" and previstos_sin_el_titulo(informe) == []
+    p = titulo(doc, "El Caso de la ONU", 1)
+    informe = aplicar_con(doc, {})
+    assert texto(p) == "El Caso de la ONU" and previstos_sin_el_titulo(informe) == []
+
+
+def test_palabras_dudosas_en_los_titulos():
+    doc = documento_con_portada()
+    p = titulo(doc, "lo que dicen los datos", 2)
+    informe = aplicar_con(doc, {})
+    assert texto(p) == "Lo que Dicen los Datos"
+    assert any(a.startswith("En los títulos se ha dejado como estaba «que»") for a in informe.avisos)
+
+
+@pytest.mark.parametrize("original, esperado", [
+    ("a) evolución demográfica", "a) Evolución Demográfica"),   # la numeración, como está (no «A)»)
+    ("IV. marco teórico", "IV. Marco Teórico"),
+    ("1.1. objetivos", "1.1. Objetivos"),
+    ("2.3. LA UE EN CIFRAS", "2.3. La Ue en Cifras"),          # sin el trabajo, «UE» no se reconoce como sigla
+])
+def test_mayusculas_apa_respetan_la_numeracion(original, esperado):
+    assert titulos.mayusculas_apa(original)[0] == esperado
+
+
+def test_el_verificador_ve_un_titulo_sin_las_mayusculas_de_apa():
+    doc = documento_con_portada()
+    titulo(doc, "2. Marco teórico", 1)
+    assert problemas_del_verificador(doc, MAYUSCULAS_TITULOS) == [
+        "No lleva las mayúsculas de APA (sería «2. Marco Teórico»)."]
+    aplicar(doc)
+    assert problemas_del_verificador(doc, MAYUSCULAS_TITULOS) == []
+
+
+@pytest.mark.parametrize("escrito", ["Lo que Dicen los Datos", "Lo Que Dicen los Datos"])
+def test_el_verificador_admite_las_dudosas_de_las_dos_formas(escrito):
+    doc = documento_con_portada()
+    titulo(doc, escrito, 2)
+    assert problemas_del_verificador(doc, MAYUSCULAS_TITULOS) == []
 
 
 def test_aviso_de_remisiones_y_del_indice():
@@ -629,16 +675,18 @@ def test_la_integridad_solo_acepta_lo_previsto():
     numero = 2   # el párrafo del título (el 1 es la portada)
     p.runs[0].text = "Método nuevo"
     assert comparar(antes, radiografia(doc), [CambioPrevisto(numero, "quitar_numeracion", "1. ")])
-    assert comparar(antes, radiografia(doc), [CambioPrevisto(numero, "cambiar_mayusculas", nuevo="Método nuevo")])
+    assert comparar(antes, radiografia(doc), [CambioPrevisto(numero, "mayusculas_apa", nuevo="Método nuevo")])
     p.runs[0].text = "ÉTODO"
     assert comparar(antes, radiografia(doc), [CambioPrevisto(numero, "quitar_numeracion", "1. M")]), \
         "solo se puede quitar una numeración, aunque lo quitado coincida"
     p.runs[0].text = "Método"
     assert comparar(antes, radiografia(doc), [CambioPrevisto(numero, "quitar_numeracion", "1. "),
-                                              CambioPrevisto(numero, "cambiar_mayusculas", nuevo="Método")]) == []
+                                              CambioPrevisto(numero, "mayusculas_apa", nuevo="Método")]) == []
     p.runs[0].text = "1. Método"
-    assert comparar(antes, radiografia(doc), [CambioPrevisto(numero, "cambiar_mayusculas", nuevo="1. Método")]) == []
-    assert comparar(antes, radiografia(doc), [CambioPrevisto(numero, "cambiar_mayusculas", nuevo="1. Métodos")])
+    assert comparar(antes, radiografia(doc), [CambioPrevisto(numero, "mayusculas_apa", nuevo="1. Método")]) == []
+    assert comparar(antes, radiografia(doc), [CambioPrevisto(numero, "mayusculas_apa", nuevo="1. Métodos")])
+    assert comparar(antes, radiografia(doc), [CambioPrevisto(numero, "mayusculas_apa", nuevo="1. MÉTODO")]), \
+        "un cambio de mayúsculas anotado tiene que cambiar algo"
 
 
 # --- 4.4 Título del trabajo y rótulo «Introducción» -------------------------------------------
@@ -678,13 +726,13 @@ def test_el_titulo_de_la_portada_se_repite_al_principio_del_texto():
     antes = radiografia(doc)
     informe = aplicar(doc)
     [nuevo] = titulos_del_trabajo(doc)
-    assert texto_parrafo(nuevo) == "El sueño en la universidad"
+    assert texto_parrafo(nuevo) == "El Sueño en la Universidad"   # con las mayúsculas de APA (paso 4.6)
     assert nuevo.getnext() is not None and texto_parrafo(nuevo.getnext()) == "Introducción"
     assert nuevo.find(f"{w('pPr')}/{w('outlineLvl')}").get(w("val")) == "0", "sale en el panel de navegación"
     estilo = titulos.estilos_del_titulo_del_trabajo(doc)[0]
     assert estilo.find(f"{w('pPr')}/{w('outlineLvl')}") is None, "el estilo, sin nivel: no sale en el índice"
     assert estilo.find(f"{w('pPr')}/{w('jc')}").get(w("val")) == "center"
-    assert "Título del trabajo: se ha repetido «El sueño en la universidad» al principio del texto, centrado y " \
+    assert "Título del trabajo: se ha repetido «El Sueño en la Universidad» al principio del texto, centrado y " \
            "en negrita, como pide APA." in informe.cambios
     assert comparar(antes, radiografia(doc), informe.cambios_previstos) == []
     assert problemas_del_verificador(doc, TITULO_TRABAJO) == []
@@ -694,7 +742,7 @@ def test_el_titulo_de_la_portada_se_repite_al_principio_del_texto():
 def test_el_titulo_con_el_estilo_title_manda_sobre_el_tamano():
     doc = trabajo([("UNIVERSIDAD DE SALAMANCA", 18, True), ("Hábitos de lectura", 12, False, "Title")])
     aplicar(doc)
-    assert [texto_parrafo(p) for p in titulos_del_trabajo(doc)][-1] == "Hábitos de lectura"
+    assert [texto_parrafo(p) for p in titulos_del_trabajo(doc)][-1] == "Hábitos de Lectura"
 
 
 def test_con_subtitulo_va_en_dos_lineas_sin_anadir_nada():
@@ -703,17 +751,31 @@ def test_con_subtitulo_va_en_dos_lineas_sin_anadir_nada():
     antes = radiografia(doc)
     informe = aplicar(doc)
     [nuevo] = titulos_del_trabajo(doc)
+    assert texto_parrafo(nuevo) == "El Turismo Rural\nEstudio de Cuatro Municipios"   # el subtítulo, con mayúscula
+    assert comparar(antes, radiografia(doc), informe.cambios_previstos) == []
+    assert any(c.startswith("Título del trabajo: al principio del texto lleva mayúscula inicial en las palabras "
+                            "principales, como pide APA («EL TURISMO RURAL estudio de cuatro municipios» → «El "
+                            "Turismo Rural Estudio de Cuatro Municipios»)") for c in informe.cambios)
+
+
+def test_titulo_del_trabajo_tal_cual():
+    doc = trabajo([("EL TURISMO RURAL", 18, True), ("estudio de cuatro municipios", 16, True),
+                   ("Autora: Lucía Prieto", 12, False)])
+    antes = radiografia(doc)
+    informe = Informe()
+    titulos.aplicar(doc, {"titulo_tal_cual": True}, informe)
+    [nuevo] = titulos_del_trabajo(doc)
     assert texto_parrafo(nuevo) == "EL TURISMO RURAL\nestudio de cuatro municipios"
     assert comparar(antes, radiografia(doc), informe.cambios_previstos) == []
-    assert any(a.startswith("El título del trabajo está escrito en mayúsculas («EL TURISMO RURAL»)")
-               for a in informe.avisos)
+    assert any(a.startswith("El título del trabajo está escrito en mayúsculas («EL TURISMO RURAL»") and
+               "--titulo-tal-cual" in a for a in informe.avisos)
 
 
 def test_una_linea_de_datos_no_es_el_subtitulo():
     """«Autora: …» debajo del título, aunque vaya en negrita y grande, es un dato de la portada."""
     doc = trabajo([("El turismo rural", 18, True), ("Autora: Lucía Prieto", 14, True), ("Grado", 12, False)])
     aplicar(doc)
-    assert [texto_parrafo(p) for p in titulos_del_trabajo(doc)] == ["El turismo rural"]
+    assert [texto_parrafo(p) for p in titulos_del_trabajo(doc)] == ["El Turismo Rural"]
 
 
 def test_el_salto_de_pagina_y_el_formato_de_la_portada_no_se_copian():
@@ -728,12 +790,12 @@ def test_el_salto_de_pagina_y_el_formato_de_la_portada_no_se_copian():
     titulo(doc, "Método", 1)
     informe = aplicar(doc)
     [nuevo] = titulos_del_trabajo(doc)
-    assert texto_parrafo(nuevo) == "Hábitos de Cien años de soledad"
+    assert texto_parrafo(nuevo) == "Hábitos de Cien Años de Soledad"
     assert next(nuevo.iter(w("br")), None) is None, "sin el salto de página"
     assert [r.find(f"{w('rPr')}/{w('i')}") is not None for r in nuevo.iter(w("r"))] == [False, True], \
         "la cursiva (el título de una obra) se conserva"
     assert next(nuevo.iter(w("sz")), None) is None and next(nuevo.iter(w("color")), None) is None
-    assert informe.cambios_previstos[-1].nuevo == "Hábitos de Cien años de soledad"
+    assert informe.cambios_previstos[-1].nuevo == "Hábitos de Cien Años de Soledad"
 
 
 def test_sin_titulo_reconocible_solo_se_avisa():
@@ -765,12 +827,14 @@ def test_la_integridad_solo_acepta_una_copia_de_la_portada():
     antes = radiografia(doc)
     aplicar(doc)
     # Portada: párrafos 1 a 3; «Introducción», el 4.
-    previsto = CambioPrevisto(4, "añadir_titulo", nuevo="El sueño en la universidad", desde=(1,))
+    # La copia puede cambiar las mayúsculas (paso 4.6), y nada más.
+    previsto = CambioPrevisto(4, "añadir_titulo", nuevo="El Sueño en la Universidad", desde=(1,))
     assert comparar(antes, radiografia(doc), [previsto]) == []
-    for falso in (CambioPrevisto(4, "añadir_titulo", nuevo="El sueño en la universidad", desde=()),
-                  CambioPrevisto(4, "añadir_titulo", nuevo="El sueño en la universidad", desde=(2,)),
-                  CambioPrevisto(4, "añadir_titulo", nuevo="El sueño en la universidad", desde=(1, 3)),
-                  CambioPrevisto(4, "añadir_titulo", nuevo="El sueño en la universidad", desde=(4,)),
+    for falso in (CambioPrevisto(4, "añadir_titulo", nuevo="El Sueño en la Universidad", desde=()),
+                  CambioPrevisto(4, "añadir_titulo", nuevo="El Sueño en la Universidad", desde=(2,)),
+                  CambioPrevisto(4, "añadir_titulo", nuevo="El Sueño en la Universidad", desde=(1, 3)),
+                  CambioPrevisto(4, "añadir_titulo", nuevo="El Sueño en la Universidad", desde=(4,)),
+                  CambioPrevisto(4, "añadir_titulo", nuevo="El Sueño en la Universidad.", desde=(1,)),
                   CambioPrevisto(4, "añadir_titulo", nuevo="Un título inventado", desde=(1,))):
         assert comparar(antes, radiografia(doc), [falso]), falso
     assert comparar(antes, radiografia(doc)), "sin anotarlo, la integridad lo ve"

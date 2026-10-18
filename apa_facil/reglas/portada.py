@@ -26,95 +26,13 @@ sigue a dos puntos, raya o punto. Las palabras que pueden ser de las dos clases
 según la frase («que», «lo», «vía») se dejan como están y se avisa.
 """
 
-import re
-
 from docx.oxml import OxmlElement
 
 from apa_facil.datos_portada import LINEAS_EN_BLANCO_ANTES_DEL_TITULO, parrafos_de_portada
 from apa_facil.documento import Estilos, texto_parrafo, w
 from apa_facil.estructura import clasificar
 from apa_facil.reglas import titulos
-
-# Palabras menores en español, con los criterios de APA.
-ARTICULOS = {"el", "la", "los", "las", "un", "una", "unos", "unas"}
-CONTRACCIONES = {"al", "del"}   # preposición y artículo
-CONJUNCIONES = {"y", "e", "o", "u", "ni", "si", "mas"}
-PREPOSICIONES = {"a", "de", "en", "con", "por", "sin", "so", "pro"}
-MENORES = ARTICULOS | CONTRACCIONES | CONJUNCIONES | PREPOSICIONES
-# Según la frase son menores (conjunción, artículo, preposición) o principales (pronombre, sustantivo).
-DUDOSAS = {"que", "lo", "vía", "via"}
-
-PALABRA = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)*")   # «O'Donnell» es una sola palabra
-# Lo que hace empezar un subtítulo o una frase: la palabra siguiente va con mayúscula.
-ABRE_SUBTITULO = re.compile(r"[:.?!…—\n]|\s–|–\s")
-
-
-def _con_mayuscula(palabra):
-    return palabra[0].upper() + palabra[1:]
-
-
-def _nombres_propios(clasificados):
-    """
-    Las parejas «Palabra Palabra» que el trabajo escribe a mitad de frase, para no
-    pasar a minúscula el artículo de un nombre propio («La Rioja», «El Salvador»).
-    """
-    parejas = set()
-    for c in clasificados:
-        if c.tipo in ("titulo", "titulo_referencias", "anexo", "vacio", "imagen") or titulos.en_mayusculas(c.texto):
-            continue
-        for frase in re.split(r"[.!?¿¡:]\s+", c.texto):
-            palabras = PALABRA.findall(frase)
-            for anterior, siguiente in zip(palabras[1:], palabras[2:]):   # la primera de la frase, no
-                if anterior.lower() in MENORES and anterior[0].isupper() and siguiente[0].isupper():
-                    parejas.add((anterior, siguiente))
-    return parejas
-
-
-def mayusculas_apa(titulo, clasificados=()):
-    """
-    El título con las mayúsculas de APA («title case»). Devuelve (título, dudosas):
-    las palabras que se han dejado como estaban porque su clase depende de la frase.
-
-    - Una palabra principal en minúscula pasa a mayúscula inicial; una con mayúsculas
-      dentro («iPhone») o una sigla («UE», «COVID») se dejan.
-    - Una palabra menor con mayúscula inicial pasa a minúscula, salvo si va al
-      principio, si es una sigla o si es parte de un nombre propio que el trabajo
-      escribe así («La Rioja»).
-    - Un título escrito entero en mayúsculas se pasa antes a minúsculas como en el
-      paso 4.3, con los nombres propios y las siglas como los escribe el trabajo.
-    """
-    if titulos.en_mayusculas(titulo):
-        titulo = titulos.a_minusculas(titulo, titulos._formas_del_texto(clasificados))
-    mixto = any(c.islower() for c in titulo)
-    propios = _nombres_propios(clasificados)
-    piezas = list(PALABRA.finditer(titulo))
-    resultado, dudosas, hasta, forzar = [], [], 0, True
-    for numero, encontrada in enumerate(piezas):
-        palabra = encontrada.group(0)
-        resultado.append(titulo[hasta:encontrada.start()])
-        minuscula = palabra.lower()
-        sigla = mixto and len(palabra) >= 2 and palabra.isupper()
-        siguiente = piezas[numero + 1].group(0) if numero + 1 < len(piezas) else ""
-        if sigla:
-            nueva = palabra
-        elif forzar:
-            nueva = _con_mayuscula(palabra) if palabra.islower() else palabra
-        elif minuscula in DUDOSAS:
-            nueva = palabra
-            dudosas.append(palabra)
-        elif minuscula in MENORES:
-            nombre_propio = (_con_mayuscula(minuscula), _con_mayuscula(siguiente)) in propios
-            nueva = _con_mayuscula(minuscula) if nombre_propio else (minuscula if palabra[1:].islower() or
-                                                                    len(palabra) == 1 else palabra)
-        else:
-            nueva = _con_mayuscula(palabra) if palabra.islower() else palabra
-        resultado.append(nueva)
-        hasta = encontrada.end()
-        entre = titulo[hasta:piezas[numero + 1].start()] if numero + 1 < len(piezas) else ""
-        forzar = bool(ABRE_SUBTITULO.search(entre))
-    resultado.append(titulo[hasta:])
-    return "".join(resultado), dudosas
-
+from apa_facil.reglas.titulos import mayusculas_apa
 
 # --- Los párrafos ---------------------------------------------------------------------
 
@@ -247,10 +165,4 @@ def aplicar(doc, opciones, informe, estructura=None):
         informe.cambio(f"Portada: el título lleva ahora mayúscula inicial en las palabras principales, como pide "
                        f"APA: «{_extracto(datos.titulo)}» → «{_extracto(titulo)}». Revísalo, sobre todo los "
                        "nombres propios; si prefieres dejarlo como lo escribiste, usa la opción --titulo-tal-cual.")
-    if dudosas:
-        vistas = list(dict.fromkeys(dudosas))
-        informe.aviso("En el título se ha" + ("n" if len(vistas) > 1 else "") + " dejado como " +
-                      ("las" if len(vistas) > 1 else "la") + " escribiste " +
-                      ", ".join(f"«{p}»" for p in vistas) + ": APA pone mayúscula a los pronombres y a los "
-                      "sustantivos, pero no a los artículos, ni a las conjunciones y preposiciones cortas. "
-                      "Revisa cuál es en tu título.")
+    titulos.avisar_dudosas(informe, dudosas, "el título de la portada")

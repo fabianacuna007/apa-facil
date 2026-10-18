@@ -201,16 +201,16 @@ class CambioPrevisto:
       - "quitar_numeracion": se quita `quitado` del principio del párrafo, que
         solo puede ser una numeración de apartado ("1.1. ", "a) "…) y deja
         texto detrás (paso 4.3, con la opción --quitar-numeracion);
-      - "cambiar_mayusculas": el texto pasa a ser `nuevo`, que solo puede
-        diferir en mayúsculas y minúsculas de un texto escrito entero en
-        mayúsculas (paso 4.3, con la opción --quitar-mayusculas);
+      - "mayusculas_apa": el texto pasa a ser `nuevo`, que solo puede diferir
+        en mayúsculas y minúsculas (paso 4.6: las mayúsculas de APA en los
+        títulos);
       - "quitar_introduccion": se borra el párrafo, que solo puede ser el rótulo
         «Introducción» (con o sin numeración y punto final) (paso 4.4, con la
         opción --quitar-introduccion);
       - "añadir_titulo": se añade antes del párrafo un párrafo nuevo con el
         texto `nuevo`, que tiene que ser una copia exacta de los párrafos
-        `desde` del original, línea a línea y sin el espacio de los extremos ni
-        los saltos de página (el título del trabajo de la portada, y su
+        `desde` del original (salvo mayúsculas y minúsculas: paso 4.6), línea a
+        línea y sin el espacio de los extremos ni los saltos de página (el título del trabajo de la portada, y su
         subtítulo, separados por un salto de línea) (paso 4.4); o, sin `desde`,
         el título de la portada APA añadida (paso 5.2);
       - "añadir_al_final": se añade `nuevo` al final del párrafo, que solo puede
@@ -248,13 +248,6 @@ def es_rotulo_de_introduccion(texto):
     return resto.strip().rstrip(".:").strip().lower() in ROTULO_DE_INTRODUCCION
 
 
-def _solo_cambian_mayusculas(antes, despues):
-    """¿Es `despues` el mismo texto que `antes` (escrito entero en mayúsculas), con otras minúsculas?"""
-    letras = [c for c in antes if c.isalpha()]
-    return (despues != antes and len(despues) == len(antes) and bool(letras) and all(c.isupper() for c in letras)
-            and all(a == d or (a.isalpha() and a.lower() == d.lower()) for a, d in zip(antes, despues)))
-
-
 def _aplicar_previstos(antes, previstos):
     """
     Los textos que debería tener la copia si solo se han hecho los cambios
@@ -287,7 +280,7 @@ def _aplicar_previstos(antes, previstos):
         if not seguidos or not all(antes.textos[n - 1][0].startswith(f"Párrafo {n}") for n in desde):
             return False
         copiadas = [linea for n in desde for linea in lineas_de_texto(antes.textos[n - 1][1])]
-        return bool(copiadas) and cambio.nuevo == "\n".join(copiadas)
+        return bool(copiadas) and datos_portada.solo_cambian_mayusculas("\n".join(copiadas), cambio.nuevo)
 
     for cambio in previstos:
         i = cambio.parrafo - 1   # en la radiografía, los párrafos van primero y en orden
@@ -303,7 +296,8 @@ def _aplicar_previstos(antes, previstos):
         elif cambio.accion == "quitar_numeracion" and NUMERACION_DE_APARTADO.fullmatch(cambio.quitado) \
                 and texto.startswith(cambio.quitado) and texto[len(cambio.quitado):].strip():
             textos[i] = (donde, texto[len(cambio.quitado):])
-        elif cambio.accion == "cambiar_mayusculas" and _solo_cambian_mayusculas(texto, cambio.nuevo):
+        elif cambio.accion == "mayusculas_apa" and cambio.nuevo != texto and \
+                datos_portada.solo_cambian_mayusculas(texto, cambio.nuevo):
             textos[i] = (donde, cambio.nuevo)
         elif cambio.accion == "quitar_introduccion" and es_rotulo_de_introduccion(texto):
             borrar.add(i)
@@ -321,7 +315,7 @@ def _aplicar_previstos(antes, previstos):
             problemas.append(f"{donde}: una regla anotó «{cambio.accion}», pero eso cambiaría el texto "
                              f"(«{_extracto(texto)}»). Solo se pueden borrar párrafos vacíos y el rótulo "
                              "«Introducción», quitar espacios o tabuladores del principio, quitar la numeración "
-                             "de un título, pasar a minúsculas un título escrito en mayúsculas, repetir el "
+                             "de un título, cambiar las mayúsculas de un título, repetir el "
                              "título de la portada al principio del texto, poner el punto final a los títulos "
                              "de nivel 4 y 5 y añadir la portada APA con los datos del estudiante.")
     resultado = []

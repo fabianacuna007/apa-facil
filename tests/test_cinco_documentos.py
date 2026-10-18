@@ -40,11 +40,10 @@ EXCEPCIONES = {
     "02_informe_tablas": {(TITULO_TRABAJO, 6)},                      # «Introducción»
     "03_trabajo_imagenes_listas": {(TEXTO_TITULOS, n) for n in (4, 10, 14, 18, 26)}   # «1.» a «4.» y «2.1.»
                                   | {(TITULO_TRABAJO, 4)},                            # «1. Introducción»
-    "04_formato_caotico": {(TITULO_TRABAJO, 6)},   # el título del trabajo, en mayúsculas
+    "04_formato_caotico": set(),
     "05_tfg_completo": {(ALINEACION, 8), (ALINEACION, 9), (ALINEACION, 10)}   # portada: Autora, Tutor, Convocatoria
-                       | {(TEXTO_TITULOS, n) for n in (12,                    # «RESUMEN» (antes del título añadido)
-                                                       20, 23, 24, 26, 27, 29, 31, 35, 37, 38, 63, 65)}
-                       | {(TITULO_TRABAJO, 19), (TITULO_TRABAJO, 20)},        # título en mayúsculas, «1. Introducción»
+                       | {(TEXTO_TITULOS, n) for n in (20, 23, 24, 26, 27, 29, 31, 35, 37, 38, 63, 65)}
+                       | {(TITULO_TRABAJO, 20)},                              # «1. Introducción»
 }
 
 
@@ -88,8 +87,8 @@ def test_la_copia_lleva_su_estructura(procesado):
         doc = docx.Document(str(ruta))
         estilos = Estilos(doc)
         # Sin el título del trabajo que el paso 4.4 añade al principio del texto (lo comprueba el verificador).
-        # Los de nivel 4 y 5 terminan en punto desde el paso 4.5.
-        return [(c.tipo, c.nivel, c.texto.rstrip(".") if (c.nivel or 0) >= 4 else c.texto)
+        # Los de nivel 4 y 5 terminan en punto desde el paso 4.5, y las mayúsculas cambian en el 4.6.
+        return [(c.tipo, c.nivel, (c.texto.rstrip(".") if (c.nivel or 0) >= 4 else c.texto).lower())
                 for c in estructura.clasificar(doc)
                 if c.tipo in ("titulo", "titulo_referencias", "anexo")
                 and estilos.nombre(estilos.estilo_de(c.elemento)).lower() != "title"]
@@ -126,18 +125,19 @@ def test_estan_todos_los_documentos_de_la_lista():
 
 # Paso 4.3: con --quitar-numeracion y --quitar-mayusculas, el texto de los títulos cambia,
 # pero solo eso (la integridad lo comprueba) y desaparecen sus excepciones.
-TITULOS_CAMBIADOS = {"01_ensayo_basico": 3, "02_informe_tablas": 0, "03_trabajo_imagenes_listas": 5,
-                     "04_formato_caotico": 0, "05_tfg_completo": 13}
+# Numeraciones quitadas y títulos con otras mayúsculas (pasos 4.3 y 4.6): cada cambio, una vez.
+TITULOS_CAMBIADOS = {"01_ensayo_basico": 3 + 3, "02_informe_tablas": 0, "03_trabajo_imagenes_listas": 5 + 3,
+                     "04_formato_caotico": 0 + 3, "05_tfg_completo": 12 + 8}
 
 
 @pytest.mark.parametrize("original", PRUEBAS, ids=lambda p: p.stem)
 def test_con_las_opciones_de_los_titulos(original, tmp_path):
-    opciones = {"quitar_numeracion": True, "quitar_mayusculas": True}
+    opciones = {"quitar_numeracion": True}   # las mayúsculas de APA, por defecto (paso 4.6)
     salida, informe = pipeline.procesar(original, tmp_path, opciones)   # no se entrega si la integridad falla
     resultado = verificar(salida)
     assert resultado.cumple, mostrar(resultado)
     assert not [h for h in resultado.excepciones if h.regla == TEXTO_TITULOS]
-    acciones = [c for c in informe.cambios_previstos if c.accion in ("quitar_numeracion", "cambiar_mayusculas")]
+    acciones = [c for c in informe.cambios_previstos if c.accion in ("quitar_numeracion", "mayusculas_apa")]
     assert len(acciones) == TITULOS_CAMBIADOS[original.stem]
     diferencias = comparar(radiografia(docx.Document(str(original))), radiografia(docx.Document(str(salida))),
                            informe.cambios_previstos)

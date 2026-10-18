@@ -65,7 +65,7 @@ def test_el_json_se_guarda_junto_a_la_copia(procesado_03):
     assert datos["archivo"] == original("03").name
     assert datos["copia"] == salida.name
     assert datos["version"] == VERSION
-    assert datos["opciones"] == {"fuente": None, "quitar_numeracion": False, "quitar_mayusculas": False,
+    assert datos["opciones"] == {"fuente": None, "quitar_numeracion": False, "titulos_tal_cual": False,
                                  "quitar_introduccion": False,
                                  "titulo_tal_cual": False, "portada": None}
     datetime.fromisoformat(datos["fecha"])   # una fecha válida
@@ -90,7 +90,7 @@ def test_las_tildes_se_guardan_tal_cual(procesado_03):
 def test_el_json_recoge_la_fuente_pedida(tmp_path):
     salida, _ = pipeline.procesar(original("01"), tmp_path, {"fuente": "Georgia"})
     datos = json.loads(salida.with_suffix(".json").read_text(encoding="utf-8"))
-    assert datos["opciones"] == {"fuente": "Georgia", "quitar_numeracion": False, "quitar_mayusculas": False,
+    assert datos["opciones"] == {"fuente": "Georgia", "quitar_numeracion": False, "titulos_tal_cual": False,
                                  "quitar_introduccion": False,
                                  "titulo_tal_cual": False, "portada": None}
 

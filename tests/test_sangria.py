@@ -332,5 +332,5 @@ def test_documentos_de_prueba(original, tmp_path):
         elif m != "tabulador":
             assert primera == 0, f"«{texto_parrafo(p)[:30]}» ({m}) no debe llevar sangría"
     for inicio, esperado in EMPIEZAN_POR[clave]:
-        p = next(p for p, _ in clasificados if texto_parrafo(p).strip().startswith(inicio))
+        p = next(p for p, _ in clasificados if texto_parrafo(p).strip().lower().startswith(inicio.lower()))
         assert dict(clasificados)[p] == esperado, inicio

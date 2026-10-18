@@ -34,11 +34,13 @@ Qué hace:
      subapartado y un título que se salta un nivel (de 1 a 3). Y de la
      numeración automática de Word en un título, que se deja.
 
-  6. Paso 4.3: los títulos numerados ("1.1. Objetivos") o escritos en
-     mayúsculas ("RESUMEN"). Cambiarlos modifica el texto, así que por defecto
-     solo se avisa (decisión del propietario); con las opciones
-     --quitar-numeracion y --quitar-mayusculas se cambian, y cada cambio se anota
-     como cambio previsto para la comprobación de integridad.
+  6. Paso 4.3: los títulos numerados ("1.1. Objetivos"). Quitar la numeración
+     modifica el texto, así que por defecto solo se avisa (decisión del
+     propietario); con --quitar-numeracion se quita, y se anota como cambio
+     previsto para la comprobación de integridad. Paso 4.6: las mayúsculas de
+     APA (mayúscula inicial en las palabras principales), por defecto (decisión
+     del propietario; --titulos-tal-cual las deja), también en los títulos
+     escritos en mayúsculas ("RESUMEN" → "Resumen").
   7. Paso 4.4: el título del trabajo, copiado de la portada, al principio del
      texto, y el rótulo «Introducción» (aviso, o --quitar-introduccion).
   8. Paso 4.5: los títulos de nivel 4 y 5, en la misma línea que su texto (con
@@ -381,25 +383,158 @@ def a_minusculas(texto, formas):
     return texto[:inicio] + PALABRA.sub(cambiar, texto[inicio:])
 
 
-def _cambiar_mayusculas(p, formas):
-    """Pasa a minúsculas el texto del título dentro de cada fragmento, sin mover el formato."""
-    piezas = [t for t in _piezas(p) if t.tag == w("t")]
-    completo = "".join(t.text or "" for t in piezas)
-    nuevo = a_minusculas(completo, formas)
-    if len(nuevo) != len(completo):
-        return False   # alguna letra cambiaría de longitud: mejor no tocarlo
-    desde = 0
-    for t in piezas:
-        largo = len(t.text or "")
-        t.text = nuevo[desde:desde + largo]
-        desde += largo
-    return nuevo != completo
+def _lineas_de_piezas(p):
+    """Los w:t del párrafo agrupados por líneas (separadas por saltos de línea), sin los de cuadros de texto."""
+    lineas = [[]]
+    for el in p.iter(w("t"), w("br"), w("cr")):
+        if next(el.iterancestors(w("p")), None) is not p:
+            continue
+        if el.tag == w("t"):
+            lineas[-1].append(el)
+        elif el.get(w("type")) in (None, "textWrapping"):
+            lineas.append([])
+    return [linea for linea in lineas if linea]
+
+
+def _poner_mayusculas(p, cambiar):
+    """
+    Cambia las mayúsculas del texto del párrafo, línea a línea (`cambiar` recibe el
+    texto de una línea y devuelve el nuevo y sus palabras dudosas), dentro de cada
+    fragmento: el formato no se mueve. Devuelve las palabras dudosas, o None si no
+    se ha podido (una letra que cambia de longitud, como «ß»).
+    """
+    nuevos, dudosas = [], []
+    for piezas in _lineas_de_piezas(p):
+        completo = "".join(t.text or "" for t in piezas)
+        nuevo, dudas = cambiar(completo)
+        if len(nuevo) != len(completo):
+            return None
+        nuevos.append((piezas, nuevo))
+        dudosas += dudas
+    for piezas, nuevo in nuevos:
+        desde = 0
+        for t in piezas:
+            largo = len(t.text or "")
+            t.text = nuevo[desde:desde + largo]
+            desde += largo
+    return dudosas
+
+
+# --- 4.6 Mayúsculas de APA en los títulos («title case») -------------------------------
+#
+# La web oficial de APA (Title case capitalization) pide mayúscula inicial en las
+# palabras principales en el título del trabajo y en todos los títulos (niveles 1 a
+# 5). Palabras menores, en minúscula: todos los artículos y las conjunciones y
+# preposiciones de tres letras o menos; las demás (sustantivos, verbos, adjetivos,
+# adverbios, pronombres y cualquier palabra de cuatro letras o más) van con
+# mayúscula, y también la primera del título, la del subtítulo y la que sigue a dos
+# puntos, raya o punto. Las palabras que pueden ser de las dos clases según la
+# frase («que», «lo», «vía») se dejan como están y se avisa. Decisión del
+# propietario: se aplica por defecto (el título de la portada y del texto se deja
+# con --titulo-tal-cual; los de los apartados, con --titulos-tal-cual).
+
+# Palabras menores en español, con los criterios de APA.
+ARTICULOS = {"el", "la", "los", "las", "un", "una", "unos", "unas"}
+CONTRACCIONES = {"al", "del"}   # preposición y artículo
+CONJUNCIONES = {"y", "e", "o", "u", "ni", "si", "mas"}
+PREPOSICIONES = {"a", "de", "en", "con", "por", "sin", "so", "pro"}
+MENORES = ARTICULOS | CONTRACCIONES | CONJUNCIONES | PREPOSICIONES
+# Según la frase son menores (conjunción, artículo, preposición) o principales (pronombre, sustantivo).
+DUDOSAS = {"que", "lo", "vía", "via"}
+
+PALABRA_DE_TITULO = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)*")   # «O'Donnell» es una sola palabra
+# Lo que hace empezar un subtítulo o una frase: la palabra siguiente va con mayúscula.
+ABRE_SUBTITULO = re.compile(r"[:.?!…—\n]|\s–|–\s")
+
+
+def _con_mayuscula(palabra):
+    return palabra[0].upper() + palabra[1:]
+
+
+def _nombres_propios(clasificados):
+    """
+    Las parejas «Palabra Palabra» que el trabajo escribe a mitad de frase, para no
+    pasar a minúscula el artículo de un nombre propio («La Rioja», «El Salvador»).
+    """
+    parejas = set()
+    for c in clasificados:
+        if c.tipo in ("titulo", "titulo_referencias", "anexo", "vacio", "imagen") or en_mayusculas(c.texto):
+            continue
+        for frase in re.split(r"[.!?¿¡:]\s+", c.texto):
+            palabras = PALABRA_DE_TITULO.findall(frase)
+            for anterior, siguiente in zip(palabras[1:], palabras[2:]):   # la primera de la frase, no
+                if anterior.lower() in MENORES and anterior[0].isupper() and siguiente[0].isupper():
+                    parejas.add((anterior, siguiente))
+    return parejas
+
+
+def mayusculas_apa(titulo, clasificados=()):
+    """
+    El título con las mayúsculas de APA («title case»). Devuelve (título, dudosas):
+    las palabras que se han dejado como estaban porque su clase depende de la frase.
+
+    - Una palabra principal en minúscula pasa a mayúscula inicial; una con mayúsculas
+      dentro («iPhone») o una sigla («UE», «COVID») se dejan.
+    - Una palabra menor con mayúscula inicial pasa a minúscula, salvo si va al
+      principio, si es una sigla o si es parte de un nombre propio que el trabajo
+      escribe así («La Rioja»).
+    - Un título escrito entero en mayúsculas se pasa antes a minúsculas como en el
+      paso 4.3, con los nombres propios y las siglas como los escribe el trabajo.
+    - La numeración del principio se deja como está.
+    """
+    prefijo = numeracion(titulo) or ""   # la numeración del principio («a) », «IV. ») no se toca
+    if prefijo:
+        resto, dudosas = mayusculas_apa(titulo[len(prefijo):], clasificados)
+        return prefijo + resto, dudosas
+    if en_mayusculas(titulo):
+        titulo = a_minusculas(titulo, _formas_del_texto(clasificados))
+    mixto = any(c.islower() for c in titulo)
+    propios = _nombres_propios(clasificados)
+    piezas = list(PALABRA_DE_TITULO.finditer(titulo))
+    resultado, dudosas, hasta, forzar = [], [], 0, True
+    for numero, encontrada in enumerate(piezas):
+        palabra = encontrada.group(0)
+        resultado.append(titulo[hasta:encontrada.start()])
+        minuscula = palabra.lower()
+        sigla = mixto and len(palabra) >= 2 and palabra.isupper()
+        siguiente = piezas[numero + 1].group(0) if numero + 1 < len(piezas) else ""
+        if sigla:
+            nueva = palabra
+        elif forzar:
+            nueva = _con_mayuscula(palabra) if palabra.islower() else palabra
+        elif minuscula in DUDOSAS:
+            nueva = palabra
+            dudosas.append(palabra)
+        elif minuscula in MENORES:
+            nombre_propio = bool(siguiente) and (_con_mayuscula(minuscula), _con_mayuscula(siguiente)) in propios
+            nueva = _con_mayuscula(minuscula) if nombre_propio else (minuscula if palabra[1:].islower() or
+                                                                    len(palabra) == 1 else palabra)
+        else:
+            nueva = _con_mayuscula(palabra) if palabra.islower() else palabra
+        resultado.append(nueva)
+        hasta = encontrada.end()
+        entre = titulo[hasta:piezas[numero + 1].start()] if numero + 1 < len(piezas) else ""
+        forzar = bool(ABRE_SUBTITULO.search(entre))
+    resultado.append(titulo[hasta:])
+    return "".join(resultado), dudosas
+
+
+
+def avisar_dudosas(informe, dudosas, donde):
+    """Aviso de las palabras que se han dejado como estaban porque pueden ser de las dos clases."""
+    vistas = list(dict.fromkeys(dudosas))
+    if not vistas:
+        return
+    varias = len(vistas) > 1
+    informe.aviso(f"En {donde} se ha{'n' if varias else ''} dejado como estaba{'n' if varias else ''} " +
+                  ", ".join(f"«{p}»" for p in vistas) + ": APA pone mayúscula a los pronombres y a los "
+                  "sustantivos, pero no a los artículos, ni a las conjunciones y preposiciones cortas. "
+                  "Revisa cuál es en tu caso.")
 
 
 def _texto_de_titulos(doc, opciones, informe, clasificados, seguros):
     con_numeracion = [c for c in seguros if numeracion(texto_parrafo(c.elemento))]
-    en_mayus = [c for c in seguros if en_mayusculas(texto_parrafo(c.elemento))]
-    quitar_numeracion, quitar_mayusculas = opciones.get("quitar_numeracion"), opciones.get("quitar_mayusculas")
+    quitar_numeracion, tal_cual = opciones.get("quitar_numeracion"), opciones.get("titulos_tal_cual")
 
     if con_numeracion and not quitar_numeracion:
         varios = len(con_numeracion) > 1
@@ -407,15 +542,15 @@ def _texto_de_titulos(doc, opciones, informe, clasificados, seguros):
                       f"empieza{'n' if varios else ''} con una numeración ({_lista([c.texto for c in con_numeracion])}). "
                       "APA no numera los títulos, pero muchas universidades lo exigen, así que se ha dejado como "
                       "estaba. Si la tuya no lo pide, la herramienta puede quitarla: usa la opción --quitar-numeracion.")
-    if en_mayus and not quitar_mayusculas:
-        varios = len(en_mayus) > 1
-        informe.aviso(f"{len(en_mayus)} título{'s' if varios else ''} "
-                      f"está{'n' if varios else ''} escrito{'s' if varios else ''} en mayúsculas "
-                      f"({_lista([c.texto for c in en_mayus])}). APA escribe los títulos con mayúscula solo al "
-                      "principio y en los nombres propios. Cámbialo tú o usa la opción --quitar-mayusculas.")
+    if tal_cual:
+        sin_apa = [c.texto for c in seguros if mayusculas_apa(c.texto, clasificados)[0] != c.texto]
+        if sin_apa:
+            varios = len(sin_apa) > 1
+            informe.aviso(f"{len(sin_apa)} título{'s' if varios else ''} no lleva{'n' if varios else ''} las "
+                          f"mayúsculas de APA ({_lista(sin_apa)}): APA pone mayúscula inicial en las palabras "
+                          "principales. Se ha dejado como estaba porque has usado la opción --titulos-tal-cual.")
 
-    cambiados = []   # (antes, después) de cada título modificado
-    formas = _formas_del_texto(clasificados) if quitar_mayusculas else {}
+    cambiados, con_mayusculas, dudosas = [], [], []   # (antes, después) de cada título modificado
     for c in seguros:
         p = c.elemento
         antes = texto_parrafo(p)
@@ -423,8 +558,12 @@ def _texto_de_titulos(doc, opciones, informe, clasificados, seguros):
         if quitado:
             _quitar_numeracion(p, quitado)
             informe.cambio_previsto(c.numero, "quitar_numeracion", quitado=quitado)
-        if quitar_mayusculas and en_mayusculas(antes) and _cambiar_mayusculas(p, formas):
-            informe.cambio_previsto(c.numero, "cambiar_mayusculas", nuevo=texto_parrafo(p))
+        if not tal_cual:
+            sin_cambiar = texto_parrafo(p)
+            dudosas += _poner_mayusculas(p, lambda texto: mayusculas_apa(texto, clasificados)) or []
+            if texto_parrafo(p) != sin_cambiar:
+                informe.cambio_previsto(c.numero, "mayusculas_apa", nuevo=texto_parrafo(p))
+                con_mayusculas.append((sin_cambiar, texto_parrafo(p)))
         if texto_parrafo(p) != antes:
             cambiados.append((antes, texto_parrafo(p)))
 
@@ -437,12 +576,14 @@ def _texto_de_titulos(doc, opciones, informe, clasificados, seguros):
         if remisiones:
             informe.aviso(f"El texto remite a apartados por su número ({_lista(remisiones)}). Sin la numeración "
                           "de los títulos, esas remisiones ya no se entienden: cámbialas por el nombre del apartado.")
-    pasados = [(a, d) for a, d in cambiados if en_mayusculas(a)]
-    if pasados:
-        informe.cambio(f"Títulos: {len(pasados)} título{'s' if len(pasados) > 1 else ''} pasa"
-                       f"{'n' if len(pasados) > 1 else ''} de mayúsculas a minúsculas ({_antes_y_despues(pasados)}). "
-                       "Se han respetado los nombres propios y las siglas que el trabajo escribe así en el texto; "
-                       "revisa que hayan quedado bien.")
+    if con_mayusculas:
+        varios = len(con_mayusculas) > 1
+        informe.cambio(f"Títulos: {len(con_mayusculas)} título{'s' if varios else ''} lleva{'n' if varios else ''} "
+                       "ahora mayúscula inicial en las palabras principales, como pide APA "
+                       f"({_antes_y_despues(con_mayusculas)}). Se han respetado los nombres propios y las siglas que "
+                       "el trabajo escribe así en el texto; revisa que hayan quedado bien. Si prefieres dejar los "
+                       "títulos como estaban, usa la opción --titulos-tal-cual.")
+    avisar_dudosas(informe, dudosas, "los títulos")
     indice = any(c.tipo == "indice" for c in clasificados)
     if cambiados and indice and doc.settings.element.find(w("updateFields")) is None:
         informe.aviso("El índice todavía muestra los títulos como estaban. Actualízalo en Word: clic derecho sobre "
@@ -607,13 +748,17 @@ def _titulo_del_trabajo(doc, opciones, informe, clasificados, quitado):
     if primero is None:
         return
     texto = "\n".join(linea for c in partes for linea in lineas_de_texto(texto_parrafo(c.elemento)))
-    if " ".join(texto_parrafo(primero.elemento).split()) == " ".join(texto.split()):
-        return   # ya está
+    if " ".join(texto_parrafo(primero.elemento).split()).lower() == " ".join(texto.split()).lower():
+        return   # ya está (quizá con otras mayúsculas: las pone el paso 4.6, porque es un título)
     nuevo = _copia_del_titulo(estilo.get(w("styleId")), partes)
     if texto_parrafo(nuevo) != texto:
         informe.aviso("No se ha podido repetir el título del trabajo al principio del texto: escríbelo tú, "
                       "centrado y en negrita, con el estilo «Título» de Word.")
         return
+    dudosas = []
+    if not opciones.get("titulo_tal_cual"):   # paso 4.6: las mayúsculas de APA
+        dudosas = _poner_mayusculas(nuevo, lambda linea: mayusculas_apa(linea, clasificados)) or []
+        texto = texto_parrafo(nuevo)
     estilos_efectivos = Estilos(doc)
     if _salto_de_pagina_antes(estilos_efectivos, primero.elemento):
         # Si el primer apartado empezaba página (su estilo lo pide), la empieza el título.
@@ -623,11 +768,17 @@ def _titulo_del_trabajo(doc, opciones, informe, clasificados, quitado):
     informe.cambio_previsto(primero.numero, "añadir_titulo", nuevo=texto, desde=[c.numero for c in partes])
     informe.cambio(f"Título del trabajo: se ha repetido «{_extracto(' '.join(texto.split()), 60)}» al principio "
                    "del texto, centrado y en negrita, como pide APA.")
-    en_mayus = [c.texto for c in partes if en_mayusculas(c.texto)]
-    if en_mayus:
-        informe.aviso(f"El título del trabajo está escrito en mayúsculas ({_lista(en_mayus)}). APA lo escribe con "
-                      "mayúscula inicial en las palabras principales: corrígelo en la portada y al principio del "
-                      "texto.")
+    original = "\n".join(lineas_de_texto("\n".join(texto_parrafo(c.elemento) for c in partes)))
+    if texto != original:
+        informe.cambio(f"Título del trabajo: al principio del texto lleva mayúscula inicial en las palabras "
+                       f"principales, como pide APA («{_extracto(' '.join(original.split()), 50)}» → "
+                       f"«{_extracto(' '.join(texto.split()), 50)}»). Si prefieres dejarlo como en la portada, usa "
+                       "la opción --titulo-tal-cual.")
+    avisar_dudosas(informe, dudosas, "el título del trabajo")
+    if opciones.get("titulo_tal_cual") and any(en_mayusculas(c.texto) for c in partes):
+        informe.aviso(f"El título del trabajo está escrito en mayúsculas ({_lista([c.texto for c in partes])}). "
+                      "APA lo escribe con mayúscula inicial en las palabras principales: se ha dejado así porque "
+                      "has usado la opción --titulo-tal-cual.")
 
 
 # --- 4.5 Títulos de nivel 4 y 5 en la misma línea que su texto --------------------------

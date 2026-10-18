@@ -34,15 +34,17 @@ python -m apa_facil pruebas\01_ensayo_basico.docx --fuente "Arial"
 
 Las fuentes recomendadas por APA, con su tamaño, son Aptos 12, Calibri 11, Arial 11, Lucida Sans Unicode 10, Times New Roman 12, Georgia 11 y Computer Modern 10. Si no se indica `--fuente`, se mantiene la del documento si es una de ellas, o se usa la más parecida.
 
-Para quitar la numeración de los títulos («1.1. Objetivos» → «Objetivos») o pasar a minúsculas los títulos escritos en mayúsculas («RESUMEN» → «Resumen»), que APA no usa:
+Los títulos llevan mayúscula inicial en las palabras principales, como pide APA: «Marco teórico» → «Marco Teórico», «RESUMEN» → «Resumen». Se respetan los nombres propios y las siglas que el trabajo escribe así en el texto, y la numeración del principio. Con `--titulos-tal-cual`, los títulos de los apartados se quedan como están; con `--titulo-tal-cual`, el título del trabajo.
+
+Para quitar la numeración de los títulos («1.1. Objetivos» → «Objetivos»), que APA no usa:
 
 ```
-python -m apa_facil pruebas\05_tfg_completo.docx --quitar-numeracion --quitar-mayusculas
+python -m apa_facil pruebas\05_tfg_completo.docx --quitar-numeracion
 ```
 
 Con `--quitar-introduccion` se quita el rótulo «Introducción» del primer apartado, que APA no usa (el título del trabajo hace sus veces), si el apartado no tiene subapartados.
 
-Las tres opciones son independientes. Sin ellas solo se avisa, porque cambian el texto y muchas universidades exigen numerar los títulos. Al quitar las mayúsculas se respetan los nombres propios y las siglas que el trabajo escribe así en el texto.
+Sin `--quitar-numeracion` ni `--quitar-introduccion` solo se avisa, porque cambian el texto y muchas universidades exigen numerar los títulos.
 
 ### Datos de la portada
 
@@ -71,7 +73,7 @@ Todo va a doble espacio, y el texto empieza en una página nueva con el mismo t�
 - **Texto alineado a la izquierda**, sin justificar ni guiones automáticos.
 - **Sangría de 1,27 cm** en la primera línea de los párrafos de texto (no en títulos, listas, referencias, citas en bloque…).
 - **Título del trabajo** repetido al principio del texto, centrado y en negrita: se copia tal cual de la portada.
-- **Títulos** con los estilos de Word «Título 1» a «Título 5» y el formato APA de cada nivel (así aparecen en el panel de navegación), sin formato puesto a mano que lo contradiga; los de nivel 4 y 5, en la misma línea que su texto y terminados en punto (con el separador de estilo de Word: en LibreOffice se ven en su propia línea). Avisa de los apartados con un solo subapartado y de los títulos numerados o en mayúsculas.
+- **Títulos** con los estilos de Word «Título 1» a «Título 5» y el formato APA de cada nivel (así aparecen en el panel de navegación), sin formato puesto a mano que lo contradiga; los de nivel 4 y 5, en la misma línea que su texto y terminados en punto (con el separador de estilo de Word: en LibreOffice se ven en su propia línea). Con mayúscula inicial en las palabras principales. Avisa de los apartados con un solo subapartado y de los títulos numerados.
 - **Número de página** arriba a la derecha en todas las páginas, también en la portada, y nada más en el encabezado.
 - **Limpieza**: quita los párrafos vacíos usados para dejar espacio, los tabuladores o espacios usados como sangría y el color, el resaltado y el subrayado del texto (los enlaces se conservan). No toca la portada ni las tablas.
 - **Avisos** de lo que conviene revisar a mano sin que la herramienta lo cambie: saltos de línea manuales, viñetas escritas a mano, dobles espacios entre palabras y texto que estaba en otra fuente (suele venir de pegarlo de una web).
