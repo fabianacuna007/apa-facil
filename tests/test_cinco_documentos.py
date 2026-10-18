@@ -40,7 +40,9 @@ EXCEPCIONES = {
     "01_ensayo_basico": {(TEXTO_TITULOS, n) for n in (10, 13, 16)}   # «1.», «2.» y «3.»
                         | {(TITULO_TRABAJO, 7), (PORTADA_PROPIA, 1)},  # «Introducción»; la portada
     "02_informe_tablas": {(TITULO_TRABAJO, 6), (PORTADA_PROPIA, 1)},   # «Introducción»; la portada
-    "03_trabajo_imagenes_listas": {(TEXTO_TITULOS, n) for n in (4, 10, 14, 18, 26)}   # «1.» a «4.» y «2.1.»
+    # «1.» a «4.» y «2.1.»; desde el 6.2, «2.1.» y lo que sigue van uno o dos más allá: el título de cada figura
+    # va en su propio párrafo
+    "03_trabajo_imagenes_listas": {(TEXTO_TITULOS, n) for n in (4, 10, 15, 20, 28)}
                                   | {(TITULO_TRABAJO, 4), (PORTADA_PROPIA, 1)},       # «1. Introducción»; la portada
     "04_formato_caotico": {(PORTADA_PROPIA, 1)},
     "05_tfg_completo": {(ALINEACION, 8), (ALINEACION, 9), (ALINEACION, 10)}   # portada: Autora, Tutor, Convocatoria

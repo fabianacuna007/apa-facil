@@ -653,8 +653,10 @@ class _Clasificador:
         if r.lista_de_word:
             return "lista", ALTA, "lista de Word (con viñetas o numerada)", None
         numero = LEYENDA_CON_NUMERO.match(r.anterior.texto) if r.anterior else None
-        if numero and not numero.group(3) and r.despues == "tabla":   # como lo deja el paso 6.1
-            return "leyenda_tabla", ALTA, f"título de tabla: debajo de «{r.anterior.texto}» y encima de la tabla", None
+        if numero and not numero["titulo"] and r.despues in ("tabla", "imagen"):   # como lo dejan los pasos 6.1 y 6.2
+            de_que, encima_de = ("tabla", "la tabla") if r.despues == "tabla" else ("figura", "la imagen")
+            return (f"leyenda_{de_que}", ALTA, f"título de {de_que}: debajo de «{r.anterior.texto}» y encima de "
+                    f"{encima_de}", None)
         if _parece_titulo(r) and r.despues == "tabla":
             return "leyenda_tabla", MEDIA, f"{_forma_de_titulo(r)}, justo encima de una tabla", None
         if _parece_titulo(r) and (r.antes == "imagen" or r.despues == "imagen"):

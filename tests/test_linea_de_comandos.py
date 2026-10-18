@@ -97,8 +97,9 @@ def test_salida_completa_de_un_documento(tmp_path, capsys):
     assert main([str(original)], carpeta_salida=tmp_path) == 0
     salida = capsys.readouterr().out
     assert salida.startswith(f"✔ {original.name} → {tmp_path.name}/{original.stem}_APA.docx\n   Lo que hemos cambiado (")
-    # Encabezado, un solo subapartado, numeración, «Introducción» y la portada que se mantiene (sin datos, paso 5.3).
-    assert "   Lo que debes revisar tú (5):" in salida
+    # Encabezado, un solo subapartado, numeración, «Introducción» y la portada que se mantiene (sin datos, paso 5.3);
+    # y de las figuras (6.2), «(elaboración propia)» en un título, la línea en blanco y dónde colocarlas.
+    assert "   Lo que debes revisar tú (8):" in salida
     assert f"   Informe completo: {tmp_path.name}/{original.stem}_APA.json" in salida
     assert "todavía incompleto" not in salida
     assert salida.rstrip().endswith("1 de 1 documento(s) procesado(s).")

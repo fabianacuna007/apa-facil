@@ -81,16 +81,16 @@ python -m apa_facil pruebas\05_tfg_completo.docx --quitar-indice
 
 Se quita el índice automático de Word o el escrito a mano (el rótulo «Índice» y sus líneas con número de página), sin dejar una página en blanco ni perder secciones. Si algo de lo que parece índice no tiene forma de línea de índice, no se quita nada y se avisa.
 
-### Tablas
+### Tablas y figuras
 
-Como las describe la web oficial de APA:
-- encima de la tabla, «**Tabla 1**» en negrita y, en la línea siguiente, el título en *cursiva* y con mayúscula inicial en las palabras principales, los dos a la izquierda y sin sangría. Si la leyenda está debajo, sube encima; si el número y el título van en la misma línea («Tabla 1: Título»), se separan;
+Como las describe la web oficial de APA (las tablas y las figuras se presentan igual):
+- encima, «**Tabla 1**» o «**Figura 1**» en negrita y, en la línea siguiente, el título en *cursiva* y con mayúscula inicial en las palabras principales, los dos a la izquierda y sin sangría. Si la leyenda está debajo, sube encima; si el número y el título van en la misma línea («Tabla 1: Título»), se separan;
+- APA llama «Tabla» a todas las tablas y «Figura» a todo lo demás: «Cuadro 1» pasa a «Tabla 1», y «Gráfico 1», «Imagen 2» o «Esquema 3» pasan a «Figura 1», «Figura 2» y «Figura 3»;
 - debajo, la nota, que empieza por «*Nota.*» en cursiva. A una nota que empieza por «Fuente:» se le pone «Nota.» delante;
-- si ninguna tabla tiene número, se añade «Tabla 1», «Tabla 2»… a las que tienen título (si unas lo tienen y otras no, solo se avisa);
-- la fila de encabezados se repite en cada página si la tabla ocupa más de una;
-- solo líneas horizontales (arriba, debajo de los encabezados y abajo), sin bordes verticales ni colores de fondo. Con `--tablas-tal-cual` se dejan los bordes y los colores como están.
+- si ninguna tabla (o figura) tiene número, se añade «Tabla 1», «Tabla 2»… a las que tienen título (si unas lo tienen y otras no, solo se avisa);
+- en las tablas, la fila de encabezados se repite en cada página si la tabla ocupa más de una, y solo hay líneas horizontales (arriba, debajo de los encabezados y abajo), sin bordes verticales ni colores de fondo. Con `--tablas-tal-cual` se dejan los bordes y los colores como están.
 
-Si falta la línea en blanco entre la tabla y el texto, si una tabla no tiene título o si la numeración no va seguida, solo se avisa. Si una tabla es demasiado ancha, el aviso propone ponerla en una página horizontal.
+Una figura es un párrafo con solo una imagen; la imagen no se toca. Si falta la línea en blanco entre la tabla o figura y el texto, si no tiene título, si la numeración no va seguida o si el título lleva «(elaboración propia)» (que APA pone en una nota), solo se avisa. Si una tabla es demasiado ancha, el aviso propone ponerla en una página horizontal.
 
 ### Qué hace (formato básico, títulos y limpieza)
 

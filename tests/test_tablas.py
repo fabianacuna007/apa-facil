@@ -22,6 +22,7 @@ from apa_facil.documento import CambioPrevisto, Estilos, comparar, radiografia, 
 from apa_facil.informe import Informe
 from apa_facil.reglas import tablas as regla
 from apa_facil.reglas.fuente import _runs_propios
+from apa_facil.reglas.resumen import _activado, _poner
 from herramientas.verificar import TABLAS, verificar
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -74,8 +75,8 @@ def parrafo(doc, inicio):
 def formato(doc, p):
     """[(texto, cursiva, negrita)] de cada fragmento con texto."""
     estilos = Estilos(doc)
-    return [("".join(t.text or "" for t in r.iter(w("t"))), regla._activado(estilos, r, p, "i"),
-             regla._activado(estilos, r, p, "b")) for r in _runs_propios(p)
+    return [("".join(t.text or "" for t in r.iter(w("t"))), _activado(estilos, r, p, "i"),
+             _activado(estilos, r, p, "b")) for r in _runs_propios(p)
             if "".join(t.text or "" for t in r.iter(w("t")))]
 
 
@@ -257,11 +258,11 @@ def test_avisos_de_linea_en_blanco_y_de_posicion(tmp_path):
     assert not any("línea en blanco" in a for a in informe.avisos)
 
 
-def test_cuadro_y_numeracion_desordenada():
-    original = trabajo(antes=["Cuadro 3: notas"])
-    informe = Informe()
-    regla.aplicar(original, {}, informe)
-    assert any(a.startswith("APA llama «Tabla» a las tablas, y no «Cuadro»") for a in informe.avisos)
+def test_cuadro_pasa_a_tabla_y_numeracion_desordenada(tmp_path):
+    """Decisión del propietario en el 6.2: la palabra pasa a ser la de APA («Cuadro 3» → «Tabla 3»)."""
+    doc, informe = procesar(trabajo(antes=["Cuadro 3: notas"]), tmp_path)
+    assert alrededor(doc)[0] == ["Tabla 3", "Notas"]
+    assert "Tablas: APA llama «Tabla» a todas las tablas: «Cuadro 3» → «Tabla 3». Si el texto las nombra de otra "            "forma («cuadro 3»), cámbialo tú." in informe.cambios
     assert any(a.startswith("La numeración de las tablas no va seguida (3)") for a in informe.avisos)
 
 
@@ -320,10 +321,10 @@ def test_integridad_numero_y_nota():
     antes, despues = _radiografias([("Notas", False), ("Dato", True), ("Fuente: el centro.", False)],
                                    [("Tabla 1", False), ("Notas", False), ("Dato", True),
                                     ("Nota. Fuente: el centro.", False)])
-    bien = [CambioPrevisto(1, "añadir_numero_de_tabla", nuevo="Tabla 1"),
+    bien = [CambioPrevisto(1, "añadir_numero", nuevo="Tabla 1"),
             CambioPrevisto(3, "añadir_nota", nuevo="Nota. ")]
     assert comparar(antes, despues, bien) == []
-    assert comparar(antes, despues, [CambioPrevisto(1, "añadir_numero_de_tabla", nuevo="Tabla uno"), bien[1]])
+    assert comparar(antes, despues, [CambioPrevisto(1, "añadir_numero", nuevo="Tabla uno"), bien[1]])
     antes_texto, despues_texto = _radiografias([("Texto.", False)], [("Nota. Texto.", False)])
     assert comparar(antes_texto, despues_texto, [CambioPrevisto(1, "añadir_nota", nuevo="Nota. ")])
 
@@ -344,5 +345,5 @@ def test_integridad_solo_sube_la_leyenda_de_justo_debajo(antes, despues):
 def test_el_verificador_ve_un_titulo_sin_cursiva(tmp_path):
     doc, _ = procesar(trabajo(antes=["Tabla 1", "Notas"]), tmp_path)
     for r in _runs_propios(parrafo(doc, "Notas")):
-        regla._poner(r, "i", False)
+        _poner(r, "i", False)
     assert incumplimientos(doc) == ["El título de la tabla: no va en cursiva."]

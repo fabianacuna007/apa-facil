@@ -43,6 +43,7 @@ NOMBRES = {
     "sangria": "Sangría",
     "titulos": "Títulos",
     "tablas": "Tablas",
+    "figuras": "Figuras",
     "paginacion": "Número de página",
 }
 

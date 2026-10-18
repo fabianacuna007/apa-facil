@@ -212,12 +212,19 @@ NUMERACION_DE_APARTADO = re.compile(r"(?:\d{1,2}(?:\.\d{1,2})*[.)]|\d{1,2}(?:\.\
                                     r"[A-Za-z][.)])[ \t ]+")
 
 
-# Leyendas de tabla (paso 6.1). El número («Tabla 1», «Cuadro 2») y, si van en la misma
-# línea, lo que lo separa del título («: », «. », « – ») y el título. «Tabla 1.2» (numeración
-# por capítulos) no se reconoce: no se puede separar sin dudas.
-LEYENDA_CON_NUMERO = re.compile(r"^((?:tabla|cuadro)\s+[A-Z]?\d{1,3})(?![.\-–]?\d)"
-                                r"(?:(\s*[:.\-–—]\s*|\s+)(\S.*)|[.:]?\s*)$", re.IGNORECASE | re.DOTALL)
-NUMERO_DE_TABLA = re.compile(r"Tabla [1-9]\d{0,2}")   # el que se añade si la tabla no lo tiene
+# Leyendas de tablas y figuras (pasos 6.1 y 6.2). La palabra con que empiezan y la de APA
+# por la que se cambia (decisión del propietario en el 6.2: «Gráfico 1» → «Figura 1»).
+PALABRAS_DE_ROTULO = {"tabla": "Tabla", "cuadro": "Tabla",
+                      "figura": "Figura", "gráfico": "Figura", "grafico": "Figura", "imagen": "Figura",
+                      "ilustración": "Figura", "ilustracion": "Figura", "mapa": "Figura", "fotografía": "Figura",
+                      "fotografia": "Figura", "diagrama": "Figura", "esquema": "Figura"}
+# El número («Tabla 1», «Gráfico 2») y, si van en la misma línea, lo que lo separa del
+# título («: », «. », « – ») y el título. «Tabla 1.2» (numeración por capítulos) no se
+# reconoce: no se puede separar sin dudas.
+LEYENDA_CON_NUMERO = re.compile(r"^(?P<numero>(?P<palabra>" + "|".join(PALABRAS_DE_ROTULO) + r")\s+[A-Z]?\d{1,3})"
+                                r"(?![.\-–]?\d)(?:(?P<separador>\s*[:.\-–—]\s*|\s+)(?P<titulo>\S.*)|[.:]?\s*)$",
+                                re.IGNORECASE | re.DOTALL)
+NUMERO_NUEVO = re.compile(r"(Tabla|Figura) [1-9]\d{0,2}")   # el que se añade si la tabla o figura no lo tiene
 # Una nota de tabla que no empieza por «Nota.»: delante se añade «Nota. ».
 NOTA_SIN_ROTULO = re.compile(r"^\s*fuentes?\s*:", re.IGNORECASE)
 ROTULO_DE_NOTA = "Nota. "
@@ -267,23 +274,28 @@ class CambioPrevisto:
       - "quitar_punto_final": se quita el punto del final del párrafo, que solo
         puede ser la línea de las palabras clave («Palabras clave: …») y acabar
         justo en ese punto (paso 5.5);
-      - "dividir_leyenda": el párrafo, que tiene que ser una leyenda de tabla con
-        el número y el título en la misma línea («Tabla 1: Título»), pasa a ser
+      - "cambiar_rotulo": la palabra del principio de una leyenda con número
+        (`quitado`: «Cuadro», «Gráfico», «Imagen»…) pasa a ser `nuevo`, que solo
+        puede ser la de APA para esa palabra («Tabla» o «Figura») (paso 6.2);
+      - "dividir_leyenda": el párrafo, que tiene que ser una leyenda de tabla o de
+        figura con el número y el título en la misma línea («Tabla 1: Título»), pasa a ser
         dos: el número y, debajo, el título `nuevo` (el mismo, salvo mayúsculas y
         minúsculas: paso 4.6). Desaparece `quitado`, que tiene que ser justo lo que
         los separaba («: », «. »…) (paso 6.1);
       - "mover_leyenda": el párrafo pasa a estar justo antes del párrafo
-        `desde[0]`, que tiene que ser el primero de una tabla. El párrafo estaba
-        debajo de esa tabla, con solo párrafos vacíos (o los que se mueven con él)
-        en medio, y el primero que se mueve tiene que ser una leyenda con número
-        («Tabla 1…»): una leyenda de debajo de la tabla sube encima (paso 6.1);
-      - "añadir_numero_de_tabla": se añade antes del párrafo un párrafo nuevo con
-        el texto `nuevo`, que solo puede ser «Tabla N». El párrafo tiene que ser el
-        primero de una tabla o ir justo antes de una (solo con párrafos vacíos en
-        medio): el título de una tabla que no tenía número (paso 6.1);
+        `desde[0]`, que tiene que ser el primero de una tabla o un párrafo con solo
+        una imagen. El párrafo estaba debajo de esa tabla o imagen, con solo
+        párrafos vacíos (o los que se mueven con él) en medio, y el primero que se
+        mueve tiene que ser una leyenda con número («Tabla 1…»): una leyenda de
+        debajo sube encima (pasos 6.1 y 6.2);
+      - "añadir_numero": se añade antes del párrafo un párrafo nuevo con el texto
+        `nuevo`, que solo puede ser «Tabla N» o «Figura N». El párrafo tiene que ir
+        justo antes de una tabla o de una imagen (solo con párrafos vacíos en
+        medio): el título de una tabla o figura que no tenía número (pasos 6.1 y 6.2);
       - "añadir_nota": se añade «Nota. » al principio del párrafo, que tiene que
-        empezar por «Fuente:» o «Fuentes:» e ir justo detrás de una tabla (solo con
-        párrafos vacíos en medio) (paso 6.1).
+        empezar por «Fuente:» o «Fuentes:» e ir justo detrás de una tabla o de una
+        imagen (solo con párrafos vacíos, o leyendas que se suben, en medio)
+        (pasos 6.1 y 6.2).
     Si un párrafo tiene varios, se comprueban en el orden en que se anotaron.
     """
     parrafo: int     # número del párrafo en el original: desde 1, contando los de las tablas
@@ -319,22 +331,32 @@ def _aplicar_previstos(antes, previstos):
     problemas, borrar, insertar = [], set(), {}
     despues = {}    # párrafos que salen de dividir uno: van justo detrás de él
     movidos = {}    # destino → los párrafos que se ponen justo antes de él (leyendas de tabla)
+    notas = []      # párrafos a los que se pone «Nota. »: se comprueban al final
     titulo_de_la_portada, portada_quitada, indice_quitado = None, [], []
 
     def en_tabla(k):
         return 0 <= k < len(antes.textos) and antes.textos[k][0].startswith("Párrafo ") \
             and antes.textos[k][0].endswith("(dentro de una tabla)")
 
-    def vacio(k):
+    def sin_texto(k):
         return 0 <= k < len(antes.textos) and antes.textos[k][0].startswith("Párrafo ") \
             and not en_tabla(k) and not antes.textos[k][1].strip()
 
-    def junto_a_una_tabla(k, paso):
-        """¿Hay una tabla justo antes (paso -1) o justo después (+1) del párrafo k, sin contar los vacíos?"""
+    def imagen(k):   # un párrafo con solo una imagen (una figura)
+        return sin_texto(k) and bool(antes.imagenes_en.get(k + 1))
+
+    def vacio(k):
+        return sin_texto(k) and not imagen(k)
+
+    def junto_a_un_objeto(k, paso, tambien=()):
+        """
+        ¿Hay una tabla o una imagen justo antes (paso -1) o justo después (+1) del
+        párrafo k, sin contar los vacíos (ni los párrafos `tambien`)?
+        """
         k += paso
-        while vacio(k):
+        while vacio(k) or k in tambien:
             k += paso
-        return en_tabla(k)
+        return en_tabla(k) or imagen(k)
 
     def portada_de_los_datos(cambio):
         """¿Son `parrafos` justo la portada APA que sale de `datos`, al principio del documento?"""
@@ -399,20 +421,23 @@ def _aplicar_previstos(antes, previstos):
         elif cambio.accion == "añadir_al_final" and texto.strip() and not texto[-1].isspace() and \
                 (cambio.nuevo == " " or (cambio.nuevo == ". " and not texto.rstrip("\"'»”)").endswith((".", "…")))):
             textos[i] = (donde, texto + cambio.nuevo)
-        elif cambio.accion == "dividir_leyenda" and leyenda and leyenda.group(3) and \
-                cambio.quitado == leyenda.group(2) and datos_portada.solo_cambian_mayusculas(leyenda.group(3),
-                                                                                            cambio.nuevo):
-            textos[i] = (donde, leyenda.group(1))
+        elif cambio.accion == "dividir_leyenda" and leyenda and leyenda["titulo"] and \
+                cambio.quitado == leyenda["separador"] and \
+                datos_portada.solo_cambian_mayusculas(leyenda["titulo"], cambio.nuevo):
+            textos[i] = (donde, leyenda["numero"])
             despues.setdefault(i, []).append((f"{donde}, su título (separado)", cambio.nuevo))
-        elif cambio.accion == "mover_leyenda" and len(cambio.desde) == 1 and en_tabla(destino) \
-                and not en_tabla(destino - 1) and destino < i:
+        elif cambio.accion == "cambiar_rotulo" and leyenda and cambio.quitado == leyenda["palabra"] and \
+                cambio.nuevo == PALABRAS_DE_ROTULO.get(cambio.quitado.lower()) and cambio.nuevo != cambio.quitado:
+            textos[i] = (donde, cambio.nuevo + texto[len(cambio.quitado):])
+        elif cambio.accion == "mover_leyenda" and len(cambio.desde) == 1 and destino < i and \
+                ((en_tabla(destino) and not en_tabla(destino - 1)) or imagen(destino)):
             movidos.setdefault(destino, []).append(i)   # se comprueban juntos, al final
-        elif cambio.accion == "añadir_numero_de_tabla" and NUMERO_DE_TABLA.fullmatch(cambio.nuevo) and \
-                ((en_tabla(i) and not en_tabla(i - 1)) or (not en_tabla(i) and junto_a_una_tabla(i, +1))):
-            insertar.setdefault(i, []).append(("Número de tabla, añadido", cambio.nuevo))
+        elif cambio.accion == "añadir_numero" and NUMERO_NUEVO.fullmatch(cambio.nuevo) and \
+                not en_tabla(i) and texto.strip() and junto_a_un_objeto(i, +1):
+            insertar.setdefault(i, []).append(("Número de tabla o figura, añadido", cambio.nuevo))
         elif cambio.accion == "añadir_nota" and cambio.nuevo == ROTULO_DE_NOTA and NOTA_SIN_ROTULO.match(texto) \
-                and not en_tabla(i) and junto_a_una_tabla(i, -1):
-            textos[i] = (donde, cambio.nuevo + texto)
+                and not en_tabla(i):
+            notas.append(i)   # justo detrás de su tabla o imagen: se comprueba al final
         else:
             problemas.append(f"{donde}: una regla anotó «{cambio.accion}», pero eso cambiaría el texto "
                              f"(«{_extracto(texto)}»). Solo se pueden borrar párrafos vacíos y el rótulo "
@@ -420,8 +445,9 @@ def _aplicar_previstos(antes, previstos):
                              "de un título, cambiar las mayúsculas de un título, repetir el "
                              "título de la portada al principio del texto, poner el punto final a los títulos "
                              "de nivel 4 y 5, añadir la portada APA con los datos del estudiante, quitar el "
-                             "índice si se pide, el punto final de las palabras clave y, en las tablas, subir "
-                             "su leyenda, separar el número del título y añadir «Tabla N» y «Nota.».")
+                             "índice si se pide, el punto final de las palabras clave y, en las tablas y figuras, "
+                             "subir su leyenda, separar el número del título, poner «Tabla» o «Figura» y añadir "
+                             "su número y «Nota.».")
 
     if indice_quitado:
         numeros = sorted(n for _, n, _ in indice_quitado)
@@ -447,13 +473,19 @@ def _aplicar_previstos(antes, previstos):
         final_de_la_tabla = destino
         while en_tabla(final_de_la_tabla + 1):
             final_de_la_tabla += 1
-        en_medio = range(final_de_la_tabla + 1, lista[-1])
+        en_medio = range(final_de_la_tabla + 1, lista[-1])   # (una imagen es un solo párrafo)
         seguidos = lista[0] > final_de_la_tabla and all(vacio(k) or k in lista for k in en_medio)
         if not seguidos or not LEYENDA_CON_NUMERO.match(antes.textos[lista[0]][1]):
             problemas.append(f"{antes.textos[lista[0]][0]}: una regla anotó «mover_leyenda», pero solo se puede "
                              "subir la leyenda que está justo debajo de su tabla y empieza por su número.")
             del movidos[destino]
     destino_de = {i: destino for destino, lista in movidos.items() for i in lista}
+    for i in notas:
+        if junto_a_un_objeto(i, -1, tambien=destino_de):
+            textos[i] = (textos[i][0], ROTULO_DE_NOTA + textos[i][1])
+        else:
+            problemas.append(f"{textos[i][0]}: una regla anotó «añadir_nota», pero el párrafo no está justo debajo "
+                             "de una tabla o una imagen.")
 
     def con_lo_suyo(i):
         """El párrafo i con lo que se le añade delante y detrás (o sin él, si se borra)."""

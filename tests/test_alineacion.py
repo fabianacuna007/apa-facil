@@ -212,11 +212,11 @@ def test_documentos_de_prueba(original, tmp_path):
 
     assert not [k for k in despues if k[1] in alineacion.JUSTIFICADOS]
     assert despues[("cuerpo", "right")] == DERECHA_ESPERADA.get(original.name[:2], 0)
-    # Lo centrado sigue centrado, salvo las leyendas de las tablas, que van a la izquierda (paso 6.1); lo único
+    # Lo centrado sigue centrado, salvo las leyendas de tablas y figuras, que van a la izquierda (6.1 y 6.2); lo único
     # que se centra son los títulos de nivel 1 (paso 4.1). Los textos se comparan sin mayúsculas: el paso 4.6
     # cambia las de los títulos.
     leyendas = {" ".join(c.texto.split()).lower() for c in estructura.clasificar(docx.Document(str(original)))
-                if c.tipo == "leyenda_tabla"}
+                if c.tipo in ("leyenda_tabla", "leyenda_figura")}
     centrados_antes = {t.lower() for t in _centrados(docx.Document(str(original)))} - leyendas
     centrados_despues = {t.lower() for t in _centrados(docx.Document(str(salida)))}
     assert not centrados_antes - centrados_despues, "lo centrado no cambia"

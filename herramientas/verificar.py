@@ -43,6 +43,7 @@ from apa_facil.reglas import (alineacion, fuente, interlineado, margenes, pagina
                                titulos)
 from apa_facil.reglas import portada as regla_portada  # noqa: E402
 from apa_facil.reglas import resumen as resumen_regla  # noqa: E402
+from apa_facil.reglas import leyendas  # noqa: E402
 from apa_facil.reglas import tablas as regla_tablas  # noqa: E402
 
 MARGENES = "1.1 Márgenes"
@@ -62,8 +63,10 @@ PORTADA_PROPIA = "5.3 Portada propia"
 INDICE = "5.4 Índice"
 RESUMEN = "5.5 Resumen"
 TABLAS = "6.1 Tablas"
+FIGURAS = "6.2 Figuras"
 REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS, TEXTO_TITULOS,
-          TITULO_TRABAJO, TITULOS_EN_LINEA, MAYUSCULAS_TITULOS, PORTADA, PORTADA_PROPIA, INDICE, RESUMEN, TABLAS]
+          TITULO_TRABAJO, TITULOS_EN_LINEA, MAYUSCULAS_TITULOS, PORTADA, PORTADA_PROPIA, INDICE, RESUMEN, TABLAS,
+          FIGURAS]
 SIN_LINEA = (None, "nil", "none")
 SIN_FONDO = (None, "auto", "FFFFFF", "ffffff")
 
@@ -171,7 +174,8 @@ class Verificacion:
         for comprobacion in (self.margenes, self.fuente, self.interlineado, self.alineacion,
                              self.sangria, self.paginacion, self.titulos, self.formato_de_titulos,
                              self.texto_de_titulos, self.titulo_del_trabajo, self.titulos_en_linea,
-                             self.mayusculas_de_titulos, self.portada, self.indice, self.resumen, self.tablas):
+                             self.mayusculas_de_titulos, self.portada, self.indice, self.resumen, self.tablas,
+                             self.figuras):
             comprobacion()
         return self.resultado
 
@@ -822,37 +826,17 @@ class Verificacion:
     def tablas(self):
         """
         Cada tabla del texto, como la describe la web oficial de APA (Table setup y
-        Sample tables): encima, «Tabla N» en negrita y, en la línea siguiente, el
-        título en cursiva, los dos a la izquierda, sin sangría y con «Conservar con el
-        siguiente»; debajo, si hay nota, «Nota.» en cursiva y el resto sin cursiva; la
-        fila de encabezados se repite en cada página; sin bordes verticales ni colores
-        de fondo en las celdas. No se miran las tablas de la portada o del índice, los
-        recuadros de una sola celda ni las tablas que colocan imágenes (como la regla).
+        Sample tables): sus leyendas (ver _leyendas_de); la fila de encabezados se
+        repite en cada página; sin bordes verticales ni colores de fondo en las
+        celdas. No se miran las tablas de la portada o del índice, los recuadros de
+        una sola celda ni las tablas que colocan imágenes (como la regla).
         """
         bloques = estructura._bloques(self.doc)
         for k, tbl in enumerate(bloques):
-            if tbl.tag != w("tbl") or not regla_tablas._es_tabla_de_datos(tbl):
-                continue
-            vecino = next((self.clasificado_de[b] for b in reversed(bloques[:k]) if b in self.clasificado_de), None)
-            if vecino is not None and vecino.zona in regla_tablas.ZONAS_SIN_TABLAS_APA:
+            if not regla_tablas._es_tabla_de_datos(tbl) or self._en_portada_o_indice(bloques, k):
                 continue
             info = self.por_elemento[tbl.find(f".//{w('p')}")]
-            encima = self._con_texto(bloques, k, -1, 2)
-            numero, titulo = encima if len(encima) == 2 else (None, None)
-            if numero is None or not regla_tablas.NUMERO_O_LETRA.fullmatch(texto_parrafo(numero)):
-                self.fallo_en(TABLAS, info, "La tabla no tiene encima su número («Tabla 1») y, debajo, su título.")
-            else:
-                for p, negrita, cursiva, que in ((numero, True, False, "El número"), (titulo, False, True, "El título")):
-                    problemas = self._problemas_de_leyenda(p, negrita, cursiva, True)
-                    if problemas:
-                        self.fallo_en(TABLAS, self.por_elemento[p], f"{que} de la tabla: {'; '.join(problemas)}.")
-            nota = next(iter(self._con_texto(bloques, k, +1, 1)), None)
-            if nota is not None and estructura.NOTA.match(texto_parrafo(nota)):
-                rotulo = re.match(r"Nota\.", texto_parrafo(nota))
-                problemas = (self._problemas_de_leyenda(nota, False, rotulo.end(), False) if rotulo
-                             else ["no empieza por «Nota.»"])
-                if problemas:
-                    self.fallo_en(TABLAS, self.por_elemento[nota], f"Nota de la tabla: {'; '.join(problemas)}.")
+            self._leyendas_de(TABLAS, leyendas.TABLA, bloques, k, info)
             problemas = []
             primera = tbl.find(w("tr"))
             if not _activado(primera.find(f"{w('trPr')}/{w('tblHeader')}") if primera is not None else None):
@@ -864,6 +848,50 @@ class Verificacion:
                 problemas.append("tiene colores de fondo")
             for problema in problemas:
                 self.fallo_en(TABLAS, info, f"Tabla: {problema}.")
+
+    # --- 6.2 Figuras --------------------------------------------------------------------------
+
+    def figuras(self):
+        """
+        Cada figura del texto (un párrafo con solo una imagen, fuera de la portada y
+        del índice, como en la regla), como la describe la web oficial de APA (Figure
+        setup y Sample figures): sus leyendas, igual que las de las tablas.
+        """
+        bloques = estructura._bloques(self.doc)
+        for k, p in enumerate(bloques):
+            c = self.clasificado_de.get(p)
+            if c is None or c.tipo != "imagen" or c.zona in leyendas.ZONAS_SIN_LEYENDAS_APA:
+                continue
+            self._leyendas_de(FIGURAS, leyendas.FIGURA, bloques, k, self.por_elemento[p])
+
+    def _en_portada_o_indice(self, bloques, k):
+        vecino = next((self.clasificado_de[b] for b in reversed(bloques[:k]) if b in self.clasificado_de), None)
+        return vecino is not None and vecino.zona in leyendas.ZONAS_SIN_LEYENDAS_APA
+
+    def _leyendas_de(self, regla, clase, bloques, k, info):
+        """
+        Encima del bloque k, «Tabla N» (o «Figura N») en negrita y, en la línea
+        siguiente, el título en cursiva, los dos a la izquierda, sin sangría y con
+        «Conservar con el siguiente»; debajo, si hay nota, «Nota.» en cursiva y el
+        resto sin cursiva.
+        """
+        s = clase.singular
+        encima = self._con_texto(bloques, k, -1, 2)
+        numero, titulo = encima if len(encima) == 2 else (None, None)
+        if numero is None or not clase.numero_o_letra.fullmatch(texto_parrafo(numero)):
+            self.fallo_en(regla, info, f"La {s} no tiene encima su número («{clase.rotulo} 1») y, debajo, su título.")
+        else:
+            for p, negrita, cursiva, que in ((numero, True, False, "El número"), (titulo, False, True, "El título")):
+                problemas = self._problemas_de_leyenda(p, negrita, cursiva, True)
+                if problemas:
+                    self.fallo_en(regla, self.por_elemento[p], f"{que} de la {s}: {'; '.join(problemas)}.")
+        nota = next(iter(self._con_texto(bloques, k, +1, 1)), None)
+        if nota is not None and estructura.NOTA.match(texto_parrafo(nota)):
+            rotulo = re.match(r"Nota\.", texto_parrafo(nota))
+            problemas = (self._problemas_de_leyenda(nota, False, rotulo.end(), False) if rotulo
+                         else ["no empieza por «Nota.»"])
+            if problemas:
+                self.fallo_en(regla, self.por_elemento[nota], f"Nota de la {s}: {'; '.join(problemas)}.")
 
     def _con_texto(self, bloques, k, paso, cuantos):
         """Los `cuantos` párrafos con texto seguidos encima (paso -1) o debajo (+1) del bloque k, sin los vacíos."""
