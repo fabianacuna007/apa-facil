@@ -18,7 +18,7 @@ from apa_facil import estructura, pipeline
 from apa_facil.documento import CambioPrevisto, Estilos, comparar, radiografia, texto_parrafo, w
 from apa_facil.informe import Informe
 from apa_facil.reglas import titulos
-from herramientas.verificar import (FORMATO_TITULOS, MAYUSCULAS_TITULOS, TITULO_TRABAJO, TITULOS, TITULOS_EN_LINEA,
+from herramientas.verificar import (FORMATO_TITULOS, MAYUSCULAS_TITULOS, PORTADA_PROPIA, TITULO_TRABAJO, TITULOS, TITULOS_EN_LINEA,
                                    verificar)
 
 PRUEBAS = sorted((Path(__file__).resolve().parent.parent / "pruebas").glob("*.docx"))
@@ -211,7 +211,7 @@ def test_titulo_dudoso_no_recibe_estilo_y_se_avisa():
     assert sin_el_titulo(informe.avisos) == ["«Esto es importante.» parece un título, pero no es seguro, así que se ha dejado "
                               "como estaba. Si es un título, ponle en Word el estilo «Título 1»."]
     resultado = verificar(doc)
-    assert [h.regla for h in resultado.excepciones] == [TITULOS]
+    assert [h.regla for h in resultado.excepciones if h.regla != PORTADA_PROPIA] == [TITULOS]
     assert not [h for h in resultado.incumplimientos if h.regla == TITULOS]
 
 
@@ -857,7 +857,7 @@ def test_introduccion_por_defecto_solo_se_avisa():
         "El primer apartado se titula «Introducción». En APA la introducción no lleva título: el título del "
         "trabajo, al principio del texto, hace sus veces. Se ha dejado así; quítalo tú o usa la opción "
         "--quitar-introduccion."]
-    assert [h.regla for h in verificar(doc).excepciones] == [TITULO_TRABAJO]
+    assert [h.regla for h in verificar(doc).excepciones if h.regla != PORTADA_PROPIA] == [TITULO_TRABAJO]
 
 
 def test_introduccion_con_la_opcion_se_quita():

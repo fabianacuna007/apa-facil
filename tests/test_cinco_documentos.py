@@ -24,7 +24,7 @@ import pytest
 
 from apa_facil import estructura, pipeline
 from apa_facil.documento import Estilos, comparar, radiografia
-from herramientas.verificar import ALINEACION, TEXTO_TITULOS, TITULO_TRABAJO, mostrar, verificar
+from herramientas.verificar import ALINEACION, PORTADA_PROPIA, TEXTO_TITULOS, TITULO_TRABAJO, mostrar, verificar
 
 CARPETA = Path(__file__).resolve().parent.parent / "pruebas"
 PRUEBAS = sorted(CARPETA.glob("*.docx"))
@@ -34,16 +34,17 @@ PRUEBAS = sorted(CARPETA.glob("*.docx"))
 # Desde el paso 4.3, los títulos numerados y en mayúsculas (que por defecto se dejan) también; desde
 # el 4.4, el rótulo «Introducción» y el título del trabajo en mayúsculas. Los números son los de la
 # copia, que lleva el título del trabajo añadido al principio del texto (por eso van uno por delante).
+# Desde el 5.3, sin datos de portada se mantiene la de la universidad: también es una excepción admitida.
 EXCEPCIONES = {
     "01_ensayo_basico": {(TEXTO_TITULOS, n) for n in (10, 13, 16)}   # «1.», «2.» y «3.»
-                        | {(TITULO_TRABAJO, 7)},                     # «Introducción»
-    "02_informe_tablas": {(TITULO_TRABAJO, 6)},                      # «Introducción»
+                        | {(TITULO_TRABAJO, 7), (PORTADA_PROPIA, 1)},  # «Introducción»; la portada
+    "02_informe_tablas": {(TITULO_TRABAJO, 6), (PORTADA_PROPIA, 1)},   # «Introducción»; la portada
     "03_trabajo_imagenes_listas": {(TEXTO_TITULOS, n) for n in (4, 10, 14, 18, 26)}   # «1.» a «4.» y «2.1.»
-                                  | {(TITULO_TRABAJO, 4)},                            # «1. Introducción»
-    "04_formato_caotico": set(),
+                                  | {(TITULO_TRABAJO, 4), (PORTADA_PROPIA, 1)},       # «1. Introducción»; la portada
+    "04_formato_caotico": {(PORTADA_PROPIA, 1)},
     "05_tfg_completo": {(ALINEACION, 8), (ALINEACION, 9), (ALINEACION, 10)}   # portada: Autora, Tutor, Convocatoria
                        | {(TEXTO_TITULOS, n) for n in (20, 23, 24, 26, 27, 29, 31, 35, 37, 38, 63, 65)}
-                       | {(TITULO_TRABAJO, 20)},                              # «1. Introducción»
+                       | {(TITULO_TRABAJO, 20), (PORTADA_PROPIA, 2)},         # «1. Introducción»; la portada (sin logo)
 }
 
 

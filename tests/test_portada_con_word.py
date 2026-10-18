@@ -93,3 +93,18 @@ def test_word_ve_la_portada_sola_en_la_primera_pagina(tmp_path):
     for anterior, siguiente in zip(alturas, alturas[1:]):
         assert siguiente - anterior == pytest.approx(linea, abs=1), "todo a doble espacio, sin espacio extra"
     assert texto[0][1] == pytest.approx(72, abs=1), "el título del texto, arriba de la página 2"
+
+
+# --- Paso 5.3: la portada de la universidad, sustituida ------------------------------------------
+
+@pytest.mark.skipif(not a_pdf.hay_word(), reason="Word no está instalado")
+@pytest.mark.parametrize("nombre", ["01_ensayo_basico", "05_tfg_completo"])
+def test_word_ve_la_portada_sustituida_sola_en_la_primera_pagina(nombre, tmp_path):
+    datos = RAIZ / "tests" / "datos" / f"{nombre[:2]}_datos.json"
+    copia, _ = pipeline.procesar(RAIZ / "pruebas" / f"{nombre}.docx", tmp_path, {"portada": combinar(datos)})
+    filas = posiciones_segun_word(copia, 11)
+    portada, siguiente = filas[:10], filas[10]
+    assert all(pagina == 1 for pagina, _ in portada), "la portada APA, sola en la página 1"
+    assert siguiente[0] == 2 and siguiente[1] == pytest.approx(72, abs=1), "lo siguiente, arriba de la página 2"
+    alturas = [altura for _, altura in portada]
+    assert alturas[3] == pytest.approx(alturas[0] + 3 * (alturas[1] - alturas[0]), abs=1), "el título, en la 4.ª línea"

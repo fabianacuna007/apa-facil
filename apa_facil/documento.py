@@ -100,6 +100,7 @@ class Radiografia:
     textos: list = field(default_factory=list)   # (ubicación, texto) de cada párrafo
     tablas: int = 0
     imagenes: int = 0
+    imagenes_en: dict = field(default_factory=dict)   # número de párrafo → imágenes que lleva (paso 5.3)
     notas_al_pie: int = 0
     notas_al_final: int = 0
     secciones: int = 0
@@ -162,6 +163,9 @@ def radiografia(documento):
     for i, p in enumerate(cuerpo.iter(w("p")), start=1):
         dentro = " (dentro de una tabla)" if next(p.iterancestors(w("tc")), None) is not None else ""
         r.textos.append((f"Párrafo {i}{dentro}", texto_parrafo(p)))
+        propias = sum(1 for el in p.iter(w("drawing"), w("pict")) if next(el.iterancestors(w("p")), None) is p)
+        if propias:
+            r.imagenes_en[i] = propias
     for tipo, parte, etiqueta in (("Nota al pie", "/word/footnotes.xml", "footnote"),
                                   ("Nota al final", "/word/endnotes.xml", "endnote")):
         for n, nota in enumerate(_notas(documento, parte, etiqueta), start=1):
@@ -221,7 +225,12 @@ class CambioPrevisto:
         `parrafos`, que tienen que ser exactamente la portada APA que sale de
         `datos` (datos_portada.parrafos_de_portada), con el título de los datos o
         el mismo con otras mayúsculas; el último puede acabar en un salto de página
-        si el documento empieza con una tabla (paso 5.2).
+        si el documento empieza con una tabla (paso 5.2);
+      - "quitar_portada": se borra el párrafo, que tiene que ser de la portada
+        que tenía el documento: los párrafos quitados son los primeros del
+        documento, seguidos (sin tablas en medio), cortos (menos de 25
+        palabras), y en su lugar se añade la portada APA ("añadir_portada"). Sus
+        imágenes (el logo) se descuentan del recuento (paso 5.3).
     Si un párrafo tiene varios, se comprueban en el orden en que se anotaron.
     """
     parrafo: int     # número del párrafo en el original: desde 1, contando los de las tablas
@@ -255,7 +264,7 @@ def _aplicar_previstos(antes, previstos):
     """
     textos = list(antes.textos)
     problemas, borrar, insertar = [], set(), {}
-    titulo_de_la_portada = None
+    titulo_de_la_portada, portada_quitada = None, []
 
     def portada_de_los_datos(cambio):
         """¿Son `parrafos` justo la portada APA que sale de `datos`, al principio del documento?"""
@@ -308,6 +317,8 @@ def _aplicar_previstos(antes, previstos):
             # Delante de todo, también del título del texto si se añade en el mismo sitio.
             insertar.setdefault(i, [])[0:0] = [(f"Portada APA, párrafo {n} (añadido)", texto)
                                                for n, texto in enumerate(cambio.parrafos, start=1)]
+        elif cambio.accion == "quitar_portada":
+            portada_quitada.append((i, cambio.parrafo, donde, texto))   # se comprueba entera, al final
         elif cambio.accion == "añadir_al_final" and texto.strip() and not texto[-1].isspace() and \
                 (cambio.nuevo == " " or (cambio.nuevo == ". " and not texto.rstrip("\"'»”)").endswith((".", "…")))):
             textos[i] = (donde, texto + cambio.nuevo)
@@ -318,12 +329,25 @@ def _aplicar_previstos(antes, previstos):
                              "de un título, cambiar las mayúsculas de un título, repetir el "
                              "título de la portada al principio del texto, poner el punto final a los títulos "
                              "de nivel 4 y 5 y añadir la portada APA con los datos del estudiante.")
+
+    imagenes_quitadas = 0
+    if portada_quitada:
+        numeros = sorted(n for _, n, _, _ in portada_quitada)
+        al_principio = numeros == list(range(1, len(numeros) + 1))
+        cortos = all(len(texto.split()) < 25 for _, _, _, texto in portada_quitada)
+        if al_principio and cortos and titulo_de_la_portada is not None:
+            borrar.update(i for i, _, _, _ in portada_quitada)
+            imagenes_quitadas = sum(antes.imagenes_en.get(n, 0) for n in numeros)
+        else:
+            problemas.append(f"{portada_quitada[0][2]}: una regla anotó «quitar_portada», pero solo se puede quitar "
+                             "la portada que tenía el documento (sus primeros párrafos, seguidos y cortos) y "
+                             "poniendo en su lugar la portada APA.")
     resultado = []
     for i, t in enumerate(textos):
         resultado += insertar.get(i, [])
         if i not in borrar:
             resultado.append(t)
-    return resultado, problemas
+    return resultado, problemas, imagenes_quitadas
 
 
 def comparar(antes, despues, previstos=(), maximo=10):
@@ -333,12 +357,16 @@ def comparar(antes, despues, previstos=(), maximo=10):
     (CambioPrevisto) que se indiquen, que tienen que haberse hecho tal cual.
     """
     diferencias = []
+    esperados, problemas, imagenes_quitadas = _aplicar_previstos(antes, previstos)
     for atributo, nombre in ELEMENTOS:
         a, d = getattr(antes, atributo), getattr(despues, atributo)
+        if atributo == "imagenes" and imagenes_quitadas:   # el logo de la portada sustituida (paso 5.3)
+            if a - imagenes_quitadas != d:
+                diferencias.append(f"Había {a} {nombre}; quitando las {imagenes_quitadas} de la portada sustituida "
+                                   f"tendría que haber {a - imagenes_quitadas}, y hay {d}.")
+            continue
         if a != d:
             diferencias.append(f"Había {a} {nombre} y ahora hay {d}.")
-
-    esperados, problemas = _aplicar_previstos(antes, previstos)
     diferencias += problemas
     antes = Radiografia(textos=esperados)
     textos_a = [t for _, t in antes.textos]

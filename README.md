@@ -63,7 +63,9 @@ Con esos datos se genera la **portada APA de estudiante**, como la describe la w
 - una línea en blanco;
 - debajo, centrados: los autores («Ana Pérez y Luis Gómez»), la afiliación («Departamento…, Universidad…»), la asignatura («HIS 201: Historia…»), el profesor y la fecha («16 de octubre de 2026»).
 
-Todo va a doble espacio, y el texto empieza en una página nueva con el mismo título. El título lleva mayúscula inicial en las palabras principales, como pide APA: los artículos y las conjunciones y preposiciones de tres letras o menos van en minúscula. Con `--titulo-tal-cual` se deja como lo escribes. «que», «lo» y «vía» pueden ir de las dos formas según la frase: se dejan como estén y se avisa. De momento la portada solo se añade a documentos que no tienen ninguna; si ya hay una, se deja como está y se avisa.
+Todo va a doble espacio, y el texto empieza en una página nueva con el mismo título. El título lleva mayúscula inicial en las palabras principales, como pide APA: los artículos y las conjunciones y preposiciones de tres letras o menos van en minúscula. Con `--titulo-tal-cual` se deja como lo escribes. «que», «lo» y «vía» pueden ir de las dos formas según la frase: se dejan como estén y se avisa.
+
+Si el documento ya tiene una portada (la de la universidad), con tus datos **se sustituye** por la portada APA, logo incluido, y el informe dice qué líneas se han quitado. Con `--mantener-portada` se deja como está, con su diseño, y solo se hace que el texto empiece en una página nueva; muchas universidades exigen su propia portada, y APA lo admite. Sin datos de portada, también se mantiene. Tampoco se sustituye, y se avisa, si la portada lleva algo que podría ser del trabajo: una tabla, una nota, un campo o un párrafo largo.
 
 ### Qué hace (formato básico, títulos y limpieza)
 

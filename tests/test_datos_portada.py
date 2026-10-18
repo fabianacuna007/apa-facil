@@ -18,6 +18,7 @@ import zipfile
 from datetime import date
 from pathlib import Path
 
+import docx
 import pytest
 
 from apa_facil import pipeline
@@ -245,9 +246,11 @@ def test_el_documento_01_con_datos_json(tmp_path, capsys):
     assert "Faltan datos para la portada" not in capsys.readouterr().out
     informe = json.loads((con / "01_ensayo_basico_APA.json").read_text(encoding="utf-8"))
     assert informe["opciones"]["portada"] == {"dados": list(DATOS), "faltan": []}
-    # En el 5.1 los datos todavía no cambian el documento: la copia es la misma que sin ellos.
+    # Con los datos, su portada se sustituye por la de APA (pasos 5.2 y 5.3); sin ellos, se mantiene.
     assert main([str(DOC_01)], carpeta_salida=sin) == 0
-    assert contenido_docx(con / "01_ensayo_basico_APA.docx") == contenido_docx(sin / "01_ensayo_basico_APA.docx")
+    assert contenido_docx(con / "01_ensayo_basico_APA.docx") != contenido_docx(sin / "01_ensayo_basico_APA.docx")
+    primeros = [p.text for p in docx.Document(str(con / "01_ensayo_basico_APA.docx")).paragraphs[:4]]
+    assert primeros == ["", "", "", "La Revolución Industrial y Sus Efectos en el Mundo del Trabajo"]
 
 
 def test_los_valores_no_se_guardan_en_el_json(tmp_path):

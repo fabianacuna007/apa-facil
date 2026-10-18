@@ -11,26 +11,25 @@ Order of pages):
 - todo a doble espacio, con el número de página (paso 1.6), y el texto empieza
   en una página nueva («start each section on a new page»).
 
-La portada se genera solo si el documento no tiene ya una (decisión del
-propietario: sustituirla o mantenerla es el paso 5.3). Sin título no se genera:
-APA lo exige. El título del principio del texto (paso 4.4) sale entonces de los
-datos, con las mismas mayúsculas que en la portada.
+Sin título no se genera: APA lo exige. El título del principio del texto (paso
+4.4) sale entonces de los datos, con las mismas mayúsculas que en la portada
+(paso 4.6; --titulo-tal-cual lo deja como lo escribe el estudiante).
 
-Mayúsculas del título (decisión del propietario: por defecto, con la opción
---titulo-tal-cual se deja como lo escribe el estudiante). APA llama palabras
-menores, en minúscula, a todos los artículos y a las conjunciones y
-preposiciones de tres letras o menos; las demás (sustantivos, verbos,
-adjetivos, adverbios, pronombres y cualquier palabra de cuatro letras o más)
-van con mayúscula, y también la primera del título, la del subtítulo y la que
-sigue a dos puntos, raya o punto. Las palabras que pueden ser de las dos clases
-según la frase («que», «lo», «vía») se dejan como están y se avisa.
+Paso 5.3: si el documento ya tiene una portada (la de la universidad), por
+defecto se sustituye por la de APA (decisión del propietario): se quitan sus
+párrafos, el logo incluido, y se anota en el informe lo que se ha quitado. Se
+mantiene con --mantener-portada (APA admite otra portada si la universidad o el
+profesor la exigen), sin datos de portada o si quitarla podría borrar algo que
+no es de la portada (una tabla, una nota, un campo, un párrafo largo). Si se
+mantiene, se deja con su diseño (decisión del propietario) y solo se hace que el
+texto empiece en una página nueva.
 """
 
 from docx.oxml import OxmlElement
 
 from apa_facil.datos_portada import LINEAS_EN_BLANCO_ANTES_DEL_TITULO, parrafos_de_portada
 from apa_facil.documento import Estilos, texto_parrafo, w
-from apa_facil.estructura import clasificar
+from apa_facil.estructura import PALABRAS_DE_PARRAFO_LARGO, clasificar
 from apa_facil.reglas import titulos
 from apa_facil.reglas.titulos import mayusculas_apa
 
@@ -103,19 +102,130 @@ def _lista(partes):
     return partes[0] if len(partes) == 1 else ", ".join(partes[:-1]) + " y " + partes[-1]
 
 
+# --- 5.3 La portada que ya tenía el documento ------------------------------------------
+
+# Lo que una portada no lleva: si aparece, el clasificador puede haberse equivocado y quitar la
+# portada borraría algo del trabajo (o el texto de un cuadro de texto, que cuenta aparte).
+NO_SE_QUITA_SI_LLEVA = ("footnoteReference", "endnoteReference", "fldChar", "fldSimple", "commentReference",
+                        "txbxContent")
+BLOQUES = (w("p"), w("tbl"), w("sdt"))
+
+
+def portada_existente(clasificados):
+    """Los párrafos de la portada que ya tenía el documento (vacíos e imágenes incluidos), o []."""
+    portada = [c for c in clasificados if c.zona == "portada"]
+    return portada if any(c.texto for c in portada) else []
+
+
+def _por_que_no_se_puede_quitar(portada):
+    """None si la portada se puede quitar sin riesgo; si no, el motivo, para el aviso."""
+    elementos = [c.elemento for c in portada]
+    bloques = [el for el in elementos[0].getparent() if el.tag in BLOQUES]
+    if bloques[:len(elementos)] != elementos:
+        return "hay una tabla u otro elemento entre sus líneas"
+    for numero, c in enumerate(portada):
+        if any(next(c.elemento.iter(w(e)), None) is not None for e in NO_SE_QUITA_SI_LLEVA):
+            return "lleva una nota, un campo, un comentario o un cuadro de texto"
+        if len(c.texto.split()) >= PALABRAS_DE_PARRAFO_LARGO:
+            return "tiene un párrafo largo, que podría ser parte del texto"
+        if c.elemento.find(f"{w('pPr')}/{w('sectPr')}") is not None and numero != len(portada) - 1:
+            return "tiene un salto de sección entre sus líneas"
+    return None
+
+
+def que_hacer(opciones, clasificados):
+    """
+    Qué se hace con la portada: ("nueva" | "sustituir" | "mantener" | None, motivo). La regla
+    del título del trabajo (paso 4.4) lo usa para saber si el título sale de los datos.
+    """
+    datos, existente = opciones.get("portada"), portada_existente(clasificados)
+    if not existente:
+        return ("nueva", None) if datos and datos.titulo else (None, "sin_titulo" if datos else None)
+    if opciones.get("mantener_portada"):
+        return "mantener", "pedido"
+    if not datos:
+        return "mantener", "sin_datos"
+    if not datos.titulo:
+        return "mantener", "sin_titulo"
+    motivo = _por_que_no_se_puede_quitar(existente)
+    return ("mantener", motivo) if motivo else ("sustituir", None)
+
+
+def _termina_en_salto(p):
+    """¿Acaba el párrafo en un salto de página o de sección que empieza página? (no las marcas de Word)"""
+    if any(b.get(w("type")) == "page" for b in p.iter(w("br"))):
+        return True
+    seccion = p.find(f"{w('pPr')}/{w('sectPr')}")
+    tipo = seccion.find(w("type")) if seccion is not None else None
+    return seccion is not None and (tipo is None or tipo.get(w("val")) != "continuous")
+
+
+def _siguiente_bloque(el):
+    return next((s for s in el.itersiblings() if s.tag in BLOQUES), None)
+
+
+def _mantener(doc, informe, existente, motivo, datos):
+    """La portada se deja como está; el texto empieza en una página nueva («start each section on a new page»)."""
+    primera = next(c.texto for c in existente if c.texto)
+    inicio = f"Se ha mantenido tu portada («{_extracto(primera, 40)}»)"
+    if motivo == "pedido":
+        informe.aviso(f"{inicio}, como has pedido. APA pide la portada de estudiante salvo que tu universidad o tu "
+                      "profesor exijan otra" + (": no se han usado tus datos de portada." if datos else "."))
+    elif motivo == "sin_datos":
+        informe.aviso(f"{inicio} porque no has dado los datos para la portada APA de estudiante (título, autores, "
+                      "universidad, asignatura, profesor y fecha). Si quieres sustituirla, dalos en un archivo con "
+                      "--datos o con las opciones de portada; si tu universidad exige la suya, déjala así.")
+    elif motivo == "sin_titulo":
+        informe.aviso(f"{inicio} porque falta el título del trabajo, que la portada APA exige. Añádelo en tu "
+                      "archivo de datos o con la opción --titulo.")
+    else:
+        informe.aviso(f"{inicio} y no se ha sustituido por la de APA porque {motivo}: al quitarla podría borrarse "
+                      "algo que no es de la portada. Revísala tú.")
+
+    ultimo = existente[-1].elemento
+    siguiente = _siguiente_bloque(ultimo)
+    if _termina_en_salto(ultimo) or siguiente is None:
+        return
+    if siguiente.tag != w("p"):
+        informe.aviso("Después de tu portada hay una tabla, así que no se ha podido hacer que el texto empiece en "
+                      "una página nueva: pon tú un salto de página al final de la portada.")
+        return
+    if not titulos._salto_de_pagina_antes(Estilos(doc), siguiente):
+        _empezar_pagina(siguiente, ultimo)
+        informe.cambio("Portada: el texto empieza ahora en una página nueva, después de tu portada, como pide APA.")
+
+
+def _quitar(existente, informe):
+    """
+    Quita la portada que tenía el documento. Sus marcadores pasan al párrafo siguiente.
+    Devuelve el salto de sección con que acababa (o None), para ponerlo al final de la nueva.
+    """
+    ultimo = existente[-1].elemento
+    seccion = ultimo.find(f"{w('pPr')}/{w('sectPr')}")
+    siguiente = _siguiente_bloque(ultimo)
+    marcadores = [m for c in existente for m in c.elemento.iter(w("bookmarkStart"), w("bookmarkEnd"))]
+    if marcadores and siguiente is not None and siguiente.tag == w("p"):
+        ppr = siguiente.find(w("pPr"))
+        for marcador in reversed(marcadores):
+            (ppr.addnext if ppr is not None else lambda m: siguiente.insert(0, m))(marcador)
+    for c in existente:
+        c.elemento.getparent().remove(c.elemento)
+        informe.cambio_previsto(c.numero, "quitar_portada")
+    return seccion
+
+
 def aplicar(doc, opciones, informe, estructura=None):
     datos = opciones.get("portada")
-    if not datos:
-        return
     clasificados = estructura if estructura is not None else clasificar(doc)
-    existente = [c for c in clasificados if c.zona == "portada" and c.texto]
-    if existente:
-        informe.aviso(f"Tu documento ya tiene una portada («{_extracto(existente[0].texto, 40)}»), así que de "
-                      "momento se deja como está y no se ha añadido la portada APA con tus datos.")
+    accion, motivo = que_hacer(opciones, clasificados)
+    if accion is None:
+        if motivo == "sin_titulo":
+            informe.aviso("No se ha añadido la portada APA porque falta el título del trabajo, que APA exige. "
+                          "Añádelo en tu archivo de datos o con la opción --titulo.")
         return
-    if not datos.titulo:
-        informe.aviso("No se ha añadido la portada APA porque falta el título del trabajo, que APA exige. "
-                      "Añádelo en tu archivo de datos o con la opción --titulo.")
+    existente = portada_existente(clasificados)
+    if accion == "mantener":
+        _mantener(doc, informe, existente, motivo, datos)
         return
     id_estilo = _id_del_estilo_del_titulo(doc)
     if id_estilo is None:   # lo crea el paso 4.4 cuando hay un título; aquí siempre debería estar
@@ -127,8 +237,14 @@ def aplicar(doc, opciones, informe, estructura=None):
     else:
         titulo, dudosas = mayusculas_apa(datos.titulo, clasificados)
 
+    seccion, quitadas, imagenes = None, [], 0
+    if accion == "sustituir":
+        quitadas = [c.texto for c in existente if c.texto]
+        imagenes = sum(1 for c in existente for _ in c.elemento.iter(w("drawing"), w("pict")))
+        seccion = _quitar(existente, informe)
+
     cuerpo = doc.element.body
-    primero_del_documento = next((el for el in cuerpo if el.tag in (w("p"), w("tbl"), w("sdt"))), None)
+    primero_del_documento = next((el for el in cuerpo if el.tag in BLOQUES), None)
     textos = parrafos_de_portada(datos, titulo)
     portada = [_parrafo(texto, id_estilo=id_estilo) if numero == LINEAS_EN_BLANCO_ANTES_DEL_TITULO
                else _parrafo(texto, centrado=bool(texto))
@@ -152,10 +268,20 @@ def aplicar(doc, opciones, informe, estructura=None):
         informe.cambio_previsto(primero.numero, "añadir_titulo", nuevo=titulo)
         mensaje_del_titulo = (f"Título del trabajo: se ha puesto «{_extracto(titulo)}» al principio del texto, "
                               "centrado y en negrita, como pide APA.")
-    if _empezar_pagina(portada[-1].getnext(), portada[-1]):
+    if seccion is not None:
+        # La portada era una sección propia (el 05): el salto de sección pasa a la nueva, que así
+        # sigue acabando en él (el número de secciones no cambia) y el texto empieza página.
+        portada[-1].get_or_add_pPr().append(seccion)
+    elif _empezar_pagina(_siguiente_bloque(portada[-1]), portada[-1]):
         textos[-1] += "\n"
     informe.cambio_previsto(1, "añadir_portada", parrafos=tuple(textos), datos=datos)
 
+    if accion == "sustituir":
+        logo = f" y {'la imagen' if imagenes == 1 else f'las {imagenes} imágenes'} (el logo)" if imagenes else ""
+        informe.cambio(f"Portada: se ha sustituido tu portada por la portada APA de estudiante. Se han quitado sus "
+                       f"{len(quitadas)} líneas ({titulos._lista(quitadas)}){logo}. Revisa que tus datos de "
+                       "portada no se dejen nada que necesites; si tu universidad exige su propia portada, usa la "
+                       "opción --mantener-portada.")
     informe.cambio("Portada: se ha añadido la portada APA de estudiante con " + _lista(_elementos(datos)) +
                    ", centrados y a doble espacio, con el título en negrita tres líneas por debajo del margen "
                    "superior. El texto empieza en una página nueva.")

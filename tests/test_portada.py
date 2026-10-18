@@ -3,8 +3,8 @@ Paso 5.2: la portada APA de estudiante, según la web oficial de APA (Title page
 setup y Title case capitalization).
 
 Los 5 documentos de pruebas/ ya tienen portada, y sustituirla o mantenerla es el
-paso 5.3 (decisión del propietario): la portada APA solo se añade a documentos sin
-portada. Para probarla se usa una copia temporal del 01 sin su portada (los 5
+paso 5.3 (tests/test_portada_existente.py). Aquí se prueba la portada APA en un
+documento sin portada. Para probarla se usa una copia temporal del 01 sin su portada (los 5
 primeros párrafos); pruebas/ no se modifica.
 """
 
@@ -238,12 +238,13 @@ def test_sin_titulo_no_hay_portada(sin_portada, tmp_path):
     assert textos(docx.Document(str(salida)), 1) == ["Introducción"]
 
 
-def test_un_documento_con_portada_no_cambia(tmp_path):
-    # Hasta el paso 5.3 (sustituirla o mantenerla), la portada de la universidad se deja y se avisa.
+def test_un_documento_con_portada_y_mantener_portada_no_cambia(tmp_path):
+    # Con --mantener-portada (paso 5.3), la portada de la universidad se deja y se avisa.
     con, sin = tmp_path / "con", tmp_path / "sin"
-    _, informe = pipeline.procesar(DOC_01, con, {"portada": combinar(DATOS_01)})
+    _, informe = pipeline.procesar(DOC_01, con, {"portada": combinar(DATOS_01), "mantener_portada": True})
     pipeline.procesar(DOC_01, sin)
-    assert any(a.startswith("Tu documento ya tiene una portada («La Revolución Industrial") for a in informe.avisos)
+    assert any(a.startswith("Se ha mantenido tu portada («La Revolución Industrial") and "como has pedido" in a
+               for a in informe.avisos)
     assert radiografia(documento.abrir(con / "01_ensayo_basico_APA.docx")).textos == \
            radiografia(documento.abrir(sin / "01_ensayo_basico_APA.docx")).textos
 
@@ -367,7 +368,7 @@ def test_verificador_texto_sin_pagina_nueva(procesado, tmp_path):
 
 
 def test_verificador_no_mira_otras_portadas():
-    # La portada de la universidad del 05 no sigue el esquema de APA: la trata el paso 5.3.
+    # La portada de la universidad del 05 no sigue el esquema de APA: la comprueba 5.3 (Portada propia).
     resultado = verificar(str(RAIZ / "pruebas" / "05_tfg_completo.docx"))
     assert not [h for h in resultado.incumplimientos if h.regla == PORTADA]
 

@@ -727,9 +727,10 @@ def _quitar_introduccion(doc, opciones, informe, clasificados):
 def _titulo_del_trabajo(doc, opciones, informe, clasificados, quitado):
     # El estilo «Title», con el formato APA del nivel 1 (la portada del 02 también lo usa,
     # y la portada APA del paso 5.2).
+    from apa_facil.reglas import portada   # aquí: la regla de la portada usa este módulo
     partes = [c for c in clasificados if c.titulo_del_trabajo]
-    datos = opciones.get("portada")
-    portada_apa = bool(datos and datos.titulo) and not any(c.zona == "portada" and c.texto for c in clasificados)
+    # Con portada APA (nueva o en lugar de la que había, pasos 5.2 y 5.3), el título sale de los datos.
+    portada_apa = portada.que_hacer(opciones, clasificados)[0] in ("nueva", "sustituir")
     estilos = estilos_del_titulo_del_trabajo(doc)
     estilo = (_quitar_duplicados(estilos) if estilos else
               _estilo_nuevo(doc, NOMBRE_DEL_ESTILO_DEL_TITULO, ("Title", "Ttulo", "APA_Titulo"), prioridad=10)

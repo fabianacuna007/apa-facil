@@ -40,6 +40,7 @@ from apa_facil.__main__ import configurar_terminal  # noqa: E402
 from apa_facil.documento import ErrorDocumento, Estilos, cm, en_ecuacion, texto_parrafo, w  # noqa: E402
 from apa_facil.reglas import (alineacion, fuente, interlineado, margenes, paginacion, sangria,  # noqa: E402
                                titulos)
+from apa_facil.reglas import portada as regla_portada  # noqa: E402
 
 MARGENES = "1.1 Márgenes"
 FUENTE = "1.2 Fuente"
@@ -54,8 +55,9 @@ TITULO_TRABAJO = "4.4 Título del trabajo"
 TITULOS_EN_LINEA = "4.5 Títulos de nivel 4 y 5 en línea"
 MAYUSCULAS_TITULOS = "4.6 Mayúsculas de los títulos"
 PORTADA = "5.2 Portada"
+PORTADA_PROPIA = "5.3 Portada propia"
 REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS, TEXTO_TITULOS,
-          TITULO_TRABAJO, TITULOS_EN_LINEA, MAYUSCULAS_TITULOS, PORTADA]
+          TITULO_TRABAJO, TITULOS_EN_LINEA, MAYUSCULAS_TITULOS, PORTADA, PORTADA_PROPIA]
 
 MAXIMO_POR_REGLA = 8   # incumplimientos que se muestran de cada regla; del resto, solo cuántos son
 
@@ -313,7 +315,7 @@ class Verificacion:
             elif jc in alineacion.A_LA_DERECHA and not info.en_tabla and not info.en_cuadro:
                 if info.p in portada:
                     self.excepcion_en(ALINEACION, info, "Alineado a la derecha en lo que parece la portada "
-                                                        "de la universidad (se trata en el paso 5.3).")
+                                                        "de la universidad, que se mantiene con su diseño (paso 5.3).")
                 else:
                     self.fallo_en(ALINEACION, info, "Alineado a la derecha (debe ir a la izquierda).")
 
@@ -699,12 +701,21 @@ class Verificacion:
         oficial de APA: el título 3 o 4 líneas por debajo del margen superior, centrado
         y en negrita; una sola línea en blanco; debajo, cada dato centrado en su línea,
         sin líneas en blanco entre ellos; y el texto en una página nueva. El doble
-        espacio y la sangría ya los comprueban 1.3 y 1.5. Otras portadas (las de la
-        universidad) no se comprueban aquí: las trata el paso 5.3.
+        espacio y la sangría ya los comprueban 1.3 y 1.5.
+
+        Paso 5.3: otra portada (la de la universidad, que se mantiene con
+        --mantener-portada o sin datos) es una excepción admitida, y también tiene que
+        dejar el texto en una página nueva.
         """
         portada = [c for c in self.clasificados if c.zona == "portada"]
+        if not any(c.texto for c in portada):
+            return
         blancos = next((n for n, c in enumerate(portada) if c.tipo != "vacio"), len(portada))
         if not blancos or blancos == len(portada) or not self._con_estilo_title(portada[blancos].elemento):
+            primera = next(c for c in portada if c.texto)
+            self.excepcion_en(PORTADA_PROPIA, self.por_elemento[primera.elemento],
+                              "Portada propia, no la de estudiante de APA: se ha mantenido (se avisa en el informe).")
+            self._texto_en_pagina_nueva(PORTADA_PROPIA, portada)
             return
         titulo, debajo = portada[blancos], portada[blancos + 1:]
         info = self.por_elemento[titulo.elemento]
@@ -727,13 +738,17 @@ class Verificacion:
                 self.fallo_en(PORTADA, datos, "Línea en blanco entre los datos de la portada (no debe haberla).")
             elif self._alineacion(c.elemento) != "center":
                 self.fallo_en(PORTADA, datos, "Dato de la portada sin centrar.")
+        self._texto_en_pagina_nueva(PORTADA, portada)
+
+    def _texto_en_pagina_nueva(self, regla, portada):
+        """Después de la portada, el texto empieza en una página nueva (sin contar las marcas que deja Word)."""
         ultimo = portada[-1].elemento
         siguiente = next((i for i in self.principales if i.numero > self.por_elemento[ultimo].numero), None)
-        empieza_pagina = alineacion._salto_en(ultimo) or (
+        empieza_pagina = regla_portada._termina_en_salto(ultimo) or (
             siguiente is not None and alineacion._salto_antes(self.estilos, siguiente.p))
         if not empieza_pagina:
-            self.fallo_en(PORTADA, self.por_elemento[ultimo], "Después de la portada, el texto no empieza en una "
-                                                              "página nueva.")
+            self.fallo_en(regla, self.por_elemento[ultimo], "Después de la portada, el texto no empieza en una "
+                                                            "página nueva.")
 
     def _con_estilo_title(self, p):
         estilo = self.estilos.por_id.get(self.estilos.estilo_de(p))

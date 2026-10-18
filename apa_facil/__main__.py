@@ -4,7 +4,7 @@ Línea de comandos:
     python -m apa_facil mi_trabajo.docx [otro.docx ...] [--fuente "Arial"]
                         [--quitar-numeracion] [--titulos-tal-cual] [--quitar-introduccion]
                         [--datos datos.json] [--titulo "…"] [--autor "…"] … [--fecha 16/10/2026]
-                        [--titulo-tal-cual]
+                        [--titulo-tal-cual] [--mantener-portada]
     python -m apa_facil mi_trabajo.docx --diagnostico
 
 Guarda cada copia en salida/ como nombre_APA.docx y muestra un resumen de lo
@@ -104,6 +104,10 @@ def crear_ordenes():
                          help="profesor o profesora; se repite si son varios")
     portada.add_argument("--fecha", metavar="FECHA",
                          help=f"fecha de entrega: {datos_portada.FORMATOS_FECHA.replace('«', '').replace('»', '')}")
+    portada.add_argument("--mantener-portada", action="store_true",
+                         help="mantiene la portada que ya tiene el documento (por ejemplo, la que exige tu "
+                              "universidad). Sin esta opción, si das tus datos, se sustituye por la portada APA "
+                              "de estudiante")
     portada.add_argument("--titulo-tal-cual", action="store_true",
                          help="deja el título de la portada como lo escribes. Sin esta opción lleva mayúscula "
                               "inicial en las palabras principales, como pide APA")
@@ -180,7 +184,8 @@ def main(argv=None, carpeta_salida=None):
     ordenes = crear_ordenes()
     args = ordenes.parse_args(argv)
     opciones = {"fuente": args.fuente} if args.fuente else {}
-    for opcion in ("quitar_numeracion", "titulos_tal_cual", "quitar_introduccion", "titulo_tal_cual"):
+    for opcion in ("quitar_numeracion", "titulos_tal_cual", "quitar_introduccion", "titulo_tal_cual",
+                   "mantener_portada"):
         if getattr(args, opcion):
             opciones[opcion] = True
 
@@ -188,6 +193,7 @@ def main(argv=None, carpeta_salida=None):
     if args.diagnostico:
         for nombre, usada in (("--fuente", args.fuente), ("--quitar-numeracion", args.quitar_numeracion),
                               ("--titulos-tal-cual", args.titulos_tal_cual),
+                              ("--mantener-portada", args.mantener_portada),
                               ("--quitar-introduccion", args.quitar_introduccion),
                               ("--titulo-tal-cual", args.titulo_tal_cual)):
             if usada:

@@ -7,7 +7,7 @@ Regla 1.4: texto alineado a la izquierda, sin justificar y sin guiones automáti
   pasos posteriores deciden qué debe ir centrado.
 - Alineado a la derecha → a la izquierda, salvo en lo que parece una portada
   (antes del primer salto de página o de sección y antes del primer párrafo
-  de 25 palabras o más): eso se deja y se avisa, porque la portada se trata en el paso 5.3.
+  de 25 palabras o más): eso se deja y se avisa (la portada se sustituye o se mantiene en el paso 5.3).
 - Los guiones automáticos se desactivan. Los guiones opcionales del texto solo
   se avisan: quitarlos modificaría el texto.
 - Encabezados y pies no se tocan (paso 1.6).
@@ -120,6 +120,12 @@ def aplicar(doc, opciones, informe, estructura=None):
     guiones_automaticos = _desactivar_guiones(doc)
     guiones_opcionales = sum(1 for _ in doc.element.body.iter(w("softHyphen")))
 
+    # Si la portada se va a sustituir por la de APA (paso 5.3), no tiene sentido avisar de ella.
+    from apa_facil.estructura import clasificar   # aquí: estructura usa este módulo
+    from apa_facil.reglas import portada as regla_portada
+    clasificados = estructura if estructura is not None else clasificar(doc)
+    if respetados and regla_portada.que_hacer(opciones, clasificados)[0] == "sustituir":
+        respetados = []
     _informar(informe, justificados, a_mover, respetados, guiones_automaticos, guiones_opcionales)
 
 

@@ -97,7 +97,8 @@ def test_salida_completa_de_un_documento(tmp_path, capsys):
     assert main([str(original)], carpeta_salida=tmp_path) == 0
     salida = capsys.readouterr().out
     assert salida.startswith(f"✔ {original.name} → {tmp_path.name}/{original.stem}_APA.docx\n   Lo que hemos cambiado (")
-    assert "   Lo que debes revisar tú (4):" in salida   # encabezado, un solo subapartado, numeración e «Introducción»
+    # Encabezado, un solo subapartado, numeración, «Introducción» y la portada que se mantiene (sin datos, paso 5.3).
+    assert "   Lo que debes revisar tú (5):" in salida
     assert f"   Informe completo: {tmp_path.name}/{original.stem}_APA.json" in salida
     assert "todavía incompleto" not in salida
     assert salida.rstrip().endswith("1 de 1 documento(s) procesado(s).")
@@ -191,7 +192,8 @@ def test_opciones_de_los_titulos(tmp_path, capsys):
     datos = json.loads((tmp_path / f"{original.stem}_APA.json").read_text(encoding="utf-8"))
     assert datos["opciones"] == {"fuente": None, "quitar_numeracion": True, "titulos_tal_cual": False,
                                  "quitar_introduccion": False,
-                                 "titulo_tal_cual": False, "portada": None}
+                                 "titulo_tal_cual": False, "mantener_portada": False,
+                                 "portada": None}
 
 
 def test_titulos_tal_cual(tmp_path, capsys):
