@@ -43,6 +43,7 @@ Las fuentes recomendadas por APA, con su tamaño, son Aptos 12, Calibri 11, Aria
 - **Sangría de 1,27 cm** en la primera línea de los párrafos de texto (no en títulos, listas, referencias, citas en bloque…).
 - **Número de página** arriba a la derecha en todas las páginas, también en la portada, y nada más en el encabezado.
 - **Limpieza**: quita los párrafos vacíos usados para dejar espacio, los tabuladores o espacios usados como sangría y el color, el resaltado y el subrayado del texto (los enlaces se conservan). No toca la portada ni las tablas.
+- **Avisos** de lo que conviene revisar a mano sin que la herramienta lo cambie: saltos de línea manuales, viñetas escritas a mano, dobles espacios entre palabras y texto que estaba en otra fuente (suele venir de pegarlo de una web).
 
 Al terminar, muestra para cada documento qué ha cambiado y qué conviene revisar a mano, y guarda ese mismo informe en JSON junto a la copia (`salida\nombre_APA.json`), con la regla de la que viene cada mensaje. Antes de entregar la copia comprueba que el texto, las tablas, las imágenes, las notas y las secciones son exactamente los del original; si no, no la entrega.
 

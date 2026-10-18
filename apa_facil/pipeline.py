@@ -11,9 +11,10 @@ from pathlib import Path
 from apa_facil import documento, estructura
 from apa_facil.documento import ErrorDocumento
 from apa_facil.informe import Informe
-from apa_facil.reglas import alineacion, fuente, interlineado, limpieza, margenes, paginacion, sangria
+from apa_facil.reglas import alineacion, avisos, fuente, interlineado, limpieza, margenes, paginacion, sangria
 
-REGLAS = [limpieza, margenes, fuente, interlineado, alineacion, sangria, paginacion]   # en este orden
+# En este orden. Los avisos van primero: después la regla de fuente lo iguala todo.
+REGLAS = [avisos, limpieza, margenes, fuente, interlineado, alineacion, sangria, paginacion]
 
 
 def procesar(entrada, carpeta_salida=None, opciones=None):

@@ -27,6 +27,7 @@ VERSION = 1   # versión del formato del JSON: se sube si cambia su estructura
 
 # Nombre legible de cada regla (el módulo de apa_facil/reglas/ que la aplica).
 NOMBRES = {
+    "avisos": "Revisión del texto",
     "limpieza": "Limpieza de formato",
     "margenes": "Márgenes",
     "fuente": "Fuente",
