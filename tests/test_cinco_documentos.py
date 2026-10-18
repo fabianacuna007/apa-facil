@@ -24,19 +24,22 @@ import pytest
 
 from apa_facil import estructura, pipeline
 from apa_facil.documento import comparar, radiografia
-from herramientas.verificar import ALINEACION, mostrar, verificar
+from herramientas.verificar import ALINEACION, TEXTO_TITULOS, mostrar, verificar
 
 CARPETA = Path(__file__).resolve().parent.parent / "pruebas"
 PRUEBAS = sorted(CARPETA.glob("*.docx"))
 
 # Excepciones admitidas que debe tener cada copia: (regla, número de párrafo).
 # Al añadir un documento a pruebas/, revisa a mano sus excepciones y apúntalas aquí.
+# Desde el paso 4.3, los títulos numerados y en mayúsculas (que por defecto se dejan) también.
 EXCEPCIONES = {
-    "01_ensayo_basico": set(),
+    "01_ensayo_basico": {(TEXTO_TITULOS, n) for n in (9, 12, 15)},   # «1.», «2.» y «3.»
     "02_informe_tablas": set(),
-    "03_trabajo_imagenes_listas": set(),
+    "03_trabajo_imagenes_listas": {(TEXTO_TITULOS, n) for n in (3, 9, 13, 17, 25)},   # «1.» a «4.» y «2.1.»
     "04_formato_caotico": set(),   # sus 3 párrafos con tabulador se limpian desde el paso 3.5
-    "05_tfg_completo": {(ALINEACION, 8), (ALINEACION, 9), (ALINEACION, 10)},   # portada: Autora, Tutor, Convocatoria
+    "05_tfg_completo": {(ALINEACION, 8), (ALINEACION, 9), (ALINEACION, 10)}   # portada: Autora, Tutor, Convocatoria
+                       | {(TEXTO_TITULOS, n) for n in (12,                    # «RESUMEN»
+                                                       19, 22, 23, 25, 26, 28, 30, 34, 36, 37, 62, 64)},
 }
 
 
@@ -108,3 +111,27 @@ def test_genera_su_informe(procesado):
 def test_estan_todos_los_documentos_de_la_lista():
     # Si se borra o se renombra un documento, la lista de excepciones tiene que acompañarlo.
     assert {p.stem for p in PRUEBAS} == set(EXCEPCIONES)
+
+
+# Paso 4.3: con --quitar-numeracion y --quitar-mayusculas, el texto de los títulos cambia,
+# pero solo eso (la integridad lo comprueba) y desaparecen sus excepciones.
+TITULOS_CAMBIADOS = {"01_ensayo_basico": 3, "02_informe_tablas": 0, "03_trabajo_imagenes_listas": 5,
+                     "04_formato_caotico": 0, "05_tfg_completo": 13}
+
+
+@pytest.mark.parametrize("original", PRUEBAS, ids=lambda p: p.stem)
+def test_con_las_opciones_de_los_titulos(original, tmp_path):
+    opciones = {"quitar_numeracion": True, "quitar_mayusculas": True}
+    salida, informe = pipeline.procesar(original, tmp_path, opciones)   # no se entrega si la integridad falla
+    resultado = verificar(salida)
+    assert resultado.cumple, mostrar(resultado)
+    assert not [h for h in resultado.excepciones if h.regla == TEXTO_TITULOS]
+    acciones = [c for c in informe.cambios_previstos if c.accion in ("quitar_numeracion", "cambiar_mayusculas")]
+    assert len(acciones) == TITULOS_CAMBIADOS[original.stem]
+    diferencias = comparar(radiografia(docx.Document(str(original))), radiografia(docx.Document(str(salida))),
+                           informe.cambios_previstos)
+    assert diferencias == []
+    sin_cambios_previstos = comparar(radiografia(docx.Document(str(original))),
+                                     radiografia(docx.Document(str(salida))),
+                                     [c for c in informe.cambios_previstos if c not in acciones])
+    assert bool(sin_cambios_previstos) == bool(acciones), "sin anotarlos, la integridad los vería"

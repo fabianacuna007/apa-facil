@@ -7,6 +7,7 @@ genera salida/entrada_APA.docx y muestra un resumen del informe. Las copias se
 guardan en carpetas temporales para no tocar salida/; pruebas/ no se modifica.
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -96,7 +97,7 @@ def test_salida_completa_de_un_documento(tmp_path, capsys):
     assert main([str(original)], carpeta_salida=tmp_path) == 0
     salida = capsys.readouterr().out
     assert salida.startswith(f"✔ {original.name} → {tmp_path.name}/{original.stem}_APA.docx\n   Lo que hemos cambiado (")
-    assert "   Lo que debes revisar tú (2):" in salida   # el encabezado y un apartado con un solo subapartado
+    assert "   Lo que debes revisar tú (3):" in salida   # el encabezado, un solo subapartado y la numeración
     assert f"   Informe completo: {tmp_path.name}/{original.stem}_APA.json" in salida
     assert "todavía incompleto" not in salida
     assert salida.rstrip().endswith("1 de 1 documento(s) procesado(s).")
@@ -176,3 +177,19 @@ def test_la_ayuda_explica_el_diagnostico(capsys):
         main(["-h"])
     ayuda = capsys.readouterr().out
     assert "--diagnostico" in ayuda and "no genera ninguna copia" in ayuda
+
+
+def test_opciones_de_los_titulos(tmp_path, capsys):
+    original = next(p for p in PRUEBAS if p.name.startswith("05"))
+    assert main([str(original), "--quitar-numeracion", "--quitar-mayusculas"], carpeta_salida=tmp_path) == 0
+    salida = capsys.readouterr().out
+    assert "Títulos: se ha quitado la numeración de 12 títulos" in salida
+    assert "Títulos: 1 título pasa de mayúsculas a minúsculas («RESUMEN» → «Resumen»)" in salida
+    assert "--quitar-numeracion" not in salida and "--quitar-mayusculas" not in salida, "sin los avisos"
+    datos = json.loads((tmp_path / f"{original.stem}_APA.json").read_text(encoding="utf-8"))
+    assert datos["opciones"] == {"fuente": None, "quitar_numeracion": True, "quitar_mayusculas": True}
+
+
+def test_opciones_de_los_titulos_en_el_diagnostico(capsys):
+    assert main([str(PRUEBAS[0]), "--diagnostico", "--quitar-mayusculas"]) == 0
+    assert "Aviso: la opción --quitar-mayusculas no se usa en el modo diagnóstico" in capsys.readouterr().out

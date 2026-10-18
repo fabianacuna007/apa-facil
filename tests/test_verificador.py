@@ -231,7 +231,7 @@ def test_a_la_derecha_en_la_portada_es_una_excepcion(doc):
     parrafo(doc, PORTADA).get_or_add_pPr().get_or_add_jc().set(w("val"), "right")
     resultado = verificar(doc)
     assert resultado.cumple, mostrar(resultado)
-    assert [h.parrafo for h in resultado.excepciones] == [PORTADA]
+    assert [h.parrafo for h in resultado.excepciones if h.regla == ALINEACION] == [PORTADA]
 
 
 def test_guiones_automaticos(doc):

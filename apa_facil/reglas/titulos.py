@@ -1,5 +1,5 @@
 """
-Reglas 4.1 y 4.2: estilos de título de Word (Título 1 a Título 5) con el
+Reglas 4.1 a 4.3: estilos de título de Word (Título 1 a Título 5) con el
 formato APA, cada título detectado con el estilo de su nivel, y sin formato
 puesto a mano que contradiga ese nivel.
 
@@ -36,14 +36,23 @@ Qué hace:
      el texto (decisión del propietario: se añade en el paso 4.5, al unir el
      título con su párrafo).
 
-No toca el texto de los títulos (mayúsculas y numeración: paso 4.3). Los rótulos de referencias y de
+  6. Paso 4.3: los títulos numerados ("1.1. Objetivos") o escritos en
+     mayúsculas ("RESUMEN"). Cambiarlos modifica el texto, así que por defecto
+     solo se avisa (decisión del propietario); con las opciones
+     --quitar-numeracion y --quitar-mayusculas se cambian, y cada cambio se anota
+     como cambio previsto para la comprobación de integridad.
+
+Fuera de eso, no toca el texto de los títulos. Los rótulos de referencias y de
 anexos tienen sus propios pasos (6.4 y 6.7); si ya usaban Título 1, cambian con
 el estilo, y quedan centrados y en negrita, como pide APA.
 """
 
+import re
+from collections import Counter
+
 from docx.oxml import OxmlElement
 
-from apa_facil.documento import Estilos, w
+from apa_facil.documento import NUMERACION_DE_APARTADO, Estilos, texto_parrafo, w
 from apa_facil.estructura import ACABA_EN_PUNTO, BAJA, clasificar
 from apa_facil.reglas.fuente import _letras, _runs_propios
 
@@ -261,6 +270,175 @@ def _formato_a_mano(estilos, c):
     return quitado
 
 
+# --- 4.3 Numeración y mayúsculas --------------------------------------------------------
+#
+# Quitar la numeración o las mayúsculas de un título modifica el texto. Por eso,
+# por defecto solo se avisa (decisión del propietario), y se cambia únicamente
+# con las opciones --quitar-numeracion y --quitar-mayusculas. Cada cambio se anota
+# como cambio previsto, y la comprobación de integridad acepta solo eso.
+
+PALABRA = re.compile(r"[^\W\d_]+")
+# La numeración del principio, aunque no la siga un espacio (cuando la separa un tabulador del XML).
+NUMERACION_PEGADA = re.compile(r"(?:\d{1,2}(?:\.\d{1,2})*[.)]|\d{1,2}(?:\.\d{1,2})+|[IVXLC]{1,6}[.)]|"
+                               r"[A-Za-z][.)])\s*")
+ROMANO = re.compile(r"M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})")
+NO_SON_ROMANOS = {"mi", "di", "vi", "li"}   # palabras que también son números romanos válidos
+REMISION = re.compile(r"\b(apartados?|secci[oó]n|secciones|cap[ií]tulos?|ep[ií]grafes?)\s+"
+                      r"(\d{1,2}(?:\.\d{1,2})*)\b", re.IGNORECASE)
+
+
+def numeracion(texto):
+    """La numeración de apartado con que empieza un título ("1.1. "), o None."""
+    encontrada = NUMERACION_DE_APARTADO.match(texto)
+    return encontrada.group(0) if encontrada and texto[encontrada.end():].strip() else None
+
+
+def en_mayusculas(texto):
+    """¿Está escrito entero en mayúsculas (sin contar la numeración del principio)?"""
+    letras = [c for c in texto[len(numeracion(texto) or ""):] if c.isalpha()]
+    return len(letras) >= 2 and all(c.isupper() for c in letras)
+
+
+def _piezas(p):
+    """Los trozos de texto del párrafo (w:t y tabuladores escritos), en orden, sin los de cuadros de texto."""
+    return [el for el in p.iter(w("t"), w("tab")) if next(el.iterancestors(w("p")), None) is p
+            and (el.tag == w("t") or el.getparent().tag == w("r"))]
+
+
+def _quitar_numeracion(p, quitado):
+    """Quita `quitado` del principio del párrafo, aunque esté repartido en varios fragmentos."""
+    falta = len(quitado)
+    for pieza in _piezas(p):
+        if not falta:
+            break
+        if pieza.tag == w("tab"):
+            pieza.getparent().remove(pieza)
+            falta -= 1
+            continue
+        texto = pieza.text or ""
+        pieza.text, falta = texto[falta:], max(0, falta - len(texto))
+
+
+def _formas_del_texto(clasificados):
+    """
+    Cómo se escribe cada palabra a mitad de frase en el resto del trabajo, si no es
+    en minúscula: {"españa": "España", "ue": "UE"}. Así se conservan los nombres
+    propios y las siglas al quitar las mayúsculas de un título.
+    """
+    cuentas = {}
+    for c in clasificados:
+        if c.tipo in ("titulo", "titulo_referencias", "anexo", "vacio", "imagen") or en_mayusculas(c.texto):
+            continue
+        for frase in re.split(r"[.!?¿¡]\s+", c.texto):
+            for palabra in PALABRA.findall(frase)[1:]:   # la primera de una frase va en mayúscula siempre
+                cuentas.setdefault(palabra.lower(), Counter())[palabra] += 1
+    formas = {}
+    for minuscula, cuenta in cuentas.items():
+        forma, veces = cuenta.most_common(1)[0]
+        if forma != minuscula and veces > cuenta[minuscula]:
+            formas[minuscula] = forma
+    return formas
+
+
+def a_minusculas(texto, formas):
+    """
+    "RESUMEN" → "Resumen", "1. LA UE EN ESPAÑA" → "1. La UE en España" (si el trabajo
+    escribe así "UE" y "España"). Mayúscula inicial, nombres propios y siglas como
+    en el resto del trabajo, y números romanos ("SIGLO XIX") como están.
+    """
+    prefijo = NUMERACION_PEGADA.match(texto)
+    inicio = prefijo.end() if prefijo else 0
+    vistas = []
+
+    def cambiar(encontrada):
+        palabra = encontrada.group(0)
+        minuscula = palabra.lower()
+        if minuscula in formas:
+            forma = formas[minuscula]
+        elif len(palabra) >= 2 and ROMANO.fullmatch(palabra) and minuscula not in NO_SON_ROMANOS:
+            forma = palabra
+        else:
+            forma = minuscula
+        vistas.append(palabra)
+        return forma[0].upper() + forma[1:] if len(vistas) == 1 else forma
+
+    return texto[:inicio] + PALABRA.sub(cambiar, texto[inicio:])
+
+
+def _cambiar_mayusculas(p, formas):
+    """Pasa a minúsculas el texto del título dentro de cada fragmento, sin mover el formato."""
+    piezas = [t for t in _piezas(p) if t.tag == w("t")]
+    completo = "".join(t.text or "" for t in piezas)
+    nuevo = a_minusculas(completo, formas)
+    if len(nuevo) != len(completo):
+        return False   # alguna letra cambiaría de longitud: mejor no tocarlo
+    desde = 0
+    for t in piezas:
+        largo = len(t.text or "")
+        t.text = nuevo[desde:desde + largo]
+        desde += largo
+    return nuevo != completo
+
+
+def _texto_de_titulos(doc, opciones, informe, clasificados, seguros):
+    con_numeracion = [c for c in seguros if numeracion(texto_parrafo(c.elemento))]
+    en_mayus = [c for c in seguros if en_mayusculas(texto_parrafo(c.elemento))]
+    quitar_numeracion, quitar_mayusculas = opciones.get("quitar_numeracion"), opciones.get("quitar_mayusculas")
+
+    if con_numeracion and not quitar_numeracion:
+        varios = len(con_numeracion) > 1
+        informe.aviso(f"{len(con_numeracion)} título{'s' if varios else ''} "
+                      f"empieza{'n' if varios else ''} con una numeración ({_lista([c.texto for c in con_numeracion])}). "
+                      "APA no numera los títulos, pero muchas universidades lo exigen, así que se ha dejado como "
+                      "estaba. Si la tuya no lo pide, la herramienta puede quitarla: usa la opción --quitar-numeracion.")
+    if en_mayus and not quitar_mayusculas:
+        varios = len(en_mayus) > 1
+        informe.aviso(f"{len(en_mayus)} título{'s' if varios else ''} "
+                      f"está{'n' if varios else ''} escrito{'s' if varios else ''} en mayúsculas "
+                      f"({_lista([c.texto for c in en_mayus])}). APA escribe los títulos con mayúscula solo al "
+                      "principio y en los nombres propios. Cámbialo tú o usa la opción --quitar-mayusculas.")
+
+    cambiados = []   # (antes, después) de cada título modificado
+    formas = _formas_del_texto(clasificados) if quitar_mayusculas else {}
+    for c in seguros:
+        p = c.elemento
+        antes = texto_parrafo(p)
+        quitado = numeracion(antes) if quitar_numeracion else None
+        if quitado:
+            _quitar_numeracion(p, quitado)
+            informe.cambio_previsto(c.numero, "quitar_numeracion", quitado=quitado)
+        if quitar_mayusculas and en_mayusculas(antes) and _cambiar_mayusculas(p, formas):
+            informe.cambio_previsto(c.numero, "cambiar_mayusculas", nuevo=texto_parrafo(p))
+        if texto_parrafo(p) != antes:
+            cambiados.append((antes, texto_parrafo(p)))
+
+    if quitar_numeracion and con_numeracion:
+        quitados = [(a, d) for a, d in cambiados if numeracion(a)]
+        informe.cambio(f"Títulos: se ha quitado la numeración de {len(quitados)} "
+                       f"título{'s' if len(quitados) > 1 else ''} ({_antes_y_despues(quitados)}), como pide APA.")
+        remisiones = [encontrada.group(0) for c in clasificados if c.tipo != "titulo"
+                      for encontrada in REMISION.finditer(c.texto)]
+        if remisiones:
+            informe.aviso(f"El texto remite a apartados por su número ({_lista(remisiones)}). Sin la numeración "
+                          "de los títulos, esas remisiones ya no se entienden: cámbialas por el nombre del apartado.")
+    pasados = [(a, d) for a, d in cambiados if en_mayusculas(a)]
+    if pasados:
+        informe.cambio(f"Títulos: {len(pasados)} título{'s' if len(pasados) > 1 else ''} pasa"
+                       f"{'n' if len(pasados) > 1 else ''} de mayúsculas a minúsculas ({_antes_y_despues(pasados)}). "
+                       "Se han respetado los nombres propios y las siglas que el trabajo escribe así en el texto; "
+                       "revisa que hayan quedado bien.")
+    indice = any(c.tipo == "indice" for c in clasificados)
+    if cambiados and indice and doc.settings.element.find(w("updateFields")) is None:
+        informe.aviso("El índice todavía muestra los títulos como estaban. Actualízalo en Word: clic derecho sobre "
+                      "el índice, «Actualizar campos» y «Actualizar toda la tabla» (si lo escribiste a mano, "
+                      "cámbialo tú).")
+
+
+def _antes_y_despues(pares, maximo=3):
+    texto = ", ".join(f"«{_extracto(a)}» → «{_extracto(d)}»" for a, d in pares[:maximo])
+    return texto + ("…" if len(pares) > maximo else "")
+
+
 def _lista_de_palabras(partes):
     return partes[0] if len(partes) == 1 else ", ".join(partes[:-1]) + " y " + partes[-1]
 
@@ -375,3 +553,6 @@ def aplicar(doc, opciones, informe, estructura=None):
         informe.aviso(f"{len(sin_punto)} título{'s' if varios else ''} de nivel 4 o 5 ({_lista(sin_punto)}) "
                       f"no termina{'n' if varios else ''} en punto. En APA, estos títulos terminan en punto y "
                       "el texto sigue en la misma línea; de momento se han dejado como estaban.")
+
+    # 6. Numeración y mayúsculas (paso 4.3): se avisa, y se cambia solo si se pide.
+    _texto_de_titulos(doc, opciones, informe, clasificados, seguros)

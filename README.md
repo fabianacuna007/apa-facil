@@ -34,13 +34,22 @@ python -m apa_facil pruebas\01_ensayo_basico.docx --fuente "Arial"
 
 Las fuentes recomendadas por APA, con su tamaño, son Aptos 12, Calibri 11, Arial 11, Lucida Sans Unicode 10, Times New Roman 12, Georgia 11 y Computer Modern 10. Si no se indica `--fuente`, se mantiene la del documento si es una de ellas, o se usa la más parecida.
 
-### Qué hace (formato básico y limpieza)
+Para quitar la numeración de los títulos («1.1. Objetivos» → «Objetivos») o pasar a minúsculas los títulos escritos en mayúsculas («RESUMEN» → «Resumen»), que APA no usa:
+
+```
+python -m apa_facil pruebas\05_tfg_completo.docx --quitar-numeracion --quitar-mayusculas
+```
+
+Las dos opciones son independientes. Sin ellas solo se avisa, porque cambian el texto y muchas universidades exigen numerar los títulos. Al quitar las mayúsculas se respetan los nombres propios y las siglas que el trabajo escribe así en el texto.
+
+### Qué hace (formato básico, títulos y limpieza)
 
 - **Márgenes** de 2,54 cm en todas las secciones; las páginas horizontales siguen horizontales.
 - **Una sola fuente** recomendada por APA en todo el trabajo, con su tamaño (salvo el código de programación, los símbolos y las ecuaciones).
 - **Interlineado doble** sin espacio extra entre párrafos (en las tablas se respeta el sencillo, 1,5 o doble; las notas al pie no se tocan).
 - **Texto alineado a la izquierda**, sin justificar ni guiones automáticos.
 - **Sangría de 1,27 cm** en la primera línea de los párrafos de texto (no en títulos, listas, referencias, citas en bloque…).
+- **Títulos** con los estilos de Word «Título 1» a «Título 5» y el formato APA de cada nivel (así aparecen en el panel de navegación), sin formato puesto a mano que lo contradiga. Avisa de los apartados con un solo subapartado y de los títulos numerados o en mayúsculas.
 - **Número de página** arriba a la derecha en todas las páginas, también en la portada, y nada más en el encabezado.
 - **Limpieza**: quita los párrafos vacíos usados para dejar espacio, los tabuladores o espacios usados como sangría y el color, el resaltado y el subrayado del texto (los enlaces se conservan). No toca la portada ni las tablas.
 - **Avisos** de lo que conviene revisar a mano sin que la herramienta lo cambie: saltos de línea manuales, viñetas escritas a mano, dobles espacios entre palabras y texto que estaba en otra fuente (suele venir de pegarlo de una web).
@@ -67,7 +76,7 @@ Cada fila lleva el número de párrafo, el tipo, la confianza (alta, media o baj
 
 ## Comprobar si un documento cumple APA
 
-El verificador comprueba las reglas de formato básico (márgenes, fuente, interlineado, alineación, sangría y número de página) y los estilos de título, y lista cada incumplimiento con su sección, su número de párrafo y un extracto del texto. Lo que la herramienta deja así a propósito (la portada de la universidad, el código de programación…) aparece aparte, como excepción admitida. Termina con código 0 si todo cumple y 1 si no:
+El verificador comprueba las reglas de formato básico (márgenes, fuente, interlineado, alineación, sangría y número de página) y los títulos, y lista cada incumplimiento con su sección, su número de párrafo y un extracto del texto. Lo que la herramienta deja así a propósito (la portada de la universidad, el código de programación, los títulos numerados…) aparece aparte, como excepción admitida. Termina con código 0 si todo cumple y 1 si no:
 
 ```
 python herramientas\verificar.py salida\04_formato_caotico_APA.docx

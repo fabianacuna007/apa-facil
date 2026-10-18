@@ -7,6 +7,7 @@ programa no tenga que tocar el XML directamente.
 """
 
 import difflib
+import re
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -180,18 +181,40 @@ def _extracto(texto, desde=0, largo=60):
     return ("…" if inicio else "") + trozo + ("…" if inicio + largo < len(texto) else "")
 
 
+# Numeración de apartado al principio de un título, con el espacio que la sigue:
+# "1. ", "1.1 ", "2.3.1. ", "1) ", "IV. ", "a) ". Un número sin punto ni paréntesis
+# ("20 años de…") no lo es: es parte del título.
+NUMERACION_DE_APARTADO = re.compile(r"(?:\d{1,2}(?:\.\d{1,2})*[.)]|\d{1,2}(?:\.\d{1,2})+|[IVXLC]{1,6}[.)]|"
+                                    r"[A-Za-z][.)])[ \t ]+")
+
+
 @dataclass
 class CambioPrevisto:
     """
     Un cambio de contenido que una regla hace a propósito (está previsto en
-    ROADMAP.md y la regla lo anota en el informe). Solo hay dos:
+    ROADMAP.md y la regla lo anota en el informe). Solo hay estos:
       - "borrar": se borra un párrafo sin texto (paso 3.5, párrafos vacíos);
       - "recortar": se quita `quitado` del principio del párrafo, que solo
-        puede ser espacio en blanco (paso 3.5, tabuladores usados como sangría).
+        puede ser espacio en blanco (paso 3.5, tabuladores usados como sangría);
+      - "quitar_numeracion": se quita `quitado` del principio del párrafo, que
+        solo puede ser una numeración de apartado ("1.1. ", "a) "…) y deja
+        texto detrás (paso 4.3, con la opción --quitar-numeracion);
+      - "cambiar_mayusculas": el texto pasa a ser `nuevo`, que solo puede
+        diferir en mayúsculas y minúsculas de un texto escrito entero en
+        mayúsculas (paso 4.3, con la opción --quitar-mayusculas).
+    Si un párrafo tiene varios, se comprueban en el orden en que se anotaron.
     """
     parrafo: int     # número del párrafo en el original: desde 1, contando los de las tablas
-    accion: str      # "borrar" o "recortar"
+    accion: str      # "borrar", "recortar", "quitar_numeracion" o "cambiar_mayusculas"
     quitado: str = ""
+    nuevo: str = ""
+
+
+def _solo_cambian_mayusculas(antes, despues):
+    """¿Es `despues` el mismo texto que `antes` (escrito entero en mayúsculas), con otras minúsculas?"""
+    letras = [c for c in antes if c.isalpha()]
+    return (despues != antes and len(despues) == len(antes) and bool(letras) and all(c.isupper() for c in letras)
+            and all(a == d or (a.isalpha() and a.lower() == d.lower()) for a, d in zip(antes, despues)))
 
 
 def _aplicar_previstos(antes, previstos):
@@ -212,10 +235,16 @@ def _aplicar_previstos(antes, previstos):
         elif cambio.accion == "recortar" and cambio.quitado and not cambio.quitado.strip() \
                 and texto.startswith(cambio.quitado):
             textos[i] = (donde, texto[len(cambio.quitado):])
+        elif cambio.accion == "quitar_numeracion" and NUMERACION_DE_APARTADO.fullmatch(cambio.quitado) \
+                and texto.startswith(cambio.quitado) and texto[len(cambio.quitado):].strip():
+            textos[i] = (donde, texto[len(cambio.quitado):])
+        elif cambio.accion == "cambiar_mayusculas" and _solo_cambian_mayusculas(texto, cambio.nuevo):
+            textos[i] = (donde, cambio.nuevo)
         else:
             problemas.append(f"{donde}: una regla anotó «{cambio.accion}», pero eso cambiaría el texto "
-                             f"(«{_extracto(texto)}»). Solo se pueden borrar párrafos vacíos y quitar "
-                             "espacios o tabuladores del principio.")
+                             f"(«{_extracto(texto)}»). Solo se pueden borrar párrafos vacíos, quitar "
+                             "espacios o tabuladores del principio, quitar la numeración de un título y "
+                             "pasar a minúsculas un título escrito en mayúsculas.")
     return [t for i, t in enumerate(textos) if i not in borrar], problemas
 
 

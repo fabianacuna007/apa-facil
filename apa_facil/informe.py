@@ -6,7 +6,8 @@ El informe de cada documento procesado. Distingue tres cosas:
 - errores: lo que no se pudo procesar.
 
 Además guarda los cambios de contenido previstos (documento.CambioPrevisto):
-los párrafos vacíos borrados y los tabuladores quitados del principio. Con
+los párrafos vacíos borrados, los tabuladores quitados del principio y, si se
+pide, la numeración y las mayúsculas quitadas de los títulos. Con
 ellos, la comprobación de integridad sabe qué diferencias son a propósito. No
 van en el JSON: no hacen falta para el estudiante y así no se guarda su texto.
 
@@ -23,7 +24,7 @@ from dataclasses import dataclass, field
 
 from apa_facil.documento import CambioPrevisto, ErrorDocumento
 
-VERSION = 1   # versión del formato del JSON: se sube si cambia su estructura
+VERSION = 2   # versión del formato del JSON: se sube si cambia su estructura (2: opciones de los títulos)
 
 # Nombre legible de cada regla (el módulo de apa_facil/reglas/ que la aplica).
 NOMBRES = {
@@ -71,9 +72,9 @@ class Informe:
     def error(self, mensaje):
         self.entradas.append(Entrada("error", self.regla, mensaje))
 
-    def cambio_previsto(self, parrafo, accion, quitado=""):
+    def cambio_previsto(self, parrafo, accion, quitado="", nuevo=""):
         """Anota un cambio de contenido hecho a propósito (ver documento.CambioPrevisto)."""
-        self.cambios_previstos.append(CambioPrevisto(parrafo, accion, quitado))
+        self.cambios_previstos.append(CambioPrevisto(parrafo, accion, quitado, nuevo))
 
     def _mensajes(self, tipo):
         return [e.mensaje for e in self.entradas if e.tipo == tipo]
@@ -101,7 +102,9 @@ class Informe:
             "archivo": self.archivo,
             "copia": self.copia,
             "fecha": self.fecha,
-            "opciones": {"fuente": self.opciones.get("fuente")},
+            "opciones": {"fuente": self.opciones.get("fuente"),
+                         "quitar_numeracion": bool(self.opciones.get("quitar_numeracion")),
+                         "quitar_mayusculas": bool(self.opciones.get("quitar_mayusculas"))},
             "resumen": {clave: sum(1 for e in self.entradas if e.tipo == tipo) for tipo, clave, _ in GRUPOS},
         }
         for tipo, clave, _ in GRUPOS:

@@ -49,7 +49,8 @@ SANGRIA = "1.5 Sangría"
 PAGINACION = "1.6 Número de página"
 TITULOS = "4.1 Estilos de título"
 FORMATO_TITULOS = "4.2 Formato de los títulos"
-REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS]
+TEXTO_TITULOS = "4.3 Numeración y mayúsculas de los títulos"
+REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS, TEXTO_TITULOS]
 
 MAXIMO_POR_REGLA = 8   # incumplimientos que se muestran de cada regla; del resto, solo cuántos son
 
@@ -153,7 +154,8 @@ class Verificacion:
 
     def comprobar(self):
         for comprobacion in (self.margenes, self.fuente, self.interlineado, self.alineacion,
-                             self.sangria, self.paginacion, self.titulos, self.formato_de_titulos):
+                             self.sangria, self.paginacion, self.titulos, self.formato_de_titulos,
+                             self.texto_de_titulos):
             comprobacion()
         return self.resultado
 
@@ -560,6 +562,26 @@ class Verificacion:
                 problemas.append("va subrayado")
             if problemas:
                 self.fallo_en(FORMATO_TITULOS, info, f"Título de nivel {c.nivel}: {'; '.join(problemas)}.")
+
+    # --- 4.3 Numeración y mayúsculas -------------------------------------------------------
+
+    def texto_de_titulos(self):
+        """
+        APA no numera los títulos ni los escribe en mayúsculas, pero cambiarlo
+        modifica el texto: por defecto se deja y se avisa (solo se cambia con
+        --quitar-numeracion y --quitar-mayusculas). Por eso no son
+        incumplimientos, sino excepciones admitidas.
+        """
+        for c in self.clasificados:
+            if c.tipo != "titulo" or c.confianza == estructura.BAJA:
+                continue
+            texto, info = texto_parrafo(c.elemento), self.por_elemento[c.elemento]
+            if titulos.numeracion(texto):
+                self.excepcion_en(TEXTO_TITULOS, info, "Título numerado: APA no numera los títulos, pero se deja "
+                                                       "(se avisa en el informe; --quitar-numeracion lo quita).")
+            if titulos.en_mayusculas(texto):
+                self.excepcion_en(TEXTO_TITULOS, info, "Título en mayúsculas: se deja (se avisa en el informe; "
+                                                       "--quitar-mayusculas lo cambia).")
 
     def _capa_de_parrafo(self, p, etiqueta):
         """El primer `etiqueta` en las capas de formato del párrafo (directo, estilos, por defecto)."""
