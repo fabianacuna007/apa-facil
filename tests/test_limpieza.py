@@ -321,7 +321,7 @@ def test_comparar_ve_un_cambio_no_anotado():
 
 def test_si_la_limpieza_no_anota_un_cambio_no_se_entrega_la_copia(tmp_path, monkeypatch):
     """A la contra: sin anotar los cambios previstos, el pipeline no entrega la copia del 04."""
-    monkeypatch.setattr(Informe, "cambio_previsto", lambda self, *args: None)
+    monkeypatch.setattr(Informe, "cambio_previsto", lambda self, *args, **kwargs: None)
     original = next(p for p in PRUEBAS if p.name.startswith("04"))
     with pytest.raises(ErrorDocumento, match="no coincide con el original"):
         pipeline.procesar(original, tmp_path)

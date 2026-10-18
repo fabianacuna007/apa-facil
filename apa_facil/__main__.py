@@ -2,7 +2,7 @@
 Línea de comandos:
 
     python -m apa_facil mi_trabajo.docx [otro.docx ...] [--fuente "Arial"]
-                        [--quitar-numeracion] [--quitar-mayusculas]
+                        [--quitar-numeracion] [--quitar-mayusculas] [--quitar-introduccion]
     python -m apa_facil mi_trabajo.docx --diagnostico
 
 Guarda cada copia en salida/ como nombre_APA.docx y muestra un resumen de lo
@@ -75,6 +75,10 @@ def crear_ordenes():
                          help="pasa a minúsculas los títulos escritos en mayúsculas («RESUMEN» → «Resumen»), "
                               "respetando los nombres propios y las siglas que el trabajo escribe así en el texto. "
                               "Sin esta opción solo se avisa")
+    ordenes.add_argument("--quitar-introduccion", action="store_true",
+                         help="quita el rótulo «Introducción» del primer apartado, que APA no usa (el título del "
+                              "trabajo hace sus veces), si el apartado no tiene subapartados. Sin esta opción solo "
+                              "se avisa")
     ordenes.add_argument("--diagnostico", action="store_true",
                          help="no genera ninguna copia: muestra qué es cada párrafo (título, cuerpo, lista…), "
                               "con qué confianza y por qué, para revisar cómo se ha entendido el documento")
@@ -141,14 +145,15 @@ def main(argv=None, carpeta_salida=None):
     configurar_terminal()
     args = crear_ordenes().parse_args(argv)
     opciones = {"fuente": args.fuente} if args.fuente else {}
-    for opcion in ("quitar_numeracion", "quitar_mayusculas"):
+    for opcion in ("quitar_numeracion", "quitar_mayusculas", "quitar_introduccion"):
         if getattr(args, opcion):
             opciones[opcion] = True
 
     archivos = expandir_comodines(args.archivos)
     if args.diagnostico:
         for nombre, usada in (("--fuente", args.fuente), ("--quitar-numeracion", args.quitar_numeracion),
-                              ("--quitar-mayusculas", args.quitar_mayusculas)):
+                              ("--quitar-mayusculas", args.quitar_mayusculas),
+                              ("--quitar-introduccion", args.quitar_introduccion)):
             if usada:
                 print(f"Aviso: la opción {nombre} no se usa en el modo diagnóstico, que no cambia nada.")
         return diagnosticar(archivos)

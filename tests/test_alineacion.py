@@ -221,5 +221,5 @@ def test_documentos_de_prueba(original, tmp_path):
     for clave, n in antes.items():
         if clave[0].endswith(("footnotes.xml", "endnotes.xml")):   # encabezados y pies: paso 1.6
             assert despues[clave] == n, f"las notas no cambian: {clave}"
-    avisos_portada = [a for a in informe.avisos if "portada" in a]
+    avisos_portada = [a for a in informe.avisos if "portada" in a and "derecha" in a]
     assert len(avisos_portada) == (1 if original.name.startswith("05") else 0)

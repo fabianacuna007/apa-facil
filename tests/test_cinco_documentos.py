@@ -23,23 +23,28 @@ import docx
 import pytest
 
 from apa_facil import estructura, pipeline
-from apa_facil.documento import comparar, radiografia
-from herramientas.verificar import ALINEACION, TEXTO_TITULOS, mostrar, verificar
+from apa_facil.documento import Estilos, comparar, radiografia
+from herramientas.verificar import ALINEACION, TEXTO_TITULOS, TITULO_TRABAJO, mostrar, verificar
 
 CARPETA = Path(__file__).resolve().parent.parent / "pruebas"
 PRUEBAS = sorted(CARPETA.glob("*.docx"))
 
 # Excepciones admitidas que debe tener cada copia: (regla, número de párrafo).
 # Al añadir un documento a pruebas/, revisa a mano sus excepciones y apúntalas aquí.
-# Desde el paso 4.3, los títulos numerados y en mayúsculas (que por defecto se dejan) también.
+# Desde el paso 4.3, los títulos numerados y en mayúsculas (que por defecto se dejan) también; desde
+# el 4.4, el rótulo «Introducción» y el título del trabajo en mayúsculas. Los números son los de la
+# copia, que lleva el título del trabajo añadido al principio del texto (por eso van uno por delante).
 EXCEPCIONES = {
-    "01_ensayo_basico": {(TEXTO_TITULOS, n) for n in (9, 12, 15)},   # «1.», «2.» y «3.»
-    "02_informe_tablas": set(),
-    "03_trabajo_imagenes_listas": {(TEXTO_TITULOS, n) for n in (3, 9, 13, 17, 25)},   # «1.» a «4.» y «2.1.»
-    "04_formato_caotico": set(),   # sus 3 párrafos con tabulador se limpian desde el paso 3.5
+    "01_ensayo_basico": {(TEXTO_TITULOS, n) for n in (10, 13, 16)}   # «1.», «2.» y «3.»
+                        | {(TITULO_TRABAJO, 7)},                     # «Introducción»
+    "02_informe_tablas": {(TITULO_TRABAJO, 6)},                      # «Introducción»
+    "03_trabajo_imagenes_listas": {(TEXTO_TITULOS, n) for n in (4, 10, 14, 18, 26)}   # «1.» a «4.» y «2.1.»
+                                  | {(TITULO_TRABAJO, 4)},                            # «1. Introducción»
+    "04_formato_caotico": {(TITULO_TRABAJO, 6)},   # el título del trabajo, en mayúsculas
     "05_tfg_completo": {(ALINEACION, 8), (ALINEACION, 9), (ALINEACION, 10)}   # portada: Autora, Tutor, Convocatoria
-                       | {(TEXTO_TITULOS, n) for n in (12,                    # «RESUMEN»
-                                                       19, 22, 23, 25, 26, 28, 30, 34, 36, 37, 62, 64)},
+                       | {(TEXTO_TITULOS, n) for n in (12,                    # «RESUMEN» (antes del título añadido)
+                                                       20, 23, 24, 26, 27, 29, 31, 35, 37, 38, 63, 65)}
+                       | {(TITULO_TRABAJO, 19), (TITULO_TRABAJO, 20)},        # título en mayúsculas, «1. Introducción»
 }
 
 
@@ -80,8 +85,12 @@ def test_la_copia_lleva_su_estructura(procesado):
     clasifica igual que el original (el verificador solo tiene la copia).
     """
     def titulos(ruta):
-        return [(c.tipo, c.nivel, c.texto) for c in estructura.clasificar(docx.Document(str(ruta)))
-                if c.tipo in ("titulo", "titulo_referencias", "anexo")]
+        doc = docx.Document(str(ruta))
+        estilos = Estilos(doc)
+        # Sin el título del trabajo que el paso 4.4 añade al principio del texto (lo comprueba el verificador).
+        return [(c.tipo, c.nivel, c.texto) for c in estructura.clasificar(doc)
+                if c.tipo in ("titulo", "titulo_referencias", "anexo")
+                and estilos.nombre(estilos.estilo_de(c.elemento)).lower() != "title"]
     assert titulos(procesado["salida"]) == titulos(procesado["original"])
 
 

@@ -47,12 +47,14 @@ anexos tienen sus propios pasos (6.4 y 6.7); si ya usaban Título 1, cambian con
 el estilo, y quedan centrados y en negrita, como pide APA.
 """
 
+import copy
 import re
 from collections import Counter
 
 from docx.oxml import OxmlElement
 
-from apa_facil.documento import NUMERACION_DE_APARTADO, Estilos, texto_parrafo, w
+from apa_facil.documento import (NUMERACION_DE_APARTADO, Estilos, es_rotulo_de_introduccion, lineas_de_texto,
+                                 texto_parrafo, w)
 from apa_facil.estructura import ACABA_EN_PUNTO, BAJA, clasificar
 from apa_facil.reglas.fuente import _letras, _runs_propios
 
@@ -113,18 +115,22 @@ def _quitar_duplicados(estilos):
 
 def _crear(doc, nivel):
     """Un estilo «Título N» nuevo, basado en Normal (hereda su fuente, tamaño e interlineado)."""
+    return _estilo_nuevo(doc, nombre_interno(nivel), (f"Heading{nivel}", f"Titulo{nivel}", f"APA_Titulo{nivel}"),
+                         prioridad=9, oculto_hasta_usarlo=nivel > 1)
+
+
+def _estilo_nuevo(doc, nombre, identificadores, prioridad, oculto_hasta_usarlo=False):
     raiz = doc.styles.element
     ids = {e.get(w("styleId")) for e in raiz.iter(w("style"))}
     estilo = OxmlElement("w:style")
     estilo.set(w("type"), "paragraph")
-    estilo.set(w("styleId"), next(i for i in (f"Heading{nivel}", f"Titulo{nivel}", f"APA_Titulo{nivel}")
-                                  if i not in ids))
-    estilo.get_or_add_name().set(w("val"), nombre_interno(nivel))
+    estilo.set(w("styleId"), next(i for i in identificadores if i not in ids))
+    estilo.get_or_add_name().set(w("val"), nombre)
     normal = _id_de_normal(doc)
     if normal:
         estilo.get_or_add_basedOn().set(w("val"), normal)
-    estilo.get_or_add_uiPriority().set(w("val"), "9")
-    if nivel > 1:
+    estilo.get_or_add_uiPriority().set(w("val"), str(prioridad))
+    if oculto_hasta_usarlo:
         estilo.get_or_add_unhideWhenUsed()
     estilo.get_or_add_qFormat()
     raiz.append(estilo)
@@ -149,7 +155,12 @@ def _quitar_decoracion(rpr, ppr=None):
                 ppr.remove(el)
 
 
-def _dar_formato(doc, estilo, nivel):
+def _dar_formato(doc, estilo, nivel, esquema=True):
+    """
+    El formato APA del nivel en el estilo. Con esquema=False (el estilo «Title» del
+    título del trabajo), sin nivel de esquema: la portada del 02 usa ese estilo y no
+    es un título; el título del trabajo lo lleva en su propio párrafo.
+    """
     alineacion, cursiva, sangria = FORMATO[nivel]
     ppr = estilo.get_or_add_pPr()
     ppr.get_or_add_keepNext()
@@ -160,7 +171,10 @@ def _dar_formato(doc, estilo, nivel):
         del ind.attrib[atributo]
     ind.set(w("left"), "0")
     ind.set(w("firstLine"), str(sangria))
-    ppr.get_or_add_outlineLvl().set(w("val"), str(nivel - 1))
+    if esquema:
+        ppr.get_or_add_outlineLvl().set(w("val"), str(nivel - 1))
+    else:
+        _quitar(ppr, "outlineLvl", "numPr")
 
     rpr = estilo.get_or_add_rPr()
     _quitar_decoracion(rpr, ppr)
@@ -434,6 +448,181 @@ def _texto_de_titulos(doc, opciones, informe, clasificados, seguros):
                       "cámbialo tú).")
 
 
+# --- 4.4 Título del trabajo y rótulo «Introducción» -------------------------------------
+#
+# APA repite el título del trabajo al principio del texto, centrado y en negrita
+# como un nivel 1, y la introducción no lleva rótulo. El título se copia tal cual de
+# la portada (lo encuentra el clasificador, sobre el original): nada se inventa, y la
+# comprobación de integridad exige que sea una copia exacta. Va con el estilo «Title»
+# de Word («Título»), con el formato del nivel 1, y con su nivel de esquema en el
+# propio párrafo: así sale en el panel de navegación, pero no en el índice
+# automático, que recoge los estilos Título 1 a 3.
+
+NOMBRE_DEL_ESTILO_DEL_TITULO = "title"
+PIEZAS_QUE_SE_COPIAN = ("rPr", "t", "tab", "br", "cr", "noBreakHyphen", "sym")
+TEXTO_QUE_SE_CONSERVA = ("i", "iCs", "vertAlign")   # cursiva (el título de una obra) y superíndices
+NO_SE_BORRA_SI_LLEVA = ("sectPr", "footnoteReference", "endnoteReference", "drawing", "pict", "fldChar",
+                        "fldSimple", "commentReference")
+
+
+def estilos_del_titulo_del_trabajo(doc):
+    return [e for e in doc.styles.element.iter(w("style"))
+            if e.get(w("type")) == "paragraph" and _nombre(e) == NOMBRE_DEL_ESTILO_DEL_TITULO]
+
+
+def _copia_del_titulo(id_estilo, partes):
+    """Un párrafo nuevo con el texto de los párrafos del título (separados por un salto de línea)."""
+    nuevo = OxmlElement("w:p")
+    ppr = nuevo.get_or_add_pPr()
+    ppr.get_or_add_pStyle().set(w("val"), id_estilo)
+    ppr.get_or_add_outlineLvl().set(w("val"), "0")
+    for numero, parte in enumerate(partes):
+        if numero:
+            salto = OxmlElement("w:r")
+            salto.append(OxmlElement("w:br"))
+            nuevo.append(salto)
+        copias = []
+        for r in _runs_propios(parte.elemento):
+            copia = OxmlElement("w:r")
+            for pieza in r:
+                if etiqueta_de(pieza) == "br" and pieza.get(w("type")) in ("page", "column"):
+                    continue   # el salto de página de la portada no se copia
+                if etiqueta_de(pieza) in PIEZAS_QUE_SE_COPIAN:
+                    copia.append(copy.deepcopy(pieza))
+            rpr = copia.find(w("rPr"))
+            if rpr is not None:   # el resto del formato lo pone el estilo
+                for propiedad in list(rpr):
+                    if etiqueta_de(propiedad) not in TEXTO_QUE_SE_CONSERVA:
+                        rpr.remove(propiedad)
+            if len(copia):
+                copias.append(copia)
+        _sin_espacio_en_los_extremos(copias)
+        for copia in copias:
+            nuevo.append(copia)
+    return nuevo
+
+
+def _sin_espacio_en_los_extremos(runs):
+    """Quita los espacios, tabuladores y saltos del principio y del final del texto copiado."""
+    piezas = [el for r in runs for el in r if etiqueta_de(el) in ("t", "tab", "br", "cr")]
+    for orden in (piezas, list(reversed(piezas))):
+        for pieza in orden:
+            if pieza.getparent() is None:
+                continue   # ya quitada desde el otro extremo
+            if etiqueta_de(pieza) != "t":
+                pieza.getparent().remove(pieza)
+                continue
+            texto = pieza.text or ""
+            limpio = texto.lstrip() if orden is piezas else texto.rstrip()
+            pieza.text = limpio
+            if limpio:
+                break
+
+
+def etiqueta_de(el):
+    return el.tag.rsplit("}", 1)[-1] if isinstance(el.tag, str) else ""
+
+
+def _salto_de_pagina_antes(estilos, p):
+    return _encendido(next((capa.find(w("pageBreakBefore")) for capa in estilos._capas_parrafo(p)
+                            if capa is not None and capa.find(w("pageBreakBefore")) is not None), None))
+
+
+def _subapartados(clasificados, apartado):
+    """Los títulos de nivel más bajo que van dentro de un apartado (hasta el siguiente de su nivel)."""
+    dentro, empezado = [], False
+    for c in clasificados:
+        if c is apartado:
+            empezado = True
+            continue
+        if not empezado or c.tipo not in ("titulo", "titulo_referencias", "anexo"):
+            continue
+        if c.tipo != "titulo" or (c.nivel or 1) <= apartado.nivel:
+            break
+        dentro.append(c)
+    return dentro
+
+
+def _quitar_introduccion(doc, opciones, informe, clasificados):
+    """El rótulo «Introducción» del primer apartado. Devuelve el párrafo si se ha borrado."""
+    primero = next((c for c in clasificados if c.zona == "cuerpo" and c.tipo == "titulo"), None)
+    if primero is None or primero.nivel != 1 or not es_rotulo_de_introduccion(texto_parrafo(primero.elemento)):
+        return None
+    rotulo = texto_parrafo(primero.elemento)
+    if not opciones.get("quitar_introduccion"):
+        informe.aviso(f"El primer apartado se titula «{rotulo}». En APA la introducción no lleva título: el título "
+                      "del trabajo, al principio del texto, hace sus veces. Se ha dejado así; quítalo tú o usa la "
+                      "opción --quitar-introduccion.")
+        return None
+    subapartados = _subapartados(clasificados, primero)
+    if subapartados:
+        informe.aviso(f"No se ha quitado el rótulo «{rotulo}» porque el apartado tiene subapartados "
+                      f"({_lista([c.texto for c in subapartados])}): sin él, quedarían colgando del título del "
+                      "trabajo. Si quieres seguir APA, deja la introducción sin subapartados.")
+        return None
+    p = primero.elemento
+    if any(next(p.iter(w(e)), None) is not None for e in NO_SE_BORRA_SI_LLEVA):
+        informe.aviso(f"No se ha quitado el rótulo «{rotulo}» porque lleva algo más que texto (una nota, una "
+                      "imagen, un campo o un salto de sección). Quítalo tú en Word.")
+        return None
+    # Los marcadores (los usan el índice y las referencias cruzadas) pasan al párrafo siguiente.
+    siguiente = p.getnext()
+    marcadores = [m for m in p.iter(w("bookmarkStart"), w("bookmarkEnd"))]
+    if marcadores and (siguiente is None or siguiente.tag != w("p")):
+        informe.aviso(f"No se ha quitado el rótulo «{rotulo}» porque lleva un marcador de Word. Quítalo tú.")
+        return None
+    for marcador in reversed(marcadores):
+        ppr = siguiente.find(w("pPr"))
+        (ppr.addnext if ppr is not None else lambda m: siguiente.insert(0, m))(marcador)
+    p.getparent().remove(p)
+    informe.cambio_previsto(primero.numero, "quitar_introduccion")
+    informe.cambio(f"Títulos: se ha quitado el rótulo «{rotulo}» del primer apartado: en APA la introducción no "
+                   "lleva título.")
+    return primero
+
+
+def _titulo_del_trabajo(doc, informe, clasificados, quitado):
+    # El estilo «Title», con el formato APA del nivel 1 (la portada del 02 también lo usa).
+    partes = [c for c in clasificados if c.titulo_del_trabajo]
+    estilos = estilos_del_titulo_del_trabajo(doc)
+    estilo = (_quitar_duplicados(estilos) if estilos else
+              _estilo_nuevo(doc, NOMBRE_DEL_ESTILO_DEL_TITULO, ("Title", "Ttulo", "APA_Titulo"), prioridad=10)
+              if partes else None)
+    if estilo is not None:
+        _dar_formato(doc, estilo, 1, esquema=False)
+
+    if not partes:
+        informe.aviso("No se ha encontrado el título del trabajo en la portada, así que no se ha repetido al "
+                      "principio del texto. APA lo pide ahí, centrado y en negrita: escríbelo tú, con el estilo "
+                      "«Título» de Word.")
+        return
+    primero = next((c for c in clasificados if c.zona == "cuerpo" and c.tipo != "vacio" and c is not quitado), None)
+    if primero is None:
+        return
+    texto = "\n".join(linea for c in partes for linea in lineas_de_texto(texto_parrafo(c.elemento)))
+    if " ".join(texto_parrafo(primero.elemento).split()) == " ".join(texto.split()):
+        return   # ya está
+    nuevo = _copia_del_titulo(estilo.get(w("styleId")), partes)
+    if texto_parrafo(nuevo) != texto:
+        informe.aviso("No se ha podido repetir el título del trabajo al principio del texto: escríbelo tú, "
+                      "centrado y en negrita, con el estilo «Título» de Word.")
+        return
+    estilos_efectivos = Estilos(doc)
+    if _salto_de_pagina_antes(estilos_efectivos, primero.elemento):
+        # Si el primer apartado empezaba página (su estilo lo pide), la empieza el título.
+        nuevo.find(w("pPr")).get_or_add_pageBreakBefore()
+        primero.elemento.get_or_add_pPr().get_or_add_pageBreakBefore().set(w("val"), "0")
+    primero.elemento.addprevious(nuevo)
+    informe.cambio_previsto(primero.numero, "añadir_titulo", nuevo=texto, desde=[c.numero for c in partes])
+    informe.cambio(f"Título del trabajo: se ha repetido «{_extracto(' '.join(texto.split()), 60)}» al principio "
+                   "del texto, centrado y en negrita, como pide APA.")
+    en_mayus = [c.texto for c in partes if en_mayusculas(c.texto)]
+    if en_mayus:
+        informe.aviso(f"El título del trabajo está escrito en mayúsculas ({_lista(en_mayus)}). APA lo escribe con "
+                      "mayúscula inicial en las palabras principales: corrígelo en la portada y al principio del "
+                      "texto.")
+
+
 def _antes_y_despues(pares, maximo=3):
     texto = ", ".join(f"«{_extracto(a)}» → «{_extracto(d)}»" for a, d in pares[:maximo])
     return texto + ("…" if len(pares) > maximo else "")
@@ -554,5 +743,11 @@ def aplicar(doc, opciones, informe, estructura=None):
                       f"no termina{'n' if varios else ''} en punto. En APA, estos títulos terminan en punto y "
                       "el texto sigue en la misma línea; de momento se han dejado como estaban.")
 
-    # 6. Numeración y mayúsculas (paso 4.3): se avisa, y se cambia solo si se pide.
-    _texto_de_titulos(doc, opciones, informe, clasificados, seguros)
+    # 6. El rótulo «Introducción» (paso 4.4): se avisa, y se quita solo si se pide.
+    quitado = _quitar_introduccion(doc, opciones, informe, clasificados)
+
+    # 7. Numeración y mayúsculas (paso 4.3): se avisa, y se cambia solo si se pide.
+    _texto_de_titulos(doc, opciones, informe, clasificados, [c for c in seguros if c is not quitado])
+
+    # 8. El título del trabajo al principio del texto (paso 4.4).
+    _titulo_del_trabajo(doc, informe, clasificados, quitado)

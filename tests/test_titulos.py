@@ -12,12 +12,13 @@ from pathlib import Path
 import docx
 import pytest
 from docx.enum.text import WD_BREAK
+from docx.shared import Pt
 
 from apa_facil import estructura, pipeline
 from apa_facil.documento import CambioPrevisto, Estilos, comparar, radiografia, texto_parrafo, w
 from apa_facil.informe import Informe
 from apa_facil.reglas import titulos
-from herramientas.verificar import FORMATO_TITULOS, TITULOS, verificar
+from herramientas.verificar import FORMATO_TITULOS, TITULO_TRABAJO, TITULOS, verificar
 
 PRUEBAS = sorted((Path(__file__).resolve().parent.parent / "pruebas").glob("*.docx"))
 TEXTO = ("Este es un párrafo normal de texto con bastantes palabras para que no parezca un título "
@@ -60,6 +61,18 @@ def propio(estilo, capa, etiqueta, atributo="val"):
     if el is None:
         return None
     return el.get(w(atributo), "activado")
+
+
+def sin_el_titulo(mensajes):
+    """
+    Los mensajes del informe sin los del título del trabajo (paso 4.4): la portada de
+    estos documentos de prueba («Portada») se repite al principio del texto.
+    """
+    return [m for m in mensajes if "título del trabajo" not in m.lower()]
+
+
+def previstos_sin_el_titulo(informe):
+    return [c for c in informe.cambios_previstos if c.accion != "añadir_titulo"]
 
 
 def problemas_del_verificador(doc, regla=TITULOS):
@@ -183,7 +196,8 @@ def test_los_que_ya_tenian_su_estilo_no_cuentan_como_cambio():
     doc.add_heading("Método", level=1)
     doc.add_paragraph(TEXTO)
     informe = aplicar(doc)
-    assert len(informe.cambios) == 1 and informe.cambios[0].startswith("Títulos: los estilos")
+    cambios = sin_el_titulo(informe.cambios)
+    assert len(cambios) == 1 and cambios[0].startswith("Títulos: los estilos")
 
 
 def test_titulo_dudoso_no_recibe_estilo_y_se_avisa():
@@ -193,7 +207,7 @@ def test_titulo_dudoso_no_recibe_estilo_y_se_avisa():
     assert (c.tipo, c.confianza) == ("titulo", estructura.BAJA)
     informe = aplicar(doc)
     assert estilo_de(doc, p) == "Normal"
-    assert informe.avisos == ["«Esto es importante.» parece un título, pero no es seguro, así que se ha dejado "
+    assert sin_el_titulo(informe.avisos) == ["«Esto es importante.» parece un título, pero no es seguro, así que se ha dejado "
                               "como estaba. Si es un título, ponle en Word el estilo «Título 1»."]
     resultado = verificar(doc)
     assert [h.regla for h in resultado.excepciones] == [TITULOS]
@@ -204,7 +218,7 @@ def test_sin_titulos_no_se_informa_de_nada():
     doc = documento_con_portada()
     doc.add_paragraph(TEXTO)
     informe = aplicar(doc)
-    assert informe.cambios == informe.avisos == []
+    assert sin_el_titulo(informe.cambios) == sin_el_titulo(informe.avisos) == []
 
 
 def test_el_texto_no_cambia():
@@ -213,8 +227,8 @@ def test_el_texto_no_cambia():
     titulo_falso(doc, "1.1. Antecedentes")
     doc.add_heading("Método", level=1)
     antes = radiografia(doc)
-    aplicar(doc)
-    assert comparar(antes, radiografia(doc)) == []
+    informe = aplicar(doc)
+    assert comparar(antes, radiografia(doc), informe.cambios_previstos) == []
 
 
 def test_el_verificador_ve_un_titulo_sin_estilo():
@@ -349,7 +363,8 @@ def test_negrita_desactivada_mayusculas_bordes_y_conservar():
         "Títulos: se ha quitado el formato puesto a mano que no corresponde a su nivel en 1 título («Método»: los "
         "bordes o el sombreado, «Conservar con el siguiente» desactivado, la negrita desactivada y las "
         "mayúsculas forzadas)."]
-    assert comparar(antes, radiografia(doc)) == [], "las mayúsculas son formato: el texto no cambia"
+    assert comparar(antes, radiografia(doc), informe.cambios_previstos) == [], \
+        "las mayúsculas son formato: el texto no cambia"
     assert problemas_del_verificador(doc, FORMATO_TITULOS) == []
 
 
@@ -380,11 +395,12 @@ def test_aviso_de_nivel_4_y_5_sin_punto_final():
                          ("Menores de 6", 5), ("Mayores de 6.", 5)):
         titulo(doc, texto, nivel)
     antes = radiografia(doc)
-    avisos = [a for a in aplicar(doc).avisos if "punto" in a]
+    informe = aplicar(doc)
+    avisos = [a for a in informe.avisos if "punto" in a]
     assert avisos == ["2 títulos de nivel 4 o 5 («Niños», «Menores de 6») no terminan en punto. En APA, estos "
                       "títulos terminan en punto y el texto sigue en la misma línea; de momento se han dejado "
                       "como estaban."]
-    assert comparar(antes, radiografia(doc)) == []
+    assert comparar(antes, radiografia(doc), informe.cambios_previstos) == []
 
 
 # --- 4.3 Numeración y mayúsculas --------------------------------------------------------------
@@ -430,7 +446,8 @@ def test_por_defecto_solo_se_avisa():
     antes = radiografia(doc)
     informe = aplicar(doc)
     assert (texto(p1), texto(p2)) == ("1. Introducción", "2. MÉTODO")
-    assert comparar(antes, radiografia(doc)) == [] and informe.cambios_previstos == []
+    assert comparar(antes, radiografia(doc), informe.cambios_previstos) == []
+    assert previstos_sin_el_titulo(informe) == []
     assert [a for a in informe.avisos if "numeración" in a or "mayúsculas" in a] == [
         "2 títulos empiezan con una numeración («1. Introducción», «2. MÉTODO»). APA no numera los títulos, pero "
         "muchas universidades lo exigen, así que se ha dejado como estaba. Si la tuya no lo pide, la herramienta "
@@ -473,7 +490,7 @@ def test_mayusculas_conservan_nombres_propios_siglas_y_romanos():
     antes = radiografia(doc)
     informe = aplicar_con(doc, {"quitar_mayusculas": True})
     assert texto(p) == "La UE y España en el siglo XXI"
-    assert informe.cambios[-1] == ("Títulos: 1 título pasa de mayúsculas a minúsculas («LA UE Y ESPAÑA EN EL "
+    assert sin_el_titulo(informe.cambios)[-1] == ("Títulos: 1 título pasa de mayúsculas a minúsculas («LA UE Y ESPAÑA EN EL "
                                    "SIGLO XXI» → «La UE y España en el siglo XXI»). Se han respetado los nombres "
                                    "propios y las siglas que el trabajo escribe así en el texto; revisa que hayan "
                                    "quedado bien.")
@@ -494,7 +511,7 @@ def test_solo_titulos_enteros_en_mayusculas():
     doc = documento_con_portada()
     p = titulo(doc, "El caso de la ONU", 1)
     informe = aplicar_con(doc, QUITAR_TODO)
-    assert texto(p) == "El caso de la ONU" and informe.cambios_previstos == []
+    assert texto(p) == "El caso de la ONU" and previstos_sin_el_titulo(informe) == []
 
 
 def test_aviso_de_remisiones_y_del_indice():
@@ -527,6 +544,214 @@ def test_la_integridad_solo_acepta_lo_previsto():
     assert comparar(antes, radiografia(doc), [CambioPrevisto(numero, "cambiar_mayusculas", nuevo="1. Métodos")])
 
 
+# --- 4.4 Título del trabajo y rótulo «Introducción» -------------------------------------------
+
+def trabajo(portada, apartados=(("Introducción", 1), ("Método", 1))):
+    """
+    Un documento con portada (cada línea: texto, tamaño en puntos, negrita y, si se da,
+    estilo) que acaba en un salto de página, y apartados con texto debajo.
+    """
+    doc = docx.Document()
+    for linea in portada:
+        texto_linea, tamano, negrita, *estilo = linea
+        p = doc.add_paragraph(style=estilo[0] if estilo else None)
+        r = p.add_run(texto_linea)
+        r.font.size, r.bold = Pt(tamano), negrita
+    p.runs[-1].add_break(WD_BREAK.PAGE)
+    for texto_apartado, nivel in apartados:
+        titulo(doc, texto_apartado, nivel)
+    return doc
+
+
+PORTADA = [("El sueño en la universidad", 16, True), ("Ana Ruiz", 12, False), ("Psicología", 12, False)]
+
+
+def primero_del_texto(doc):
+    clasificados = estructura.clasificar(doc)
+    return next(c for c in clasificados if c.zona == "cuerpo" and c.tipo != "vacio")
+
+
+def titulos_del_trabajo(doc):
+    return [p for p in doc.element.body.iter(w("p"))
+            if Estilos(doc).nombre(Estilos(doc).estilo_de(p)).lower() == "title"]
+
+
+def test_el_titulo_de_la_portada_se_repite_al_principio_del_texto():
+    doc = trabajo(PORTADA)
+    antes = radiografia(doc)
+    informe = aplicar(doc)
+    [nuevo] = titulos_del_trabajo(doc)
+    assert texto_parrafo(nuevo) == "El sueño en la universidad"
+    assert nuevo.getnext() is not None and texto_parrafo(nuevo.getnext()) == "Introducción"
+    assert nuevo.find(f"{w('pPr')}/{w('outlineLvl')}").get(w("val")) == "0", "sale en el panel de navegación"
+    estilo = titulos.estilos_del_titulo_del_trabajo(doc)[0]
+    assert estilo.find(f"{w('pPr')}/{w('outlineLvl')}") is None, "el estilo, sin nivel: no sale en el índice"
+    assert estilo.find(f"{w('pPr')}/{w('jc')}").get(w("val")) == "center"
+    assert "Título del trabajo: se ha repetido «El sueño en la universidad» al principio del texto, centrado y " \
+           "en negrita, como pide APA." in informe.cambios
+    assert comparar(antes, radiografia(doc), informe.cambios_previstos) == []
+    assert problemas_del_verificador(doc, TITULO_TRABAJO) == []
+    assert problemas_del_verificador(doc) == problemas_del_verificador(doc, FORMATO_TITULOS) == []
+
+
+def test_el_titulo_con_el_estilo_title_manda_sobre_el_tamano():
+    doc = trabajo([("UNIVERSIDAD DE SALAMANCA", 18, True), ("Hábitos de lectura", 12, False, "Title")])
+    aplicar(doc)
+    assert [texto_parrafo(p) for p in titulos_del_trabajo(doc)][-1] == "Hábitos de lectura"
+
+
+def test_con_subtitulo_va_en_dos_lineas_sin_anadir_nada():
+    doc = trabajo([("EL TURISMO RURAL", 18, True), ("estudio de cuatro municipios", 16, True),
+                   ("Autora: Lucía Prieto", 12, False)])
+    antes = radiografia(doc)
+    informe = aplicar(doc)
+    [nuevo] = titulos_del_trabajo(doc)
+    assert texto_parrafo(nuevo) == "EL TURISMO RURAL\nestudio de cuatro municipios"
+    assert comparar(antes, radiografia(doc), informe.cambios_previstos) == []
+    assert any(a.startswith("El título del trabajo está escrito en mayúsculas («EL TURISMO RURAL»)")
+               for a in informe.avisos)
+
+
+def test_una_linea_de_datos_no_es_el_subtitulo():
+    """«Autora: …» debajo del título, aunque vaya en negrita y grande, es un dato de la portada."""
+    doc = trabajo([("El turismo rural", 18, True), ("Autora: Lucía Prieto", 14, True), ("Grado", 12, False)])
+    aplicar(doc)
+    assert [texto_parrafo(p) for p in titulos_del_trabajo(doc)] == ["El turismo rural"]
+
+
+def test_el_salto_de_pagina_y_el_formato_de_la_portada_no_se_copian():
+    doc = docx.Document()
+    doc.add_paragraph("Ana Ruiz").runs[0].font.size = Pt(12)
+    p = doc.add_paragraph()
+    rojo = p.add_run("Hábitos de ")
+    rojo.font.size, rojo.bold, rojo.font.color.rgb = Pt(16), True, docx.shared.RGBColor(0xFF, 0, 0)
+    obra = p.add_run("Cien años de soledad ")
+    obra.font.size, obra.bold, obra.italic = Pt(16), True, True
+    p.add_run().add_break(WD_BREAK.PAGE)   # el salto de página, al final del título
+    titulo(doc, "Método", 1)
+    informe = aplicar(doc)
+    [nuevo] = titulos_del_trabajo(doc)
+    assert texto_parrafo(nuevo) == "Hábitos de Cien años de soledad"
+    assert next(nuevo.iter(w("br")), None) is None, "sin el salto de página"
+    assert [r.find(f"{w('rPr')}/{w('i')}") is not None for r in nuevo.iter(w("r"))] == [False, True], \
+        "la cursiva (el título de una obra) se conserva"
+    assert next(nuevo.iter(w("sz")), None) is None and next(nuevo.iter(w("color")), None) is None
+    assert informe.cambios_previstos[-1].nuevo == "Hábitos de Cien años de soledad"
+
+
+def test_sin_titulo_reconocible_solo_se_avisa():
+    doc = trabajo([("Ana Ruiz", 12, False), ("Psicología", 12, False)])
+    informe = aplicar(doc)
+    assert titulos_del_trabajo(doc) == []
+    assert any(a.startswith("No se ha encontrado el título del trabajo en la portada") for a in informe.avisos)
+
+
+def test_si_ya_estaba_no_se_repite():
+    doc = trabajo(PORTADA, apartados=())
+    doc.add_paragraph("El sueño en la universidad")
+    doc.add_paragraph(TEXTO)
+    informe = aplicar(doc)
+    assert titulos_del_trabajo(doc) == [] and previstos_sin_el_titulo(informe) == informe.cambios_previstos
+
+
+def test_si_el_primer_apartado_empezaba_pagina_la_empieza_el_titulo():
+    doc = trabajo([("El sueño", 16, False)])   # sin salto: el estilo del título lo pone
+    unico(doc, 1).get_or_add_pPr().get_or_add_pageBreakBefore()
+    aplicar(doc)
+    [nuevo] = titulos_del_trabajo(doc)
+    assert nuevo.find(f"{w('pPr')}/{w('pageBreakBefore')}") is not None
+    assert nuevo.getnext().find(f"{w('pPr')}/{w('pageBreakBefore')}").get(w("val")) == "0"
+
+
+def test_la_integridad_solo_acepta_una_copia_de_la_portada():
+    doc = trabajo(PORTADA)
+    antes = radiografia(doc)
+    aplicar(doc)
+    # Portada: párrafos 1 a 3; «Introducción», el 4.
+    previsto = CambioPrevisto(4, "añadir_titulo", nuevo="El sueño en la universidad", desde=(1,))
+    assert comparar(antes, radiografia(doc), [previsto]) == []
+    for falso in (CambioPrevisto(4, "añadir_titulo", nuevo="El sueño en la universidad", desde=()),
+                  CambioPrevisto(4, "añadir_titulo", nuevo="El sueño en la universidad", desde=(2,)),
+                  CambioPrevisto(4, "añadir_titulo", nuevo="El sueño en la universidad", desde=(1, 3)),
+                  CambioPrevisto(4, "añadir_titulo", nuevo="El sueño en la universidad", desde=(4,)),
+                  CambioPrevisto(4, "añadir_titulo", nuevo="Un título inventado", desde=(1,))):
+        assert comparar(antes, radiografia(doc), [falso]), falso
+    assert comparar(antes, radiografia(doc)), "sin anotarlo, la integridad lo ve"
+
+
+def test_el_verificador_ve_que_falta_el_titulo():
+    doc = trabajo(PORTADA)
+    aplicar(doc)
+    [nuevo] = titulos_del_trabajo(doc)
+    nuevo.getparent().remove(nuevo)
+    assert problemas_del_verificador(doc, TITULO_TRABAJO) == [
+        "El texto no empieza con el título del trabajo (el de la portada, con el estilo «Título» de Word)."]
+
+
+def test_introduccion_por_defecto_solo_se_avisa():
+    doc = trabajo(PORTADA)
+    informe = aplicar(doc)
+    assert any(texto_parrafo(p) == "Introducción" for p in doc.element.body.iter(w("p")))
+    assert [a for a in informe.avisos if "Introducción" in a] == [
+        "El primer apartado se titula «Introducción». En APA la introducción no lleva título: el título del "
+        "trabajo, al principio del texto, hace sus veces. Se ha dejado así; quítalo tú o usa la opción "
+        "--quitar-introduccion."]
+    assert [h.regla for h in verificar(doc).excepciones] == [TITULO_TRABAJO]
+
+
+def test_introduccion_con_la_opcion_se_quita():
+    doc = trabajo(PORTADA, apartados=(("1. Introducción", 1), ("2. Método", 1)))
+    rotulo = next(p for p in doc.element.body.iter(w("p")) if texto_parrafo(p) == "1. Introducción")
+    marcador = rotulo.makeelement(w("bookmarkStart"), {w("id"): "0", w("name"): "_Toc1"})
+    rotulo.append(marcador)
+    antes = radiografia(doc)
+    informe = aplicar_con(doc, {"quitar_introduccion": True})
+    assert rotulo.getparent() is None
+    assert marcador.getparent() is not None, "el marcador pasa al párrafo siguiente"
+    assert "Títulos: se ha quitado el rótulo «1. Introducción» del primer apartado: en APA la introducción no " \
+           "lleva título." in informe.cambios
+    [nuevo] = titulos_del_trabajo(doc)
+    assert texto_parrafo(nuevo.getnext()) == TEXTO, "el título del trabajo ocupa su lugar"
+    assert comparar(antes, radiografia(doc), informe.cambios_previstos) == []
+    assert [h for h in verificar(doc).excepciones if h.regla == TITULO_TRABAJO] == []
+
+
+def test_introduccion_con_subapartados_no_se_quita():
+    doc = trabajo(PORTADA, apartados=(("Introducción", 1), ("Objetivos", 2), ("Hipótesis", 2), ("Método", 1)))
+    informe = aplicar_con(doc, {"quitar_introduccion": True})
+    assert any(texto_parrafo(p) == "Introducción" for p in doc.element.body.iter(w("p")))
+    assert any(a.startswith("No se ha quitado el rótulo «Introducción» porque el apartado tiene subapartados "
+                            "(«Objetivos», «Hipótesis»)") for a in informe.avisos)
+
+
+def test_introduccion_que_no_es_el_primer_apartado_no_se_toca():
+    doc = trabajo(PORTADA, apartados=(("Marco teórico", 1), ("Introducción", 1)))
+    informe = aplicar_con(doc, {"quitar_introduccion": True})
+    assert any(texto_parrafo(p) == "Introducción" for p in doc.element.body.iter(w("p")))
+    assert not [m for m in informe.avisos + informe.cambios if "Introducción" in m]
+
+
+def test_la_integridad_solo_borra_el_rotulo_introduccion():
+    doc = trabajo(PORTADA)
+    antes = radiografia(doc)
+    metodo = next(p for p in doc.element.body.iter(w("p")) if texto_parrafo(p) == "Método")
+    metodo.getparent().remove(metodo)
+    # Portada: párrafos 1 a 3; «Introducción», el 4; «Método», el 6.
+    assert comparar(antes, radiografia(doc), [CambioPrevisto(6, "quitar_introduccion")]), "«Método» no"
+    assert comparar(antes, radiografia(doc), [CambioPrevisto(4, "quitar_introduccion")]), "«Introducción» sí, " \
+        "pero no es lo que se ha borrado"
+
+
+def test_cinco_documentos_con_quitar_introduccion(tmp_path):
+    """01, 02 y 03 la pierden; el 05 no (tiene subapartados), y el 04 no la tiene."""
+    quitadas = {}
+    for original in PRUEBAS:
+        salida, informe = pipeline.procesar(original, tmp_path, {"quitar_introduccion": True})
+        assert verificar(salida).cumple
+        quitadas[original.name[:2]] = sum(c.accion == "quitar_introduccion" for c in informe.cambios_previstos)
+    assert quitadas == {"01": 1, "02": 1, "03": 1, "04": 0, "05": 0}
+
+
 # --- Avisos de estructura ---------------------------------------------------------------------
 
 def test_aviso_de_un_solo_subapartado():
@@ -535,7 +760,7 @@ def test_aviso_de_un_solo_subapartado():
         doc.add_heading(texto, level=nivel)
         doc.add_paragraph(TEXTO)
     informe = aplicar(doc)
-    assert informe.avisos == ["El apartado «Método» tiene un solo subapartado («Participantes»). APA recomienda "
+    assert sin_el_titulo(informe.avisos) == ["El apartado «Método» tiene un solo subapartado («Participantes»). APA recomienda "
                               "dividir un apartado solo si tiene al menos dos subapartados: añade otro o integra "
                               "su contenido en el apartado."]
 
@@ -600,7 +825,7 @@ def test_documentos_de_prueba(original, tmp_path):
     for c in estructura.clasificar(copia):
         if c.tipo == "titulo":
             nombre = por_id[estilos.estilo_de(c.elemento)].find(w("name")).get(w("val")).lower()
-            assert nombre == f"heading {c.nivel}", c.texto
+            assert nombre == f"heading {c.nivel}" or (nombre == "title" and c.nivel == 1), c.texto
 
     esperados = [f"El apartado «{a}» tiene un solo subapartado («{b}»)" for a, b in UN_SOLO_SUBAPARTADO[clave]]
     de_estructura = [a for a in informe.avisos if "subapartado" in a or "se salta un nivel" in a]

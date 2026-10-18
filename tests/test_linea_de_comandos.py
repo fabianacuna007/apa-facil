@@ -97,7 +97,7 @@ def test_salida_completa_de_un_documento(tmp_path, capsys):
     assert main([str(original)], carpeta_salida=tmp_path) == 0
     salida = capsys.readouterr().out
     assert salida.startswith(f"✔ {original.name} → {tmp_path.name}/{original.stem}_APA.docx\n   Lo que hemos cambiado (")
-    assert "   Lo que debes revisar tú (3):" in salida   # el encabezado, un solo subapartado y la numeración
+    assert "   Lo que debes revisar tú (4):" in salida   # encabezado, un solo subapartado, numeración e «Introducción»
     assert f"   Informe completo: {tmp_path.name}/{original.stem}_APA.json" in salida
     assert "todavía incompleto" not in salida
     assert salida.rstrip().endswith("1 de 1 documento(s) procesado(s).")
@@ -187,7 +187,8 @@ def test_opciones_de_los_titulos(tmp_path, capsys):
     assert "Títulos: 1 título pasa de mayúsculas a minúsculas («RESUMEN» → «Resumen»)" in salida
     assert "--quitar-numeracion" not in salida and "--quitar-mayusculas" not in salida, "sin los avisos"
     datos = json.loads((tmp_path / f"{original.stem}_APA.json").read_text(encoding="utf-8"))
-    assert datos["opciones"] == {"fuente": None, "quitar_numeracion": True, "quitar_mayusculas": True}
+    assert datos["opciones"] == {"fuente": None, "quitar_numeracion": True, "quitar_mayusculas": True,
+                                 "quitar_introduccion": False}
 
 
 def test_opciones_de_los_titulos_en_el_diagnostico(capsys):

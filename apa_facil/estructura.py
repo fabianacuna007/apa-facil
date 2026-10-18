@@ -70,6 +70,7 @@ NUMERACION_ARABIGA = re.compile(r"^(\d{1,2}(?:\.\d{1,2})*)[.)]?\s")
 NUMERACION_ROMANA = re.compile(r"^([IVX]+)[.)]\s")
 NUMERACION_CON_LETRA = re.compile(r"^([A-Za-z])[.)]\s")
 URL = re.compile(r"https?://|www\.|doi\.org|\bdoi:", re.IGNORECASE)
+ETIQUETA = re.compile(r"^[^\W\d_]+( [^\W\d_]+)?:\s")   # «Autora: …», «Trabajo de: …» (datos de la portada)
 AUTOR_Y_FECHA = re.compile(r"^[^\W\d][^,(]{0,80},.*(\(\s*(\d{4}|s\.\s?f\.)|\b\d{4}\b)", re.IGNORECASE)
 CON_FECHA = re.compile(r"\(\s*(\d{4}[a-z]?|s\.\s?f\.)\s*[),]|\b(1[5-9]|20)\d{2}\b")
 ESTILO_DE_TITULO_NUMERADO = re.compile(r"^(heading|título|titulo)\s*(\d)$")
@@ -92,6 +93,8 @@ class Parrafo:
     # El número con que se nombra el párrafo en el diagnóstico, el verificador y la
     # radiografía: desde 1 y contando también los párrafos de las tablas.
     numero: int = 0
+    # En la portada: ¿es el título del trabajo (o su subtítulo)? (paso 4.4)
+    titulo_del_trabajo: bool = False
 
 
 # --- 1. Rasgos ------------------------------------------------------------------------
@@ -469,7 +472,38 @@ class _Clasificador:
             self.resultado.append(Parrafo(posicion, p, r.texto, tipo, confianza, motivo,
                                           zona_del_parrafo, nivel, self.numeros[p]))
         self._niveles_de_titulos_falsos()
+        titulo = set(self._titulo_del_trabajo())
+        for c in self.resultado:
+            c.titulo_del_trabajo = c.elemento in titulo
         return self.resultado
+
+    # Título del trabajo (paso 4.4) -------------------------------------------------------
+
+    def _titulo_del_trabajo(self):
+        """
+        Los párrafos de la portada que forman el título del trabajo: el que usa el
+        estilo «Title» de Word o, si no, el de letra más grande (si solo hay uno así);
+        y, justo debajo, el subtítulo, si va en negrita y con letra más grande que el
+        texto. Se decide sobre el original: después de la regla de fuente, todos los
+        párrafos tienen el mismo tamaño.
+        """
+        con_texto = [p for p in self.portada if self.rasgos[p].texto]
+        de_estilo = [p for p in con_texto if self.rasgos[p].estilos[:1] in (["title"], ["título"], ["titulo"])]
+        if de_estilo:
+            titulo = de_estilo[0]
+        else:
+            tamanos = [self.rasgos[p].tamano or 0 for p in con_texto]
+            if not tamanos or tamanos.count(max(tamanos)) != 1:
+                return []
+            titulo = con_texto[tamanos.index(max(tamanos))]
+        partes = [titulo]
+        siguiente = self.parrafos.index(titulo) + 1
+        if siguiente < len(self.parrafos) and self.parrafos[siguiente] in con_texto:
+            r = self.rasgos[self.parrafos[siguiente]]
+            if (r.negrita and r.tamano and self.tamano_del_texto and r.tamano > self.tamano_del_texto
+                    and r.palabras < PALABRAS_DE_TITULO and not ETIQUETA.match(r.texto)):
+                partes.append(self.parrafos[siguiente])
+        return partes
 
     # Niveles de los títulos falsos -----------------------------------------------------
 

@@ -24,10 +24,11 @@ from herramientas.verificar import (ALINEACION, FUENTE, INTERLINEADO, MARGENES, 
 CARPETA = Path(__file__).resolve().parent.parent / "pruebas"
 PRUEBAS = sorted(CARPETA.glob("*.docx"))
 
-# Párrafos del documento 01 (numerados como en el verificador).
+# Párrafos de la copia del documento 01 (numerados como en el verificador). Desde el paso 4.4,
+# el 6 es el título del trabajo, repetido al principio del texto.
 PORTADA = 2        # "Alumno: Javier Moreno Díaz"
-TITULO = 6         # "Introducción"
-TEXTO = 7          # "La Revolución Industrial supuso una transformación…"
+TITULO = 7         # "Introducción"
+TEXTO = 8          # "La Revolución Industrial supuso una transformación…"
 
 
 @pytest.fixture(scope="module")

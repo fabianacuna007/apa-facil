@@ -40,7 +40,9 @@ Para quitar la numeración de los títulos («1.1. Objetivos» → «Objetivos»
 python -m apa_facil pruebas\05_tfg_completo.docx --quitar-numeracion --quitar-mayusculas
 ```
 
-Las dos opciones son independientes. Sin ellas solo se avisa, porque cambian el texto y muchas universidades exigen numerar los títulos. Al quitar las mayúsculas se respetan los nombres propios y las siglas que el trabajo escribe así en el texto.
+Con `--quitar-introduccion` se quita el rótulo «Introducción» del primer apartado, que APA no usa (el título del trabajo hace sus veces), si el apartado no tiene subapartados.
+
+Las tres opciones son independientes. Sin ellas solo se avisa, porque cambian el texto y muchas universidades exigen numerar los títulos. Al quitar las mayúsculas se respetan los nombres propios y las siglas que el trabajo escribe así en el texto.
 
 ### Qué hace (formato básico, títulos y limpieza)
 
@@ -49,6 +51,7 @@ Las dos opciones son independientes. Sin ellas solo se avisa, porque cambian el 
 - **Interlineado doble** sin espacio extra entre párrafos (en las tablas se respeta el sencillo, 1,5 o doble; las notas al pie no se tocan).
 - **Texto alineado a la izquierda**, sin justificar ni guiones automáticos.
 - **Sangría de 1,27 cm** en la primera línea de los párrafos de texto (no en títulos, listas, referencias, citas en bloque…).
+- **Título del trabajo** repetido al principio del texto, centrado y en negrita: se copia tal cual de la portada.
 - **Títulos** con los estilos de Word «Título 1» a «Título 5» y el formato APA de cada nivel (así aparecen en el panel de navegación), sin formato puesto a mano que lo contradiga. Avisa de los apartados con un solo subapartado y de los títulos numerados o en mayúsculas.
 - **Número de página** arriba a la derecha en todas las páginas, también en la portada, y nada más en el encabezado.
 - **Limpieza**: quita los párrafos vacíos usados para dejar espacio, los tabuladores o espacios usados como sangría y el color, el resaltado y el subrayado del texto (los enlaces se conservan). No toca la portada ni las tablas.

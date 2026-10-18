@@ -201,13 +201,37 @@ class CambioPrevisto:
         texto detrás (paso 4.3, con la opción --quitar-numeracion);
       - "cambiar_mayusculas": el texto pasa a ser `nuevo`, que solo puede
         diferir en mayúsculas y minúsculas de un texto escrito entero en
-        mayúsculas (paso 4.3, con la opción --quitar-mayusculas).
+        mayúsculas (paso 4.3, con la opción --quitar-mayusculas);
+      - "quitar_introduccion": se borra el párrafo, que solo puede ser el rótulo
+        «Introducción» (con o sin numeración y punto final) (paso 4.4, con la
+        opción --quitar-introduccion);
+      - "añadir_titulo": se añade antes del párrafo un párrafo nuevo con el
+        texto `nuevo`, que tiene que ser una copia exacta de los párrafos
+        `desde` del original, línea a línea y sin el espacio de los extremos ni
+        los saltos de página (el título del trabajo de la portada, y su
+        subtítulo, separados por un salto de línea) (paso 4.4).
     Si un párrafo tiene varios, se comprueban en el orden en que se anotaron.
     """
     parrafo: int     # número del párrafo en el original: desde 1, contando los de las tablas
-    accion: str      # "borrar", "recortar", "quitar_numeracion" o "cambiar_mayusculas"
+    accion: str      # "borrar", "recortar", "quitar_numeracion", "cambiar_mayusculas"…
     quitado: str = ""
     nuevo: str = ""
+    desde: tuple = ()   # en "añadir_titulo": los números de los párrafos copiados
+
+
+def lineas_de_texto(texto):
+    """Las líneas con texto de un párrafo, sin el espacio de los extremos (un salto de página cuenta como línea)."""
+    return [linea.strip() for linea in texto.split("\n") if linea.strip()]
+
+
+ROTULO_DE_INTRODUCCION = ("introducción", "introduccion")
+
+
+def es_rotulo_de_introduccion(texto):
+    """«Introducción», «1. Introducción», «INTRODUCCIÓN.»…"""
+    numeracion = NUMERACION_DE_APARTADO.match(texto)
+    resto = texto[numeracion.end():] if numeracion else texto
+    return resto.strip().rstrip(".:").strip().lower() in ROTULO_DE_INTRODUCCION
 
 
 def _solo_cambian_mayusculas(antes, despues):
@@ -223,7 +247,17 @@ def _aplicar_previstos(antes, previstos):
     previstos, y los problemas si un cambio previsto no es de los permitidos.
     """
     textos = list(antes.textos)
-    problemas, borrar = [], set()
+    problemas, borrar, insertar = [], set(), {}
+
+    def copia_de_la_portada(cambio):
+        """¿Es `nuevo` una copia exacta de párrafos seguidos del original, anteriores al lugar donde se añade?"""
+        desde = list(cambio.desde)
+        seguidos = desde and desde == list(range(desde[0], desde[0] + len(desde))) and desde[-1] < cambio.parrafo
+        if not seguidos or not all(antes.textos[n - 1][0].startswith(f"Párrafo {n}") for n in desde):
+            return False
+        copiadas = [linea for n in desde for linea in lineas_de_texto(antes.textos[n - 1][1])]
+        return bool(copiadas) and cambio.nuevo == "\n".join(copiadas)
+
     for cambio in previstos:
         i = cambio.parrafo - 1   # en la radiografía, los párrafos van primero y en orden
         if not 0 <= i < len(textos) or not textos[i][0].startswith(f"Párrafo {cambio.parrafo}"):
@@ -240,12 +274,22 @@ def _aplicar_previstos(antes, previstos):
             textos[i] = (donde, texto[len(cambio.quitado):])
         elif cambio.accion == "cambiar_mayusculas" and _solo_cambian_mayusculas(texto, cambio.nuevo):
             textos[i] = (donde, cambio.nuevo)
+        elif cambio.accion == "quitar_introduccion" and es_rotulo_de_introduccion(texto):
+            borrar.add(i)
+        elif cambio.accion == "añadir_titulo" and copia_de_la_portada(cambio):
+            insertar.setdefault(i, []).append(("Título del trabajo, añadido", cambio.nuevo))
         else:
             problemas.append(f"{donde}: una regla anotó «{cambio.accion}», pero eso cambiaría el texto "
-                             f"(«{_extracto(texto)}»). Solo se pueden borrar párrafos vacíos, quitar "
-                             "espacios o tabuladores del principio, quitar la numeración de un título y "
-                             "pasar a minúsculas un título escrito en mayúsculas.")
-    return [t for i, t in enumerate(textos) if i not in borrar], problemas
+                             f"(«{_extracto(texto)}»). Solo se pueden borrar párrafos vacíos y el rótulo "
+                             "«Introducción», quitar espacios o tabuladores del principio, quitar la numeración "
+                             "de un título, pasar a minúsculas un título escrito en mayúsculas y repetir el "
+                             "título de la portada al principio del texto.")
+    resultado = []
+    for i, t in enumerate(textos):
+        resultado += insertar.get(i, [])
+        if i not in borrar:
+            resultado.append(t)
+    return resultado, problemas
 
 
 def comparar(antes, despues, previstos=(), maximo=10):

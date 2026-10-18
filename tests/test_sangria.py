@@ -274,7 +274,9 @@ def test_las_reglas_reciben_la_estructura_del_original(tmp_path, monkeypatch):
     assert recibidas[0] == del_original
     assert recibidas[1] == [c for c in del_original if c[0] not in borrados],         "la misma estructura después de las reglas, sin los párrafos vacíos borrados"
     copia = docx.Document(str(tmp_path / "04_formato_caotico_APA.docx"))
-    de_la_copia = [(c.tipo, c.nivel) for c in estructura.clasificar(copia)]
+    # Sin el título del trabajo, que el paso 4.4 añade al principio del texto.
+    de_la_copia = [(c.tipo, c.nivel) for c in estructura.clasificar(copia)
+                   if Estilos(copia).nombre(Estilos(copia).estilo_de(c.elemento)).lower() != "title"]
     assert de_la_copia == [(c[1], c[2]) for c in recibidas[1]]
 
     sin_titulos = [r for r in pipeline.REGLAS if r is not titulos and r is not espia]

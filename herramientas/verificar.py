@@ -50,7 +50,9 @@ PAGINACION = "1.6 Número de página"
 TITULOS = "4.1 Estilos de título"
 FORMATO_TITULOS = "4.2 Formato de los títulos"
 TEXTO_TITULOS = "4.3 Numeración y mayúsculas de los títulos"
-REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS, TEXTO_TITULOS]
+TITULO_TRABAJO = "4.4 Título del trabajo"
+REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS, TEXTO_TITULOS,
+          TITULO_TRABAJO]
 
 MAXIMO_POR_REGLA = 8   # incumplimientos que se muestran de cada regla; del resto, solo cuántos son
 
@@ -155,7 +157,7 @@ class Verificacion:
     def comprobar(self):
         for comprobacion in (self.margenes, self.fuente, self.interlineado, self.alineacion,
                              self.sangria, self.paginacion, self.titulos, self.formato_de_titulos,
-                             self.texto_de_titulos):
+                             self.texto_de_titulos, self.titulo_del_trabajo):
             comprobacion()
         return self.resultado
 
@@ -448,8 +450,12 @@ class Verificacion:
                 return el
         return None
 
-    def _problemas_de_estilo(self, estilo, nivel):
-        """Lo que le falta a un estilo «Título N» para tener el formato APA de su nivel."""
+    def _problemas_de_estilo(self, estilo, nivel, esquema=True):
+        """
+        Lo que le falta a un estilo «Título N» para tener el formato APA de su nivel.
+        Con esquema=False (el estilo «Title» del título del trabajo), no debe tener
+        nivel de esquema: lo lleva el párrafo del título, no la portada que use el estilo.
+        """
         alineacion_apa, cursiva, primera_linea = titulos.FORMATO[nivel]
         problemas = []
         jc = self._del_estilo(estilo, "pPr", "jc", "val")
@@ -469,9 +475,11 @@ class Verificacion:
             problemas.append(f"la sangría no es la de su nivel ({esperada})")
         if not _activado(self._del_estilo(estilo, "pPr", "keepNext")):
             problemas.append("no tiene «Conservar con el siguiente»")
-        esquema = self._del_estilo(estilo, "pPr", "outlineLvl", "val")
-        if esquema is None or esquema.get(w("val")) != str(nivel - 1):
+        nivel_de_esquema = self._del_estilo(estilo, "pPr", "outlineLvl", "val")
+        if esquema and (nivel_de_esquema is None or nivel_de_esquema.get(w("val")) != str(nivel - 1)):
             problemas.append(f"no tiene el nivel de esquema {nivel} (el que usa el panel de navegación)")
+        if not esquema and nivel_de_esquema is not None and nivel_de_esquema.get(w("val")) != "9":
+            problemas.append("tiene nivel de esquema (la portada que lo use parecería un título)")
         color = self._del_estilo(estilo, "rPr", "color", "val")
         if color is not None and color.get(w("val")) != "auto":
             problemas.append("va en color")
@@ -496,9 +504,14 @@ class Verificacion:
                 if problemas:
                     self.fallo(TITULOS, f"El estilo «Título {nivel}» no tiene el formato APA: "
                                         f"{'; '.join(problemas)}.", "Estilos de Word")
+        for estilo in titulos.estilos_del_titulo_del_trabajo(self.doc):
+            problemas = self._problemas_de_estilo(estilo, 1, esquema=False)
+            if problemas:
+                self.fallo(TITULOS, f"El estilo «Título» (el del título del trabajo) no tiene el formato APA del "
+                                    f"nivel 1: {'; '.join(problemas)}.", "Estilos de Word")
 
         for c in self.clasificados:
-            if c.tipo != "titulo" or not c.nivel:
+            if c.tipo != "titulo" or not c.nivel or self._es_titulo_del_trabajo(c):
                 continue
             if self.estilos.estilo_de(c.elemento) in {e.get(w("styleId")) for e in por_nivel[c.nivel]}:
                 continue
@@ -528,6 +541,7 @@ class Verificacion:
         """
         con_estilo = {e.get(w("styleId")): nivel for nivel, estilos in titulos.estilos_de_titulo(self.doc).items()
                       for e in estilos}
+        con_estilo.update({e.get(w("styleId")): 1 for e in titulos.estilos_del_titulo_del_trabajo(self.doc)})
         for c in self.clasificados:
             if c.tipo != "titulo" or con_estilo.get(self.estilos.estilo_de(c.elemento)) != c.nivel:
                 continue
@@ -573,7 +587,7 @@ class Verificacion:
         incumplimientos, sino excepciones admitidas.
         """
         for c in self.clasificados:
-            if c.tipo != "titulo" or c.confianza == estructura.BAJA:
+            if c.tipo != "titulo" or c.confianza == estructura.BAJA or self._es_titulo_del_trabajo(c):
                 continue
             texto, info = texto_parrafo(c.elemento), self.por_elemento[c.elemento]
             if titulos.numeracion(texto):
@@ -582,6 +596,41 @@ class Verificacion:
             if titulos.en_mayusculas(texto):
                 self.excepcion_en(TEXTO_TITULOS, info, "Título en mayúsculas: se deja (se avisa en el informe; "
                                                        "--quitar-mayusculas lo cambia).")
+
+    # --- 4.4 Título del trabajo ---------------------------------------------------------------
+
+    def _es_titulo_del_trabajo(self, c):
+        """¿Es el título del trabajo repetido al principio del texto? (estilo «Title» fuera de la portada)"""
+        estilo = self.estilos.por_id.get(self.estilos.estilo_de(c.elemento))
+        return c.zona != "portada" and estilo is not None and \
+            titulos._nombre(estilo) == titulos.NOMBRE_DEL_ESTILO_DEL_TITULO
+
+    def titulo_del_trabajo(self):
+        """
+        El texto empieza con el título del trabajo: el párrafo con el estilo «Title» y
+        el mismo texto que la portada (su formato lo comprueban 4.1 y 4.2). Si no hay
+        portada, no se puede saber cuál es. El rótulo «Introducción» y el título en
+        mayúsculas se dejan a propósito: son excepciones admitidas.
+        """
+        portada = [texto_parrafo(c.elemento) for c in self.clasificados if c.zona == "portada" and c.texto]
+        primero = next((c for c in self.clasificados if c.zona == "cuerpo" and c.tipo != "vacio"), None)
+        if not portada or primero is None:
+            return
+        info = self.por_elemento[primero.elemento]
+        lineas = texto_parrafo(primero.elemento).split("\n")
+        en_la_portada = any(portada[i:i + len(lineas)] == lineas for i in range(len(portada)))
+        if not self._es_titulo_del_trabajo(primero) or not en_la_portada:
+            self.fallo_en(TITULO_TRABAJO, info, "El texto no empieza con el título del trabajo (el de la portada, "
+                                                "con el estilo «Título» de Word).")
+        elif any(titulos.en_mayusculas(linea) for linea in lineas):
+            self.excepcion_en(TITULO_TRABAJO, info, "El título del trabajo está en mayúsculas, como en la portada: "
+                                                    "se deja (se avisa en el informe).")
+        rotulo = next((c for c in self.clasificados if c.zona == "cuerpo" and c.tipo == "titulo"
+                       and not self._es_titulo_del_trabajo(c)), None)
+        if rotulo is not None and rotulo.nivel == 1 and documento.es_rotulo_de_introduccion(texto_parrafo(rotulo.elemento)):
+            self.excepcion_en(TITULO_TRABAJO, self.por_elemento[rotulo.elemento],
+                              "Rótulo «Introducción»: APA no lo usa, pero se deja (se avisa en el informe; "
+                              "--quitar-introduccion lo quita si no tiene subapartados).")
 
     def _capa_de_parrafo(self, p, etiqueta):
         """El primer `etiqueta` en las capas de formato del párrafo (directo, estilos, por defecto)."""
@@ -594,7 +643,7 @@ class Verificacion:
 
 def verificar(origen):
     """
-    Comprueba las reglas de la fase 1 y los títulos (pasos 4.1 y 4.2) en un documento: una ruta a un .docx o un
+    Comprueba las reglas de la fase 1 y los títulos (pasos 4.1 a 4.4) en un documento: una ruta a un .docx o un
     documento ya abierto con python-docx. Devuelve un Resultado.
     """
     if isinstance(origen, (str, Path)):
