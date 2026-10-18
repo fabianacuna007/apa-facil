@@ -17,7 +17,7 @@ from apa_facil import estructura, pipeline
 from apa_facil.documento import Estilos, comparar, radiografia, w
 from apa_facil.informe import Informe
 from apa_facil.reglas import titulos
-from herramientas.verificar import TITULOS, verificar
+from herramientas.verificar import FORMATO_TITULOS, TITULOS, verificar
 
 PRUEBAS = sorted((Path(__file__).resolve().parent.parent / "pruebas").glob("*.docx"))
 TEXTO = ("Este es un párrafo normal de texto con bastantes palabras para que no parezca un título "
@@ -62,8 +62,8 @@ def propio(estilo, capa, etiqueta, atributo="val"):
     return el.get(w(atributo), "activado")
 
 
-def problemas_del_verificador(doc):
-    return [h.mensaje for h in verificar(doc).incumplimientos if h.regla == TITULOS]
+def problemas_del_verificador(doc, regla=TITULOS):
+    return [h.mensaje for h in verificar(doc).incumplimientos if h.regla == regla]
 
 
 # --- Formato de los estilos ---------------------------------------------------------------
@@ -237,6 +237,156 @@ def test_el_verificador_ve_un_estilo_estropeado():
     ]
 
 
+# --- 4.2 Formato puesto a mano ----------------------------------------------------------------
+
+def titulo(doc, texto, nivel):
+    p = doc.add_heading(texto, level=nivel)
+    doc.add_paragraph(TEXTO)
+    return p
+
+
+def poner(el, etiqueta, **atributos):
+    """Añade a mano un ajuste de formato (w:jc, w:i…) a unas propiedades."""
+    hijo = el.makeelement(w(etiqueta), {w(k): v for k, v in atributos.items()})
+    el.append(hijo)
+    return hijo
+
+
+def formato_corregido(informe):
+    return [c for c in informe.cambios if "formato puesto a mano" in c]
+
+
+def test_alineacion_a_mano_que_contradice_el_nivel():
+    doc = documento_con_portada()
+    p = titulo(doc, "Participantes", 2)
+    poner(p._p.get_or_add_pPr(), "jc", val="center")
+    informe = aplicar(doc)
+    assert p._p.pPr.find(w("jc")) is None
+    assert formato_corregido(informe) == ["Títulos: se ha quitado el formato puesto a mano que no corresponde a "
+                                          "su nivel en 1 título («Participantes»: la alineación)."]
+    assert problemas_del_verificador(doc, FORMATO_TITULOS) == []
+
+
+def test_lo_que_coincide_con_el_nivel_no_se_cuenta():
+    doc = documento_con_portada()
+    p1 = titulo(doc, "Método", 1)
+    poner(p1._p.get_or_add_pPr(), "jc", val="center")
+    p4 = titulo(doc, "Edad.", 4)
+    p4._p.get_or_add_pPr().get_or_add_ind().set(w("firstLine"), "720")
+    for r in p1.runs:
+        r.bold = True
+    informe = aplicar(doc)
+    assert p1._p.pPr.find(w("jc")) is not None and p4._p.pPr.find(w("ind")) is not None
+    assert formato_corregido(informe) == []
+
+
+def test_sangria_a_mano_en_un_titulo():
+    doc = documento_con_portada()
+    p1 = titulo(doc, "Método", 1)
+    titulo(doc, "Muestra", 2)
+    titulo(doc, "Edad", 3)
+    p4 = titulo(doc, "Niños.", 4)
+    aplicar(doc)   # los estilos, ya con el formato APA
+    p1._p.get_or_add_pPr().get_or_add_ind().set(w("left"), "720")
+    p4._p.get_or_add_pPr().get_or_add_ind().set(w("firstLine"), "0")
+    assert problemas_del_verificador(doc, FORMATO_TITULOS) == [
+        "Título de nivel 1: la sangría no es la de su nivel.", "Título de nivel 4: la sangría no es la de su nivel."]
+    informe = aplicar(doc)
+    assert p1._p.pPr.find(w("ind")) is None and p4._p.pPr.find(w("ind")) is None
+    assert "«Método»: la sangría; «Niños.»: la sangría" in formato_corregido(informe)[0]
+    assert problemas_del_verificador(doc, FORMATO_TITULOS) == []
+
+
+def test_cursiva_en_todo_el_titulo_se_quita():
+    doc = documento_con_portada()
+    p = titulo(doc, "Método", 1)
+    p.runs[0].italic = True
+    informe = aplicar(doc)
+    assert p.runs[0].italic is None
+    assert "«Método»: la cursiva)" in formato_corregido(informe)[0]
+
+
+def test_cursiva_desactivada_en_un_nivel_3():
+    doc = documento_con_portada()
+    titulo(doc, "Método", 1)
+    titulo(doc, "Muestra", 2)
+    p = titulo(doc, "Edad", 3)
+    p.runs[0].italic = False
+    informe = aplicar(doc)
+    assert p.runs[0].italic is None
+    assert "«Edad»: la cursiva desactivada" in formato_corregido(informe)[0]
+
+
+def test_cursiva_en_una_parte_del_titulo_se_respeta():
+    """APA usa la cursiva dentro de un título para el título de un libro o el nombre de una especie."""
+    doc = documento_con_portada()
+    p = doc.add_heading("Lecturas de ", level=1)
+    p.add_run("Cien años de soledad").italic = True
+    doc.add_paragraph(TEXTO)
+    informe = aplicar(doc)
+    assert p.runs[1].italic is True
+    assert formato_corregido(informe) == []
+    assert problemas_del_verificador(doc, FORMATO_TITULOS) == []
+
+
+def test_negrita_desactivada_mayusculas_bordes_y_conservar():
+    doc = documento_con_portada()
+    p = titulo(doc, "Método", 1)
+    rpr = p.runs[0]._r.get_or_add_rPr()
+    poner(rpr, "b", val="0")
+    poner(rpr, "smallCaps")
+    ppr = p._p.get_or_add_pPr()
+    poner(ppr, "keepNext", val="0")
+    poner(ppr, "pBdr")
+    antes = radiografia(doc)
+    assert problemas_del_verificador(doc, FORMATO_TITULOS)
+    informe = aplicar(doc)
+    for etiqueta in ("b", "smallCaps"):
+        assert rpr.find(w(etiqueta)) is None, etiqueta
+    for etiqueta in ("keepNext", "pBdr"):
+        assert ppr.find(w(etiqueta)) is None, etiqueta
+    assert formato_corregido(informe) == [
+        "Títulos: se ha quitado el formato puesto a mano que no corresponde a su nivel en 1 título («Método»: los "
+        "bordes o el sombreado, «Conservar con el siguiente» desactivado, la negrita desactivada y las "
+        "mayúsculas forzadas)."]
+    assert comparar(antes, radiografia(doc)) == [], "las mayúsculas son formato: el texto no cambia"
+    assert problemas_del_verificador(doc, FORMATO_TITULOS) == []
+
+
+def test_el_verificador_ve_el_formato_a_mano():
+    doc = documento_con_portada()
+    p = titulo(doc, "Método", 1)
+    aplicar(doc)
+    p.runs[0].italic = True
+    p.runs[0].underline = True
+    assert problemas_del_verificador(doc, FORMATO_TITULOS) == ["Título de nivel 1: va en cursiva; va subrayado."]
+
+
+def test_numeracion_de_word_en_un_titulo_solo_se_avisa():
+    doc = documento_con_portada()
+    p = titulo(doc, "Método", 1)
+    p._p.get_or_add_pPr().get_or_add_numPr().get_or_add_numId().set(w("val"), "1")
+    informe = aplicar(doc)
+    assert p._p.pPr.find(w("numPr")) is not None
+    assert [a for a in informe.avisos if "numeración automática" in a] == [
+        "1 título («Método») lleva la numeración automática de Word. APA no numera los títulos, pero se ha "
+        "dejado así: quítala en Word si no la exige tu universidad."]
+
+
+def test_aviso_de_nivel_4_y_5_sin_punto_final():
+    """Decisión del propietario: el punto se añade en el paso 4.5; de momento, solo se avisa."""
+    doc = documento_con_portada()
+    for texto, nivel in (("Método", 1), ("Muestra", 2), ("Edad", 3), ("Niños", 4), ("Niñas.", 4),
+                         ("Menores de 6", 5), ("Mayores de 6.", 5)):
+        titulo(doc, texto, nivel)
+    antes = radiografia(doc)
+    avisos = [a for a in aplicar(doc).avisos if "punto" in a]
+    assert avisos == ["2 títulos de nivel 4 o 5 («Niños», «Menores de 6») no terminan en punto. En APA, estos "
+                      "títulos terminan en punto y el texto sigue en la misma línea; de momento se han dejado "
+                      "como estaban."]
+    assert comparar(antes, radiografia(doc)) == []
+
+
 # --- Avisos de estructura ---------------------------------------------------------------------
 
 def test_aviso_de_un_solo_subapartado():
@@ -297,7 +447,10 @@ def test_documentos_de_prueba(original, tmp_path):
 
     salida, informe = pipeline.procesar(original, tmp_path)
     copia = docx.Document(str(salida))
-    assert problemas_del_verificador(copia) == []
+    assert problemas_del_verificador(copia) == problemas_del_verificador(copia, FORMATO_TITULOS) == []
+    assert formato_corregido(informe) == [], "en los 5 documentos no queda formato a mano que contradiga"
+    sin_punto = [a for a in informe.avisos if "no terminan en punto" in a or "no termina en punto" in a]
+    assert len(sin_punto) == (1 if clave == "05" else 0)   # «a) Evolución demográfica» y «b) Percepción…»
     for nivel in titulos.NIVELES:
         ids = [e.get(w("styleId")) for e in titulos.estilos_de_titulo(copia)[nivel]]
         assert len(ids) == len(set(ids)), f"«Título {nivel}» sin duplicados"
@@ -310,5 +463,5 @@ def test_documentos_de_prueba(original, tmp_path):
             assert nombre == f"heading {c.nivel}", c.texto
 
     esperados = [f"El apartado «{a}» tiene un solo subapartado («{b}»)" for a, b in UN_SOLO_SUBAPARTADO[clave]]
-    de_estructura = [a for a in informe.avisos if "subapartado" in a or "nivel" in a]
+    de_estructura = [a for a in informe.avisos if "subapartado" in a or "se salta un nivel" in a]
     assert [a.split(". APA")[0] for a in de_estructura] == esperados

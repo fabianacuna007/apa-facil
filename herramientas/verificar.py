@@ -48,7 +48,8 @@ ALINEACION = "1.4 Alineación"
 SANGRIA = "1.5 Sangría"
 PAGINACION = "1.6 Número de página"
 TITULOS = "4.1 Estilos de título"
-REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS]
+FORMATO_TITULOS = "4.2 Formato de los títulos"
+REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS]
 
 MAXIMO_POR_REGLA = 8   # incumplimientos que se muestran de cada regla; del resto, solo cuántos son
 
@@ -152,7 +153,7 @@ class Verificacion:
 
     def comprobar(self):
         for comprobacion in (self.margenes, self.fuente, self.interlineado, self.alineacion,
-                             self.sangria, self.paginacion, self.titulos):
+                             self.sangria, self.paginacion, self.titulos, self.formato_de_titulos):
             comprobacion()
         return self.resultado
 
@@ -507,9 +508,71 @@ class Verificacion:
                 self.fallo_en(TITULOS, info, f"Título de nivel {c.nivel} sin el estilo «Título {c.nivel}» de Word.")
 
 
+    # --- 4.2 Formato de cada título ------------------------------------------------------
+
+    def _de_texto(self, r, p, etiqueta):
+        """¿Está activado en el fragmento un ajuste de texto como la negrita ("b")? (formato efectivo)"""
+        for capa in self.estilos._capas_texto(r, p):
+            el = capa.find(w(etiqueta)) if capa is not None else None
+            if el is not None:
+                return el
+        return None
+
+    def formato_de_titulos(self):
+        """
+        Cada título, con su formato final (estilo y formato puesto a mano): el
+        de su nivel. Los que no tienen su estilo ya salen en 4.1. Se admite la
+        cursiva en una parte del título (el título de un libro, una especie).
+        """
+        con_estilo = {e.get(w("styleId")): nivel for nivel, estilos in titulos.estilos_de_titulo(self.doc).items()
+                      for e in estilos}
+        for c in self.clasificados:
+            if c.tipo != "titulo" or con_estilo.get(self.estilos.estilo_de(c.elemento)) != c.nivel:
+                continue
+            p, info = c.elemento, self.por_elemento[c.elemento]
+            alineacion_apa, cursiva, primera_linea = titulos.FORMATO[c.nivel]
+            problemas = []
+            if {"start": "left"}.get(self._alineacion(p), self._alineacion(p)) != alineacion_apa:
+                problemas.append("no está centrado" if alineacion_apa == "center" else "no está a la izquierda")
+            # La sangría de primera línea de los niveles 1 a 3 ya la comprueba 1.5 (no deben llevarla).
+            sangrias = {a: _entero(self.estilos.parrafo(p, "ind", a)) for a in ("firstLine", "hanging", "left")}
+            if sangrias["hanging"] or sangrias["left"] or \
+                    (primera_linea and (sangrias["firstLine"] != primera_linea or
+                                        _entero(self.estilos.parrafo(p, "ind", "firstLineChars")))):
+                problemas.append("la sangría no es la de su nivel")
+            if not _activado(self._capa_de_parrafo(p, "keepNext")):
+                problemas.append("no tiene «Conservar con el siguiente»")
+            fragmentos = titulos.fragmentos_con_letras(p)
+            if any(not _activado(self._de_texto(r, p, "b")) for r in fragmentos):
+                problemas.append("no va todo en negrita")
+            if fragmentos and all(titulos.cursiva_efectiva(self.estilos, r, p) != cursiva for r in fragmentos):
+                problemas.append("no va en cursiva" if cursiva else "va en cursiva")
+            if any(_activado(self._de_texto(r, p, e)) for r in fragmentos for e in ("caps", "smallCaps")):
+                problemas.append("tiene mayúsculas forzadas")
+            enlaces = [r for r in fragmentos if next(r.iterancestors(w("hyperlink")), None) is not None]
+            if any(r not in enlaces and (self._de_texto(r, p, "color") is not None and
+                                         self._de_texto(r, p, "color").get(w("val")) not in (None, "auto"))
+                   for r in fragmentos):
+                problemas.append("va en color")
+            if any(r not in enlaces and (self._de_texto(r, p, "u") is not None and
+                                         self._de_texto(r, p, "u").get(w("val")) != "none")
+                   for r in fragmentos):
+                problemas.append("va subrayado")
+            if problemas:
+                self.fallo_en(FORMATO_TITULOS, info, f"Título de nivel {c.nivel}: {'; '.join(problemas)}.")
+
+    def _capa_de_parrafo(self, p, etiqueta):
+        """El primer `etiqueta` en las capas de formato del párrafo (directo, estilos, por defecto)."""
+        for capa in self.estilos._capas_parrafo(p):
+            el = capa.find(w(etiqueta)) if capa is not None else None
+            if el is not None:
+                return el
+        return None
+
+
 def verificar(origen):
     """
-    Comprueba las reglas de la fase 1 y los estilos de título en un documento: una ruta a un .docx o un
+    Comprueba las reglas de la fase 1 y los títulos (pasos 4.1 y 4.2) en un documento: una ruta a un .docx o un
     documento ya abierto con python-docx. Devuelve un Resultado.
     """
     if isinstance(origen, (str, Path)):

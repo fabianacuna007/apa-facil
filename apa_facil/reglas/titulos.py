@@ -1,6 +1,7 @@
 """
-Regla 4.1: estilos de título de Word (Título 1 a Título 5) con el formato APA,
-y cada título detectado con el estilo de su nivel.
+Reglas 4.1 y 4.2: estilos de título de Word (Título 1 a Título 5) con el
+formato APA, cada título detectado con el estilo de su nivel, y sin formato
+puesto a mano que contradiga ese nivel.
 
 Usar los estilos de Word, y no formato directo, mantiene el panel de
 navegación y el índice de Word, y es lo que recomienda APA por accesibilidad.
@@ -21,19 +22,30 @@ Qué hace:
   3. Pone a cada título del clasificador el estilo de su nivel. Los de confianza
      baja no: un párrafo de texto convertido por error en título se notaría
      mucho. Se avisa para que el estudiante lo revise.
-  4. Avisa de lo que APA desaconseja en la estructura: un apartado con un solo
-     subapartado y un título que se salta un nivel (de 1 a 3).
+  4. Paso 4.2: el formato puesto a mano en el párrafo manda sobre el estilo, así
+     que se quita el que contradice el nivel del título: una alineación o una
+     sangría distintas, bordes, sombreado, "Conservar con el siguiente"
+     desactivado, la negrita desactivada, las mayúsculas forzadas y la
+     cursiva. La cursiva solo si va en todo el título: en una parte (el nombre
+     de una especie, el título de un libro) APA la usa, y se deja. El color, el
+     subrayado y el resaltado ya los quita la limpieza (paso 3.5).
+  5. Avisa de lo que APA desaconseja en la estructura: un apartado con un solo
+     subapartado y un título que se salta un nivel (de 1 a 3). Y de lo que se
+     deja para más adelante: la numeración automática de Word en un título
+     (paso 4.3) y el punto final de los niveles 4 y 5, porque añadirlo modifica
+     el texto (decisión del propietario: se añade en el paso 4.5, al unir el
+     título con su párrafo).
 
-No toca el texto de los títulos (mayúsculas y numeración: paso 4.3) ni el
-formato directo de sus párrafos (paso 4.2). Los rótulos de referencias y de
+No toca el texto de los títulos (mayúsculas y numeración: paso 4.3). Los rótulos de referencias y de
 anexos tienen sus propios pasos (6.4 y 6.7); si ya usaban Título 1, cambian con
 el estilo, y quedan centrados y en negrita, como pide APA.
 """
 
 from docx.oxml import OxmlElement
 
-from apa_facil.documento import w
-from apa_facil.estructura import BAJA, clasificar
+from apa_facil.documento import Estilos, w
+from apa_facil.estructura import ACABA_EN_PUNTO, BAJA, clasificar
+from apa_facil.reglas.fuente import _letras, _runs_propios
 
 NIVELES = range(1, 6)
 SANGRIA = 720   # 1,27 cm en twips
@@ -161,6 +173,98 @@ def _dar_formato(doc, estilo, nivel):
                     _quitar_decoracion(otro.find(w("rPr")))
 
 
+# --- 4.2 Formato puesto a mano --------------------------------------------------------
+
+def _apagado(el):
+    return el is not None and el.get(w("val")) in ("0", "false", "off")
+
+
+def _encendido(el):
+    return el is not None and not _apagado(el)
+
+
+def _entero(valor):
+    try:
+        return int(valor)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _quitar(padre, *etiquetas):
+    """Quita los hijos con esas etiquetas. ¿Había alguno?"""
+    quitados = [el for etiqueta in etiquetas for el in padre.findall(w(etiqueta))]
+    for el in quitados:
+        padre.remove(el)
+    return bool(quitados)
+
+
+def _sangria_de_otro_nivel(ind, sangria):
+    """¿Dice la sangría del párrafo algo distinto de la de su nivel?"""
+    esperado = {"firstLine": sangria, "hanging": 0, "left": 0, "start": 0,
+                "firstLineChars": 0, "hangingChars": 0, "leftChars": 0, "startChars": 0}
+    return any(ind.get(w(atributo)) is not None and _entero(ind.get(w(atributo))) != valor
+               for atributo, valor in esperado.items())
+
+
+def cursiva_efectiva(estilos, r, p):
+    """¿Se ve en cursiva este fragmento? (formato directo → estilo de carácter → estilo del párrafo…)"""
+    for capa in estilos._capas_texto(r, p):
+        el = capa.find(w("i")) if capa is not None else None
+        if el is not None:
+            return not _apagado(el)
+    return False
+
+
+def fragmentos_con_letras(p):
+    return [r for r in _runs_propios(p) if _letras(r)]
+
+
+def _formato_a_mano(estilos, c):
+    """Quita del título lo puesto a mano que contradice su nivel. Devuelve qué se ha quitado."""
+    alineacion, cursiva, sangria = FORMATO[c.nivel]
+    p, quitado = c.elemento, []
+    ppr = p.find(w("pPr"))
+    if ppr is not None:
+        jc = ppr.find(w("jc"))
+        if jc is not None and {"start": "left"}.get(jc.get(w("val")), jc.get(w("val"))) != alineacion:
+            ppr.remove(jc)
+            quitado.append("la alineación")
+        ind = ppr.find(w("ind"))
+        if ind is not None and _sangria_de_otro_nivel(ind, sangria):
+            ppr.remove(ind)
+            quitado.append("la sangría")
+        if _quitar(ppr, *DECORACION_DE_PARRAFO):
+            quitado.append("los bordes o el sombreado")
+        if _apagado(ppr.find(w("keepNext"))):
+            _quitar(ppr, "keepNext")
+            quitado.append("«Conservar con el siguiente» desactivado")
+
+    fragmentos = fragmentos_con_letras(p)
+    negrita = mayusculas = False
+    for r in fragmentos:
+        rpr = r.find(w("rPr"))
+        if rpr is None:
+            continue
+        if _apagado(rpr.find(w("b"))):
+            negrita |= _quitar(rpr, "b", "bCs")
+        for etiqueta in ("caps", "smallCaps"):
+            if _encendido(rpr.find(w(etiqueta))):
+                mayusculas |= _quitar(rpr, etiqueta)
+    if negrita:
+        quitado.append("la negrita desactivada")
+    if mayusculas:
+        quitado.append("las mayúsculas forzadas")
+    # La cursiva, solo si todo el título la tiene al revés que su nivel: en una parte, APA la usa.
+    if fragmentos and all(cursiva_efectiva(estilos, r, p) != cursiva for r in fragmentos):
+        if any(r.find(w("rPr")) is not None and _quitar(r.find(w("rPr")), "i", "iCs") for r in fragmentos):
+            quitado.append("la cursiva desactivada" if cursiva else "la cursiva")
+    return quitado
+
+
+def _lista_de_palabras(partes):
+    return partes[0] if len(partes) == 1 else ", ".join(partes[:-1]) + " y " + partes[-1]
+
+
 def _extracto(texto, largo=40):
     return texto if len(texto) <= largo else texto[:largo].rstrip() + "…"
 
@@ -229,6 +333,10 @@ def aplicar(doc, opciones, informe, estructura=None):
             sin_estilo.append(c.texto)
             pstyle.set(w("val"), destino)
 
+    # 4. Sin formato puesto a mano que contradiga el nivel (paso 4.2).
+    estilos = Estilos(doc)
+    corregidos = [(c, quitado) for c in seguros for quitado in [_formato_a_mano(estilos, c)] if quitado]
+
     if seguros:   # sin títulos, arreglar los estilos no se nota: no se cuenta
         niveles = sorted(por_nivel)
         rango = (f"«Título {niveles[0]}»" if len(niveles) == 1
@@ -242,10 +350,28 @@ def aplicar(doc, opciones, informe, estructura=None):
                        f"({_lista(sin_estilo)}) usa{'n' if varios else ''} ahora el estilo de título de Word "
                        "de su nivel, así que aparece" + ("n" if varios else "") +
                        " en el panel de navegación de Word y en el índice automático, si lo usas.")
+    if corregidos:
+        varios = len(corregidos) > 1
+        ejemplos = "; ".join(f"«{_extracto(c.texto)}»: {_lista_de_palabras(q)}" for c, q in corregidos[:3])
+        informe.cambio(f"Títulos: se ha quitado el formato puesto a mano que no corresponde a su nivel en "
+                       f"{len(corregidos)} título{'s' if varios else ''} ({ejemplos}"
+                       f"{'…' if len(corregidos) > 3 else ''}).")
     for c in titulos:
         if c.confianza == BAJA:
             informe.aviso(f"«{_extracto(c.texto)}» parece un título, pero no es seguro, así que se ha dejado "
                           f"como estaba. Si es un título, ponle en Word el estilo «Título {c.nivel}».")
 
-    # 4. Estructura.
+    # 5. Avisos.
     _avisos_de_estructura(clasificados, informe)
+    numerados = [c.texto for c in seguros if c.elemento.find(f"{w('pPr')}/{w('numPr')}") is not None]
+    if numerados:
+        varios = len(numerados) > 1
+        informe.aviso(f"{len(numerados)} título{'s' if varios else ''} ({_lista(numerados)}) "
+                      f"lleva{'n' if varios else ''} la numeración automática de Word. APA no numera los "
+                      "títulos, pero se ha dejado así: quítala en Word si no la exige tu universidad.")
+    sin_punto = [c.texto for c in seguros if c.nivel >= 4 and not ACABA_EN_PUNTO.search(c.texto)]
+    if sin_punto:
+        varios = len(sin_punto) > 1
+        informe.aviso(f"{len(sin_punto)} título{'s' if varios else ''} de nivel 4 o 5 ({_lista(sin_punto)}) "
+                      f"no termina{'n' if varios else ''} en punto. En APA, estos títulos terminan en punto y "
+                      "el texto sigue en la misma línea; de momento se han dejado como estaban.")
