@@ -67,6 +67,10 @@ Todo va a doble espacio, y el texto empieza en una página nueva con el mismo t�
 
 Si el documento ya tiene una portada (la de la universidad), con tus datos **se sustituye** por la portada APA, logo incluido, y el informe dice qué líneas se han quitado. Con `--mantener-portada` se deja como está, con su diseño, y solo se hace que el texto empiece en una página nueva; muchas universidades exigen su propia portada, y APA lo admite. Sin datos de portada, también se mantiene. Tampoco se sustituye, y se avisa, si la portada lleva algo que podría ser del trabajo: una tabla, una nota, un campo o un párrafo largo.
 
+### Resumen y palabras clave
+
+Si el trabajo tiene resumen, se le da el formato de la guía oficial de APA: el rótulo «Resumen» centrado y en negrita al principio de su página, el texto sin sangría, y la línea de palabras clave con sangría, con el rótulo «*Palabras clave:*» en cursiva y las palabras en letra normal y sin punto al final. Lo que sigue al resumen empieza en una página nueva. Si el resumen pasa de 250 palabras, tiene varios párrafos o las palabras clave no son de tres a cinco o empiezan con mayúscula sin ser nombres propios, solo se avisa.
+
 ### Índice
 
 APA no usa el índice en los trabajos de estudiante, pero muchas universidades lo exigen, así que **se mantiene** y se avisa. Para quitarlo:

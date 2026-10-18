@@ -33,6 +33,7 @@ VERSION = 8   # versión del formato del JSON: se sube si cambia su estructura (
 NOMBRES = {
     "portada": "Portada",
     "indice": "Índice",
+    "resumen": "Resumen",
     "avisos": "Revisión del texto",
     "limpieza": "Limpieza de formato",
     "margenes": "Márgenes",

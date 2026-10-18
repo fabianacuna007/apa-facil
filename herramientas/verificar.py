@@ -41,6 +41,7 @@ from apa_facil.documento import ErrorDocumento, Estilos, cm, en_ecuacion, texto_
 from apa_facil.reglas import (alineacion, fuente, interlineado, margenes, paginacion, sangria,  # noqa: E402
                                titulos)
 from apa_facil.reglas import portada as regla_portada  # noqa: E402
+from apa_facil.reglas import resumen as resumen_regla  # noqa: E402
 
 MARGENES = "1.1 Márgenes"
 FUENTE = "1.2 Fuente"
@@ -57,8 +58,9 @@ MAYUSCULAS_TITULOS = "4.6 Mayúsculas de los títulos"
 PORTADA = "5.2 Portada"
 PORTADA_PROPIA = "5.3 Portada propia"
 INDICE = "5.4 Índice"
+RESUMEN = "5.5 Resumen"
 REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS, TEXTO_TITULOS,
-          TITULO_TRABAJO, TITULOS_EN_LINEA, MAYUSCULAS_TITULOS, PORTADA, PORTADA_PROPIA, INDICE]
+          TITULO_TRABAJO, TITULOS_EN_LINEA, MAYUSCULAS_TITULOS, PORTADA, PORTADA_PROPIA, INDICE, RESUMEN]
 
 MAXIMO_POR_REGLA = 8   # incumplimientos que se muestran de cada regla; del resto, solo cuántos son
 
@@ -164,7 +166,7 @@ class Verificacion:
         for comprobacion in (self.margenes, self.fuente, self.interlineado, self.alineacion,
                              self.sangria, self.paginacion, self.titulos, self.formato_de_titulos,
                              self.texto_de_titulos, self.titulo_del_trabajo, self.titulos_en_linea,
-                             self.mayusculas_de_titulos, self.portada, self.indice):
+                             self.mayusculas_de_titulos, self.portada, self.indice, self.resumen):
             comprobacion()
         return self.resultado
 
@@ -764,6 +766,51 @@ class Verificacion:
             self.excepcion_en(INDICE, self.por_elemento[primero.elemento],
                               "Índice: APA no lo usa en los trabajos de estudiante, pero se deja (se avisa en el "
                               "informe; --quitar-indice lo quita).")
+
+    # --- 5.5 Resumen ------------------------------------------------------------------------
+
+    def resumen(self):
+        """
+        Las palabras clave, como las describe la guía oficial de APA (Abstract and
+        Keywords Guide): el rótulo «Palabras clave:» en cursiva y sin negrita, las
+        palabras sin cursiva ni negrita y sin punto al final (el de una abreviatura se
+        admite: es una excepción). Y lo que sigue al resumen empieza en una página
+        nueva. El rótulo «Resumen» y la sangría ya los comprueban 4.1, 4.2 y 1.5.
+        """
+        resumen = [c for c in self.clasificados if c.zona == "resumen"]
+        if not resumen:
+            return
+        clave = next((c for c in resumen if documento.PALABRAS_CLAVE.match(c.texto)), None)
+        if clave is not None:
+            p, info = clave.elemento, self.por_elemento[clave.elemento]
+            texto = texto_parrafo(p)
+            rotulo = documento.PALABRAS_CLAVE.match(texto)
+            final = rotulo.end(2) if rotulo.group(2) else rotulo.end(1)
+            problemas, desde = [], 0
+            for r in fuente._runs_propios(p):
+                largo = sum(len(t.text or "") for t in r.iter(w("t")))
+                if not "".join(t.text or "" for t in r.iter(w("t"))).strip():
+                    desde += largo
+                    continue
+                cursiva, negrita = (_activado(self._de_texto(r, p, e)) for e in ("i", "b"))
+                if desde < final and (not cursiva or negrita):
+                    problemas.append("el rótulo tiene que ir en cursiva y sin negrita")
+                elif desde >= final and (cursiva or negrita):
+                    problemas.append("las palabras clave no van en cursiva ni en negrita")
+                desde += largo
+            if texto.endswith("."):
+                if resumen_regla.ABREVIATURA_FINAL.search(texto[rotulo.end():]):
+                    self.excepcion_en(RESUMEN, info, "Las palabras clave acaban en el punto de una abreviatura: se deja "
+                                                     "(se avisa en el informe).")
+                else:
+                    problemas.append("terminan en punto")
+            for problema in dict.fromkeys(problemas):
+                self.fallo_en(RESUMEN, info, f"Palabras clave: {problema}.")
+        ultimo = resumen[-1].elemento
+        siguiente = next((i for i in self.principales if i.numero > self.por_elemento[ultimo].numero), None)
+        if siguiente is not None and not regla_portada._termina_en_salto(ultimo) and \
+                not alineacion._salto_antes(self.estilos, siguiente.p):
+            self.fallo_en(RESUMEN, self.por_elemento[ultimo], "Lo que sigue al resumen no empieza en una página nueva.")
 
     def _con_estilo_title(self, p):
         estilo = self.estilos.por_id.get(self.estilos.estilo_de(p))

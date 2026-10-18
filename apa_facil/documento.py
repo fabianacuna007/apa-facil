@@ -201,6 +201,10 @@ def es_parte_de_un_indice(texto):
             or bool(LINEA_DE_INDICE.match(limpio)))
 
 
+# Palabras clave del resumen (paso 5.5): «Palabras clave:» (o «Keywords:») al principio del párrafo.
+PALABRAS_CLAVE = re.compile(r"^\s*(palabras\s+clave|keywords|key\s+words)\s*(:)?\s*", re.IGNORECASE)
+
+
 # Numeración de apartado al principio de un título, con el espacio que la sigue:
 # "1. ", "1.1 ", "2.3.1. ", "1) ", "IV. ", "a) ". Un número sin punto ni paréntesis
 # ("20 años de…") no lo es: es parte del título.
@@ -248,7 +252,10 @@ class CambioPrevisto:
       - "quitar_indice": se borra el párrafo, que tiene que poder ser parte de
         un índice (es_parte_de_un_indice: vacío, el rótulo o una línea con su
         número de página), y los párrafos quitados así van seguidos (paso 5.4,
-        con la opción --quitar-indice).
+        con la opción --quitar-indice);
+      - "quitar_punto_final": se quita el punto del final del párrafo, que solo
+        puede ser la línea de las palabras clave («Palabras clave: …») y acabar
+        justo en ese punto (paso 5.5).
     Si un párrafo tiene varios, se comprueban en el orden en que se anotaron.
     """
     parrafo: int     # número del párrafo en el original: desde 1, contando los de las tablas
@@ -337,6 +344,9 @@ def _aplicar_previstos(antes, previstos):
                                                for n, texto in enumerate(cambio.parrafos, start=1)]
         elif cambio.accion == "quitar_indice" and es_parte_de_un_indice(texto):
             indice_quitado.append((i, cambio.parrafo, donde))   # seguidos: se comprueba al final
+        elif cambio.accion == "quitar_punto_final" and cambio.quitado == "." and texto.endswith(".") \
+                and PALABRAS_CLAVE.match(texto):
+            textos[i] = (donde, texto[:-1])
         elif cambio.accion == "quitar_portada":
             portada_quitada.append((i, cambio.parrafo, donde, texto))   # se comprueba entera, al final
         elif cambio.accion == "añadir_al_final" and texto.strip() and not texto[-1].isspace() and \
@@ -348,8 +358,8 @@ def _aplicar_previstos(antes, previstos):
                              "«Introducción», quitar espacios o tabuladores del principio, quitar la numeración "
                              "de un título, cambiar las mayúsculas de un título, repetir el "
                              "título de la portada al principio del texto, poner el punto final a los títulos "
-                             "de nivel 4 y 5, añadir la portada APA con los datos del estudiante y quitar el "
-                             "índice si se pide.")
+                             "de nivel 4 y 5, añadir la portada APA con los datos del estudiante, quitar el "
+                             "índice si se pide y el punto final de las palabras clave.")
 
     if indice_quitado:
         numeros = sorted(n for _, n, _ in indice_quitado)
