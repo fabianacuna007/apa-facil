@@ -11,14 +11,15 @@ from pathlib import Path
 from apa_facil import datos_portada, documento, estructura
 from apa_facil.documento import ErrorDocumento
 from apa_facil.informe import Informe
-from apa_facil.reglas import (alineacion, avisos, fuente, interlineado, limpieza, margenes, paginacion, portada,
-                              sangria, titulos)
+from apa_facil.reglas import (alineacion, avisos, fuente, indice, interlineado, limpieza, margenes, paginacion,
+                              portada, sangria, titulos)
 
 # En este orden. Los avisos van primero: después la regla de fuente lo iguala todo.
 # Los títulos, después de la sangría: esa regla quita la sangría de primera línea
 # de todos los estilos, y los títulos de nivel 4 y 5 la llevan. La portada, después de los
 # títulos: usa el estilo «Título» con el formato que le da el paso 4.4.
-REGLAS = [avisos, limpieza, margenes, fuente, interlineado, alineacion, sangria, titulos, portada, paginacion]
+REGLAS = [avisos, limpieza, margenes, fuente, interlineado, alineacion, sangria, titulos, portada, indice,
+          paginacion]
 
 
 def procesar(entrada, carpeta_salida=None, opciones=None):

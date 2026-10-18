@@ -192,7 +192,7 @@ def test_opciones_de_los_titulos(tmp_path, capsys):
     datos = json.loads((tmp_path / f"{original.stem}_APA.json").read_text(encoding="utf-8"))
     assert datos["opciones"] == {"fuente": None, "quitar_numeracion": True, "titulos_tal_cual": False,
                                  "quitar_introduccion": False,
-                                 "titulo_tal_cual": False, "mantener_portada": False,
+                                 "titulo_tal_cual": False, "mantener_portada": False, "quitar_indice": False,
                                  "portada": None}
 
 

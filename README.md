@@ -67,6 +67,16 @@ Todo va a doble espacio, y el texto empieza en una página nueva con el mismo t�
 
 Si el documento ya tiene una portada (la de la universidad), con tus datos **se sustituye** por la portada APA, logo incluido, y el informe dice qué líneas se han quitado. Con `--mantener-portada` se deja como está, con su diseño, y solo se hace que el texto empiece en una página nueva; muchas universidades exigen su propia portada, y APA lo admite. Sin datos de portada, también se mantiene. Tampoco se sustituye, y se avisa, si la portada lleva algo que podría ser del trabajo: una tabla, una nota, un campo o un párrafo largo.
 
+### Índice
+
+APA no usa el índice en los trabajos de estudiante, pero muchas universidades lo exigen, así que **se mantiene** y se avisa. Para quitarlo:
+
+```
+python -m apa_facil pruebas\05_tfg_completo.docx --quitar-indice
+```
+
+Se quita el índice automático de Word o el escrito a mano (el rótulo «Índice» y sus líneas con número de página), sin dejar una página en blanco ni perder secciones. Si algo de lo que parece índice no tiene forma de línea de índice, no se quita nada y se avisa.
+
 ### Qué hace (formato básico, títulos y limpieza)
 
 - **Márgenes** de 2,54 cm en todas las secciones; las páginas horizontales siguen horizontales.

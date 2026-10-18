@@ -187,6 +187,20 @@ def _extracto(texto, desde=0, largo=60):
     return ("…" if inicio else "") + trozo + ("…" if inicio + largo < len(texto) else "")
 
 
+# Índice (paso 5.4): su rótulo y sus líneas («1. Introducción……3», «Método\t5»): texto, un
+# separador de índice (tabulador, puntos o varios espacios) y el número de página.
+ROTULOS_DE_INDICE = {"índice", "indice", "índice general", "indice general", "contenido", "contenidos",
+                     "tabla de contenido", "tabla de contenidos", "sumario", "table of contents"}
+LINEA_DE_INDICE = re.compile(r"^\S.*?(?:\t+|\s*(?:[.·_]{2,}|…+)\s*|\s{2,})(\d{1,4}|[ivxlcdm]{1,7})$", re.IGNORECASE)
+
+
+def es_parte_de_un_indice(texto):
+    """¿Puede ser un párrafo de un índice? Vacío, su rótulo («Índice», «Contenido»…) o una línea con su página."""
+    limpio = texto.strip()
+    return (not limpio or " ".join(limpio.split()).rstrip(":.").lower() in ROTULOS_DE_INDICE
+            or bool(LINEA_DE_INDICE.match(limpio)))
+
+
 # Numeración de apartado al principio de un título, con el espacio que la sigue:
 # "1. ", "1.1 ", "2.3.1. ", "1) ", "IV. ", "a) ". Un número sin punto ni paréntesis
 # ("20 años de…") no lo es: es parte del título.
@@ -230,7 +244,11 @@ class CambioPrevisto:
         que tenía el documento: los párrafos quitados son los primeros del
         documento, seguidos (sin tablas en medio), cortos (menos de 25
         palabras), y en su lugar se añade la portada APA ("añadir_portada"). Sus
-        imágenes (el logo) se descuentan del recuento (paso 5.3).
+        imágenes (el logo) se descuentan del recuento (paso 5.3);
+      - "quitar_indice": se borra el párrafo, que tiene que poder ser parte de
+        un índice (es_parte_de_un_indice: vacío, el rótulo o una línea con su
+        número de página), y los párrafos quitados así van seguidos (paso 5.4,
+        con la opción --quitar-indice).
     Si un párrafo tiene varios, se comprueban en el orden en que se anotaron.
     """
     parrafo: int     # número del párrafo en el original: desde 1, contando los de las tablas
@@ -264,7 +282,7 @@ def _aplicar_previstos(antes, previstos):
     """
     textos = list(antes.textos)
     problemas, borrar, insertar = [], set(), {}
-    titulo_de_la_portada, portada_quitada = None, []
+    titulo_de_la_portada, portada_quitada, indice_quitado = None, [], []
 
     def portada_de_los_datos(cambio):
         """¿Son `parrafos` justo la portada APA que sale de `datos`, al principio del documento?"""
@@ -317,6 +335,8 @@ def _aplicar_previstos(antes, previstos):
             # Delante de todo, también del título del texto si se añade en el mismo sitio.
             insertar.setdefault(i, [])[0:0] = [(f"Portada APA, párrafo {n} (añadido)", texto)
                                                for n, texto in enumerate(cambio.parrafos, start=1)]
+        elif cambio.accion == "quitar_indice" and es_parte_de_un_indice(texto):
+            indice_quitado.append((i, cambio.parrafo, donde))   # seguidos: se comprueba al final
         elif cambio.accion == "quitar_portada":
             portada_quitada.append((i, cambio.parrafo, donde, texto))   # se comprueba entera, al final
         elif cambio.accion == "añadir_al_final" and texto.strip() and not texto[-1].isspace() and \
@@ -328,8 +348,16 @@ def _aplicar_previstos(antes, previstos):
                              "«Introducción», quitar espacios o tabuladores del principio, quitar la numeración "
                              "de un título, cambiar las mayúsculas de un título, repetir el "
                              "título de la portada al principio del texto, poner el punto final a los títulos "
-                             "de nivel 4 y 5 y añadir la portada APA con los datos del estudiante.")
+                             "de nivel 4 y 5, añadir la portada APA con los datos del estudiante y quitar el "
+                             "índice si se pide.")
 
+    if indice_quitado:
+        numeros = sorted(n for _, n, _ in indice_quitado)
+        if numeros == list(range(numeros[0], numeros[0] + len(numeros))):
+            borrar.update(i for i, _, _ in indice_quitado)
+        else:
+            problemas.append(f"{indice_quitado[0][2]}: una regla anotó «quitar_indice», pero los párrafos quitados no "
+                             "van seguidos: solo se puede quitar un índice entero.")
     imagenes_quitadas = 0
     if portada_quitada:
         numeros = sorted(n for _, n, _, _ in portada_quitada)

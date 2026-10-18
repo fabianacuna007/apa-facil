@@ -35,7 +35,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Optional
 
-from apa_facil.documento import MC, WP, Estilos, texto_parrafo, w
+from apa_facil.documento import MC, ROTULOS_DE_INDICE, WP, Estilos, texto_parrafo, w
 from apa_facil.reglas.alineacion import _salto_antes, _salto_en
 
 TIPOS = ("portada", "indice", "titulo", "cuerpo", "lista", "leyenda_tabla", "leyenda_figura",
@@ -54,8 +54,6 @@ ROTULOS_DE_REFERENCIAS = {"referencias", "referencia", "referencias bibliográfi
                           "bibliografia y webgrafia", "obras citadas", "lista de referencias",
                           "references", "bibliography"}
 ROTULOS_DE_RESUMEN = {"resumen", "abstract"}
-ROTULOS_DE_INDICE = {"índice", "indice", "índice general", "indice general", "contenido", "contenidos",
-                     "tabla de contenido", "tabla de contenidos", "sumario", "table of contents"}
 ANEXO = re.compile(r"^(anexo|anexos|apéndice|apendice|apéndices|apendices)\b", re.IGNORECASE)
 LISTA_A_MANO = re.compile(r"^\s*([•·▪◦‣●○■□\-–—*]|\(?\d{1,3}[.)]|\(?[a-zA-Z]\))\s")
 LEYENDA_DE_TABLA = re.compile(r"^(tabla|cuadro)\s+[A-Z]?\d", re.IGNORECASE)

@@ -56,8 +56,9 @@ TITULOS_EN_LINEA = "4.5 Títulos de nivel 4 y 5 en línea"
 MAYUSCULAS_TITULOS = "4.6 Mayúsculas de los títulos"
 PORTADA = "5.2 Portada"
 PORTADA_PROPIA = "5.3 Portada propia"
+INDICE = "5.4 Índice"
 REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS, TEXTO_TITULOS,
-          TITULO_TRABAJO, TITULOS_EN_LINEA, MAYUSCULAS_TITULOS, PORTADA, PORTADA_PROPIA]
+          TITULO_TRABAJO, TITULOS_EN_LINEA, MAYUSCULAS_TITULOS, PORTADA, PORTADA_PROPIA, INDICE]
 
 MAXIMO_POR_REGLA = 8   # incumplimientos que se muestran de cada regla; del resto, solo cuántos son
 
@@ -163,7 +164,7 @@ class Verificacion:
         for comprobacion in (self.margenes, self.fuente, self.interlineado, self.alineacion,
                              self.sangria, self.paginacion, self.titulos, self.formato_de_titulos,
                              self.texto_de_titulos, self.titulo_del_trabajo, self.titulos_en_linea,
-                             self.mayusculas_de_titulos, self.portada):
+                             self.mayusculas_de_titulos, self.portada, self.indice):
             comprobacion()
         return self.resultado
 
@@ -749,6 +750,20 @@ class Verificacion:
         if not empieza_pagina:
             self.fallo_en(regla, self.por_elemento[ultimo], "Después de la portada, el texto no empieza en una "
                                                             "página nueva.")
+
+    # --- 5.4 Índice -------------------------------------------------------------------------
+
+    def indice(self):
+        """
+        APA no usa el índice en los trabajos de estudiante (Order of pages), pero muchas
+        universidades lo exigen: por defecto se deja (--quitar-indice lo quita). Por eso
+        no es un incumplimiento, sino una excepción admitida.
+        """
+        primero = next((c for c in self.clasificados if c.zona == "indice"), None)
+        if primero is not None:
+            self.excepcion_en(INDICE, self.por_elemento[primero.elemento],
+                              "Índice: APA no lo usa en los trabajos de estudiante, pero se deja (se avisa en el "
+                              "informe; --quitar-indice lo quita).")
 
     def _con_estilo_title(self, p):
         estilo = self.estilos.por_id.get(self.estilos.estilo_de(p))

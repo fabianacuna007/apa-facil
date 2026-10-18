@@ -2,7 +2,7 @@
 Línea de comandos:
 
     python -m apa_facil mi_trabajo.docx [otro.docx ...] [--fuente "Arial"]
-                        [--quitar-numeracion] [--titulos-tal-cual] [--quitar-introduccion]
+                        [--quitar-numeracion] [--titulos-tal-cual] [--quitar-introduccion] [--quitar-indice]
                         [--datos datos.json] [--titulo "…"] [--autor "…"] … [--fecha 16/10/2026]
                         [--titulo-tal-cual] [--mantener-portada]
     python -m apa_facil mi_trabajo.docx --diagnostico
@@ -111,6 +111,9 @@ def crear_ordenes():
     portada.add_argument("--titulo-tal-cual", action="store_true",
                          help="deja el título de la portada como lo escribes. Sin esta opción lleva mayúscula "
                               "inicial en las palabras principales, como pide APA")
+    ordenes.add_argument("--quitar-indice", action="store_true",
+                         help="quita el índice, que APA no usa en los trabajos de estudiante. Sin esta opción "
+                              "se deja y se avisa, porque muchas universidades lo exigen")
     ordenes.add_argument("--diagnostico", action="store_true",
                          help="no genera ninguna copia: muestra qué es cada párrafo (título, cuerpo, lista…), "
                               "con qué confianza y por qué, para revisar cómo se ha entendido el documento")
@@ -185,7 +188,7 @@ def main(argv=None, carpeta_salida=None):
     args = ordenes.parse_args(argv)
     opciones = {"fuente": args.fuente} if args.fuente else {}
     for opcion in ("quitar_numeracion", "titulos_tal_cual", "quitar_introduccion", "titulo_tal_cual",
-                   "mantener_portada"):
+                   "mantener_portada", "quitar_indice"):
         if getattr(args, opcion):
             opciones[opcion] = True
 
@@ -194,6 +197,7 @@ def main(argv=None, carpeta_salida=None):
         for nombre, usada in (("--fuente", args.fuente), ("--quitar-numeracion", args.quitar_numeracion),
                               ("--titulos-tal-cual", args.titulos_tal_cual),
                               ("--mantener-portada", args.mantener_portada),
+                              ("--quitar-indice", args.quitar_indice),
                               ("--quitar-introduccion", args.quitar_introduccion),
                               ("--titulo-tal-cual", args.titulo_tal_cual)):
             if usada:

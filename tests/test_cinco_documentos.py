@@ -24,7 +24,8 @@ import pytest
 
 from apa_facil import estructura, pipeline
 from apa_facil.documento import Estilos, comparar, radiografia
-from herramientas.verificar import ALINEACION, PORTADA_PROPIA, TEXTO_TITULOS, TITULO_TRABAJO, mostrar, verificar
+from herramientas.verificar import (ALINEACION, INDICE, PORTADA_PROPIA, TEXTO_TITULOS, TITULO_TRABAJO, mostrar,
+                                   verificar)
 
 CARPETA = Path(__file__).resolve().parent.parent / "pruebas"
 PRUEBAS = sorted(CARPETA.glob("*.docx"))
@@ -44,7 +45,8 @@ EXCEPCIONES = {
     "04_formato_caotico": {(PORTADA_PROPIA, 1)},
     "05_tfg_completo": {(ALINEACION, 8), (ALINEACION, 9), (ALINEACION, 10)}   # portada: Autora, Tutor, Convocatoria
                        | {(TEXTO_TITULOS, n) for n in (20, 23, 24, 26, 27, 29, 31, 35, 37, 38, 63, 65)}
-                       | {(TITULO_TRABAJO, 20), (PORTADA_PROPIA, 2)},         # «1. Introducción»; la portada (sin logo)
+                       | {(TITULO_TRABAJO, 20), (PORTADA_PROPIA, 2)}          # «1. Introducción»; la portada
+                       | {(INDICE, 16)},                                      # el índice (paso 5.4)
 }
 
 

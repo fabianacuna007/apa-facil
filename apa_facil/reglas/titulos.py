@@ -584,7 +584,7 @@ def _texto_de_titulos(doc, opciones, informe, clasificados, seguros):
                        "el trabajo escribe así en el texto; revisa que hayan quedado bien. Si prefieres dejar los "
                        "títulos como estaban, usa la opción --titulos-tal-cual.")
     avisar_dudosas(informe, dudosas, "los títulos")
-    indice = any(c.tipo == "indice" for c in clasificados)
+    indice = any(c.tipo == "indice" for c in clasificados) and not opciones.get("quitar_indice")
     if cambiados and indice and doc.settings.element.find(w("updateFields")) is None:
         informe.aviso("El índice todavía muestra los títulos como estaban. Actualízalo en Word: clic derecho sobre "
                       "el índice, «Actualizar campos» y «Actualizar toda la tabla» (si lo escribiste a mano, "
