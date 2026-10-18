@@ -52,8 +52,9 @@ FORMATO_TITULOS = "4.2 Formato de los títulos"
 TEXTO_TITULOS = "4.3 Numeración y mayúsculas de los títulos"
 TITULO_TRABAJO = "4.4 Título del trabajo"
 TITULOS_EN_LINEA = "4.5 Títulos de nivel 4 y 5 en línea"
+PORTADA = "5.2 Portada"
 REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS, TEXTO_TITULOS,
-          TITULO_TRABAJO, TITULOS_EN_LINEA]
+          TITULO_TRABAJO, TITULOS_EN_LINEA, PORTADA]
 
 MAXIMO_POR_REGLA = 8   # incumplimientos que se muestran de cada regla; del resto, solo cuántos son
 
@@ -158,7 +159,8 @@ class Verificacion:
     def comprobar(self):
         for comprobacion in (self.margenes, self.fuente, self.interlineado, self.alineacion,
                              self.sangria, self.paginacion, self.titulos, self.formato_de_titulos,
-                             self.texto_de_titulos, self.titulo_del_trabajo, self.titulos_en_linea):
+                             self.texto_de_titulos, self.titulo_del_trabajo, self.titulos_en_linea,
+                             self.portada):
             comprobacion()
         return self.resultado
 
@@ -668,6 +670,55 @@ class Verificacion:
                 problemas.append("no termina en punto")
             if problemas:
                 self.fallo_en(TITULOS_EN_LINEA, info, f"Título de nivel {c.nivel}: {'; '.join(problemas)}.")
+
+    # --- 5.2 Portada -------------------------------------------------------------------------
+
+    def portada(self):
+        """
+        La portada APA de estudiante (la que genera el paso 5.2: empieza con líneas en
+        blanco y sigue con un párrafo con el estilo «Title»), como la describe la web
+        oficial de APA: el título 3 o 4 líneas por debajo del margen superior, centrado
+        y en negrita; una sola línea en blanco; debajo, cada dato centrado en su línea,
+        sin líneas en blanco entre ellos; y el texto en una página nueva. El doble
+        espacio y la sangría ya los comprueban 1.3 y 1.5. Otras portadas (las de la
+        universidad) no se comprueban aquí: las trata el paso 5.3.
+        """
+        portada = [c for c in self.clasificados if c.zona == "portada"]
+        blancos = next((n for n, c in enumerate(portada) if c.tipo != "vacio"), len(portada))
+        if not blancos or blancos == len(portada) or not self._con_estilo_title(portada[blancos].elemento):
+            return
+        titulo, debajo = portada[blancos], portada[blancos + 1:]
+        info = self.por_elemento[titulo.elemento]
+        if blancos not in (3, 4):
+            self.fallo_en(PORTADA, info, f"El título va {blancos} línea(s) por debajo del margen superior "
+                                         "(APA: 3 o 4).")
+        problemas = []
+        if self._alineacion(titulo.elemento) != "center":
+            problemas.append("no está centrado")
+        runs = [r for r in fuente._runs_propios(titulo.elemento) if fuente._letras(r)]
+        if not runs or not all(_activado(self._de_texto(r, titulo.elemento, "b")) for r in runs):
+            problemas.append("no está en negrita")
+        if problemas:
+            self.fallo_en(PORTADA, info, f"Título de la portada: {' y '.join(problemas)}.")
+        if not debajo or debajo[0].tipo != "vacio" or (len(debajo) > 1 and debajo[1].tipo == "vacio"):
+            self.fallo_en(PORTADA, info, "Entre el título y los autores tiene que haber una sola línea en blanco.")
+        for c in debajo[1:]:
+            datos = self.por_elemento[c.elemento]
+            if c.tipo == "vacio":
+                self.fallo_en(PORTADA, datos, "Línea en blanco entre los datos de la portada (no debe haberla).")
+            elif self._alineacion(c.elemento) != "center":
+                self.fallo_en(PORTADA, datos, "Dato de la portada sin centrar.")
+        ultimo = portada[-1].elemento
+        siguiente = next((i for i in self.principales if i.numero > self.por_elemento[ultimo].numero), None)
+        empieza_pagina = alineacion._salto_en(ultimo) or (
+            siguiente is not None and alineacion._salto_antes(self.estilos, siguiente.p))
+        if not empieza_pagina:
+            self.fallo_en(PORTADA, self.por_elemento[ultimo], "Después de la portada, el texto no empieza en una "
+                                                              "página nueva.")
+
+    def _con_estilo_title(self, p):
+        estilo = self.estilos.por_id.get(self.estilos.estilo_de(p))
+        return estilo is not None and titulos._nombre(estilo) == titulos.NOMBRE_DEL_ESTILO_DEL_TITULO
 
     def _capa_de_parrafo(self, p, etiqueta):
         """El primer `etiqueta` en las capas de formato del párrafo (directo, estilos, por defecto)."""

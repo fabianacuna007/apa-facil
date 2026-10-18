@@ -24,8 +24,8 @@ from dataclasses import dataclass, field
 
 from apa_facil.documento import CambioPrevisto, ErrorDocumento
 
-VERSION = 4   # versión del formato del JSON: se sube si cambia su estructura (2 y 3: opciones de los títulos;
-              # 4: datos de la portada)
+VERSION = 5   # versión del formato del JSON: se sube si cambia su estructura (2 y 3: opciones de los títulos;
+              # 4: datos de la portada; 5: --titulo-tal-cual)
 
 # Nombre legible de cada regla (el módulo de apa_facil/reglas/ que la aplica).
 NOMBRES = {
@@ -74,9 +74,10 @@ class Informe:
     def error(self, mensaje):
         self.entradas.append(Entrada("error", self.regla, mensaje))
 
-    def cambio_previsto(self, parrafo, accion, quitado="", nuevo="", desde=()):
+    def cambio_previsto(self, parrafo, accion, quitado="", nuevo="", desde=(), parrafos=(), datos=None):
         """Anota un cambio de contenido hecho a propósito (ver documento.CambioPrevisto)."""
-        self.cambios_previstos.append(CambioPrevisto(parrafo, accion, quitado, nuevo, tuple(desde)))
+        self.cambios_previstos.append(CambioPrevisto(parrafo, accion, quitado, nuevo, tuple(desde),
+                                                     tuple(parrafos), datos))
 
     def _mensajes(self, tipo):
         return [e.mensaje for e in self.entradas if e.tipo == tipo]
@@ -108,6 +109,7 @@ class Informe:
                          "quitar_numeracion": bool(self.opciones.get("quitar_numeracion")),
                          "quitar_mayusculas": bool(self.opciones.get("quitar_mayusculas")),
                          "quitar_introduccion": bool(self.opciones.get("quitar_introduccion")),
+                         "titulo_tal_cual": bool(self.opciones.get("titulo_tal_cual")),
                          "portada": self._portada()},
             "resumen": {clave: sum(1 for e in self.entradas if e.tipo == tipo) for tipo, clave, _ in GRUPOS},
         }

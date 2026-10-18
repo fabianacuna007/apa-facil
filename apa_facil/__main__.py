@@ -4,6 +4,7 @@ Línea de comandos:
     python -m apa_facil mi_trabajo.docx [otro.docx ...] [--fuente "Arial"]
                         [--quitar-numeracion] [--quitar-mayusculas] [--quitar-introduccion]
                         [--datos datos.json] [--titulo "…"] [--autor "…"] … [--fecha 16/10/2026]
+                        [--titulo-tal-cual]
     python -m apa_facil mi_trabajo.docx --diagnostico
 
 Guarda cada copia en salida/ como nombre_APA.docx y muestra un resumen de lo
@@ -102,6 +103,9 @@ def crear_ordenes():
                          help="profesor o profesora; se repite si son varios")
     portada.add_argument("--fecha", metavar="FECHA",
                          help=f"fecha de entrega: {datos_portada.FORMATOS_FECHA.replace('«', '').replace('»', '')}")
+    portada.add_argument("--titulo-tal-cual", action="store_true",
+                         help="deja el título de la portada como lo escribes. Sin esta opción lleva mayúscula "
+                              "inicial en las palabras principales, como pide APA")
     ordenes.add_argument("--diagnostico", action="store_true",
                          help="no genera ninguna copia: muestra qué es cada párrafo (título, cuerpo, lista…), "
                               "con qué confianza y por qué, para revisar cómo se ha entendido el documento")
@@ -175,7 +179,7 @@ def main(argv=None, carpeta_salida=None):
     ordenes = crear_ordenes()
     args = ordenes.parse_args(argv)
     opciones = {"fuente": args.fuente} if args.fuente else {}
-    for opcion in ("quitar_numeracion", "quitar_mayusculas", "quitar_introduccion"):
+    for opcion in ("quitar_numeracion", "quitar_mayusculas", "quitar_introduccion", "titulo_tal_cual"):
         if getattr(args, opcion):
             opciones[opcion] = True
 
@@ -183,7 +187,8 @@ def main(argv=None, carpeta_salida=None):
     if args.diagnostico:
         for nombre, usada in (("--fuente", args.fuente), ("--quitar-numeracion", args.quitar_numeracion),
                               ("--quitar-mayusculas", args.quitar_mayusculas),
-                              ("--quitar-introduccion", args.quitar_introduccion)):
+                              ("--quitar-introduccion", args.quitar_introduccion),
+                              ("--titulo-tal-cual", args.titulo_tal_cual)):
             if usada:
                 print(f"Aviso: la opción {nombre} no se usa en el modo diagnóstico, que no cambia nada.")
         if args.datos or any(v is not None for v in opciones_de_portada(args).values()):

@@ -54,7 +54,14 @@ python -m apa_facil pruebas\01_ensayo_basico.docx --datos docs\datos_ejemplo.jso
 
 También se pueden dar con opciones sueltas, que mandan sobre el archivo dato a dato: `--titulo`, `--autor` (una vez por autor), `--departamento`, `--universidad`, `--codigo-asignatura`, `--asignatura`, `--profesor` (una vez por profesor) y `--fecha`. La fecha se escribe como `16/10/2026`, `2026-10-16` o `16 de octubre de 2026`.
 
-Los datos se usan tal cual se escriben: solo se quitan los espacios de los extremos. Lo que falte no se rellena, ni siquiera la fecha: se avisa en el informe. Si el archivo está mal escrito (una coma de más, una clave desconocida, una fecha que no existe), no se procesa nada y se explica qué corregir. El informe JSON solo dice qué datos se han dado, no sus valores. De momento los datos solo se leen y se comprueban: la portada APA llegará en el siguiente paso.
+Los datos se usan tal cual se escriben: solo se quitan los espacios de los extremos. Lo que falte no se rellena, ni siquiera la fecha: se avisa en el informe. Si el archivo está mal escrito (una coma de más, una clave desconocida, una fecha que no existe), no se procesa nada y se explica qué corregir. El informe JSON solo dice qué datos se han dado, no sus valores.
+
+Con esos datos se genera la **portada APA de estudiante**, como la describe la web oficial de APA:
+- el título, en negrita y centrado, tres líneas por debajo del margen superior;
+- una línea en blanco;
+- debajo, centrados: los autores («Ana Pérez y Luis Gómez»), la afiliación («Departamento…, Universidad…»), la asignatura («HIS 201: Historia…»), el profesor y la fecha («16 de octubre de 2026»).
+
+Todo va a doble espacio, y el texto empieza en una página nueva con el mismo título. El título lleva mayúscula inicial en las palabras principales, como pide APA: los artículos y las conjunciones y preposiciones de tres letras o menos van en minúscula. Con `--titulo-tal-cual` se deja como lo escribes. «que», «lo» y «vía» pueden ir de las dos formas según la frase: se dejan como estén y se avisa. De momento la portada solo se añade a documentos que no tienen ninguna; si ya hay una, se deja como está y se avisa.
 
 ### Qué hace (formato básico, títulos y limpieza)
 

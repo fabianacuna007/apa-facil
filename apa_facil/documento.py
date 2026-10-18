@@ -17,6 +17,8 @@ from docx.opc.exceptions import PackageNotFoundError
 from docx.oxml import OxmlElement, parse_xml
 from lxml import etree
 
+from apa_facil import datos_portada
+
 CARPETA_SALIDA = Path(__file__).resolve().parent.parent / "salida"
 SUFIJO = "_APA"
 
@@ -209,11 +211,17 @@ class CambioPrevisto:
         texto `nuevo`, que tiene que ser una copia exacta de los párrafos
         `desde` del original, línea a línea y sin el espacio de los extremos ni
         los saltos de página (el título del trabajo de la portada, y su
-        subtítulo, separados por un salto de línea) (paso 4.4);
+        subtítulo, separados por un salto de línea) (paso 4.4); o, sin `desde`,
+        el título de la portada APA añadida (paso 5.2);
       - "añadir_al_final": se añade `nuevo` al final del párrafo, que solo puede
         ser ". " (punto y espacio) o " " si ya acababa en punto o con otro signo,
         y nunca detrás de un espacio (paso 4.5: títulos de nivel 4 y 5 en la misma
-        línea que su texto).
+        línea que su texto);
+      - "añadir_portada": se añaden antes del primer párrafo los párrafos
+        `parrafos`, que tienen que ser exactamente la portada APA que sale de
+        `datos` (datos_portada.parrafos_de_portada), con el título de los datos o
+        el mismo con otras mayúsculas; el último puede acabar en un salto de página
+        si el documento empieza con una tabla (paso 5.2).
     Si un párrafo tiene varios, se comprueban en el orden en que se anotaron.
     """
     parrafo: int     # número del párrafo en el original: desde 1, contando los de las tablas
@@ -221,6 +229,8 @@ class CambioPrevisto:
     quitado: str = ""
     nuevo: str = ""
     desde: tuple = ()   # en "añadir_titulo": los números de los párrafos copiados
+    parrafos: tuple = ()   # en "añadir_portada": el texto de cada párrafo añadido
+    datos: object = None   # en "añadir_portada": los datos de la portada (DatosPortada)
 
 
 def lineas_de_texto(texto):
@@ -252,6 +262,23 @@ def _aplicar_previstos(antes, previstos):
     """
     textos = list(antes.textos)
     problemas, borrar, insertar = [], set(), {}
+    titulo_de_la_portada = None
+
+    def portada_de_los_datos(cambio):
+        """¿Son `parrafos` justo la portada APA que sale de `datos`, al principio del documento?"""
+        datos, parrafos = cambio.datos, list(cambio.parrafos)
+        if parrafos and parrafos[-1].endswith("\n"):   # el salto de página antes de una tabla
+            parrafos[-1] = parrafos[-1][:-1]
+        indice = datos_portada.LINEAS_EN_BLANCO_ANTES_DEL_TITULO
+        if cambio.parrafo != 1 or datos is None or not datos.titulo or len(parrafos) <= indice:
+            return False
+        titulo = parrafos[indice]
+        return (datos_portada.solo_cambian_mayusculas(datos.titulo, titulo)
+                and parrafos == datos_portada.parrafos_de_portada(datos, titulo))
+
+    for cambio in previstos:   # el título del texto puede ser el de la portada: se busca antes
+        if cambio.accion == "añadir_portada" and portada_de_los_datos(cambio):
+            titulo_de_la_portada = cambio.parrafos[datos_portada.LINEAS_EN_BLANCO_ANTES_DEL_TITULO]
 
     def copia_de_la_portada(cambio):
         """¿Es `nuevo` una copia exacta de párrafos seguidos del original, anteriores al lugar donde se añade?"""
@@ -280,8 +307,13 @@ def _aplicar_previstos(antes, previstos):
             textos[i] = (donde, cambio.nuevo)
         elif cambio.accion == "quitar_introduccion" and es_rotulo_de_introduccion(texto):
             borrar.add(i)
-        elif cambio.accion == "añadir_titulo" and copia_de_la_portada(cambio):
+        elif cambio.accion == "añadir_titulo" and (copia_de_la_portada(cambio) or (
+                not cambio.desde and titulo_de_la_portada is not None and cambio.nuevo == titulo_de_la_portada)):
             insertar.setdefault(i, []).append(("Título del trabajo, añadido", cambio.nuevo))
+        elif cambio.accion == "añadir_portada" and portada_de_los_datos(cambio):
+            # Delante de todo, también del título del texto si se añade en el mismo sitio.
+            insertar.setdefault(i, [])[0:0] = [(f"Portada APA, párrafo {n} (añadido)", texto)
+                                               for n, texto in enumerate(cambio.parrafos, start=1)]
         elif cambio.accion == "añadir_al_final" and texto.strip() and not texto[-1].isspace() and \
                 (cambio.nuevo == " " or (cambio.nuevo == ". " and not texto.rstrip("\"'»”)").endswith((".", "…")))):
             textos[i] = (donde, texto + cambio.nuevo)
@@ -290,8 +322,8 @@ def _aplicar_previstos(antes, previstos):
                              f"(«{_extracto(texto)}»). Solo se pueden borrar párrafos vacíos y el rótulo "
                              "«Introducción», quitar espacios o tabuladores del principio, quitar la numeración "
                              "de un título, pasar a minúsculas un título escrito en mayúsculas, repetir el "
-                             "título de la portada al principio del texto y poner el punto final a los títulos "
-                             "de nivel 4 y 5.")
+                             "título de la portada al principio del texto, poner el punto final a los títulos "
+                             "de nivel 4 y 5 y añadir la portada APA con los datos del estudiante.")
     resultado = []
     for i, t in enumerate(textos):
         resultado += insertar.get(i, [])

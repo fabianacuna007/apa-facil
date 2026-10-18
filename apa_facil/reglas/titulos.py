@@ -583,16 +583,21 @@ def _quitar_introduccion(doc, opciones, informe, clasificados):
     return primero
 
 
-def _titulo_del_trabajo(doc, informe, clasificados, quitado):
-    # El estilo «Title», con el formato APA del nivel 1 (la portada del 02 también lo usa).
+def _titulo_del_trabajo(doc, opciones, informe, clasificados, quitado):
+    # El estilo «Title», con el formato APA del nivel 1 (la portada del 02 también lo usa,
+    # y la portada APA del paso 5.2).
     partes = [c for c in clasificados if c.titulo_del_trabajo]
+    datos = opciones.get("portada")
+    portada_apa = bool(datos and datos.titulo) and not any(c.zona == "portada" and c.texto for c in clasificados)
     estilos = estilos_del_titulo_del_trabajo(doc)
     estilo = (_quitar_duplicados(estilos) if estilos else
               _estilo_nuevo(doc, NOMBRE_DEL_ESTILO_DEL_TITULO, ("Title", "Ttulo", "APA_Titulo"), prioridad=10)
-              if partes else None)
+              if partes or portada_apa else None)
     if estilo is not None:
         _dar_formato(doc, estilo, 1, esquema=False)
 
+    if portada_apa:
+        return   # el título lo pone la regla de la portada (paso 5.2), con el de los datos
     if not partes:
         informe.aviso("No se ha encontrado el título del trabajo en la portada, así que no se ha repetido al "
                       "principio del texto. APA lo pide ahí, centrado y en negrita: escríbelo tú, con el estilo "
@@ -847,4 +852,4 @@ def aplicar(doc, opciones, informe, estructura=None):
     _titulos_en_linea(informe, clasificados, [c for c in seguros if c is not quitado])
 
     # 9. El título del trabajo al principio del texto (paso 4.4).
-    _titulo_del_trabajo(doc, informe, clasificados, quitado)
+    _titulo_del_trabajo(doc, opciones, informe, clasificados, quitado)

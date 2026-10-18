@@ -235,3 +235,65 @@ def avisar(datos, informe):
     opciones = _enumerar([DATOS[c][0] for c in faltan])
     informe.aviso(f"Faltan datos para la portada: {que}. No se han rellenado: añádelos en tu archivo de "
                   f"datos o con {'la opción' if len(faltan) == 1 else 'las opciones'} {opciones}.")
+
+
+# --- 5.2 Las líneas de la portada ------------------------------------------------------
+#
+# Cómo se escribe cada línea, según la web oficial de APA (Title page setup):
+# autores con «and» entre los dos últimos (en español, «y»), afiliación «departamento,
+# universidad», asignatura «código: nombre», profesor como lo dé el estudiante y fecha
+# «en el formato habitual de tu país». Lo que falta no se escribe: ni huecos ni nada
+# en su lugar. Esto también lo usa la comprobación de integridad (documento.comparar).
+
+NOMBRES_DE_MES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre",
+                  "octubre", "noviembre", "diciembre")
+LINEAS_EN_BLANCO_ANTES_DEL_TITULO = 3   # «three to four lines down from the top»
+
+
+def fecha_en_espanol(fecha):
+    """date(2026, 10, 16) → «16 de octubre de 2026»."""
+    return f"{fecha.day} de {NOMBRES_DE_MES[fecha.month - 1]} de {fecha.year}"
+
+
+def _conjuncion(siguiente):
+    """«y», o «e» delante del sonido /i/ («Pedro e Inés», «Ana e Hilario»; pero «y Hierro», «y Yolanda»)."""
+    palabra = siguiente.lstrip().lower()
+    sonido_i = palabra.startswith(("i", "í", "hi", "hí")) and not palabra.startswith(("hia", "hie", "hio", "hiu"))
+    return "e" if sonido_i else "y"
+
+
+def unir_nombres(nombres):
+    """[«A»] → «A»; [«A», «B»] → «A y B»; [«A», «B», «C»] → «A, B y C» (en español, sin coma antes de «y»)."""
+    nombres = list(nombres)
+    if len(nombres) <= 1:
+        return "".join(nombres)
+    return f"{', '.join(nombres[:-1])} {_conjuncion(nombres[-1])} {nombres[-1]}"
+
+
+def afiliacion(datos):
+    """«Departamento de Historia, Universidad de Ejemplo», o solo el que se haya dado."""
+    return ", ".join(parte for parte in (datos.departamento, datos.universidad) if parte)
+
+
+def asignatura(datos):
+    """«HIS 201: Historia Contemporánea», o solo el código o el nombre (sin los dos puntos)."""
+    if datos.codigo_asignatura and datos.asignatura:
+        separador = " " if datos.codigo_asignatura.endswith(":") else ": "
+        return f"{datos.codigo_asignatura}{separador}{datos.asignatura}"
+    return datos.codigo_asignatura or datos.asignatura or ""
+
+
+def parrafos_de_portada(datos, titulo):
+    """
+    El texto de cada párrafo de la portada, en orden: tres líneas en blanco, el título
+    (`titulo`: el de los datos, quizá con otras mayúsculas), una línea en blanco y,
+    debajo, autores, afiliación, asignatura, profesor y fecha (los que se hayan dado).
+    """
+    debajo = [unir_nombres(datos.autores), afiliacion(datos), asignatura(datos), unir_nombres(datos.profesores),
+              fecha_en_espanol(datos.fecha) if datos.fecha else ""]
+    return [""] * LINEAS_EN_BLANCO_ANTES_DEL_TITULO + [titulo, ""] + [linea for linea in debajo if linea]
+
+
+def solo_cambian_mayusculas(antes, despues):
+    """¿Es `despues` el mismo texto que `antes`, salvo mayúsculas y minúsculas? (el título de la portada)"""
+    return len(antes) == len(despues) and all(a == d or a.lower() == d.lower() for a, d in zip(antes, despues))
