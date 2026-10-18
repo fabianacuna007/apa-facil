@@ -52,7 +52,7 @@ Las tres opciones son independientes. Sin ellas solo se avisa, porque cambian el
 - **Texto alineado a la izquierda**, sin justificar ni guiones automáticos.
 - **Sangría de 1,27 cm** en la primera línea de los párrafos de texto (no en títulos, listas, referencias, citas en bloque…).
 - **Título del trabajo** repetido al principio del texto, centrado y en negrita: se copia tal cual de la portada.
-- **Títulos** con los estilos de Word «Título 1» a «Título 5» y el formato APA de cada nivel (así aparecen en el panel de navegación), sin formato puesto a mano que lo contradiga. Avisa de los apartados con un solo subapartado y de los títulos numerados o en mayúsculas.
+- **Títulos** con los estilos de Word «Título 1» a «Título 5» y el formato APA de cada nivel (así aparecen en el panel de navegación), sin formato puesto a mano que lo contradiga; los de nivel 4 y 5, en la misma línea que su texto y terminados en punto (con el separador de estilo de Word: en LibreOffice se ven en su propia línea). Avisa de los apartados con un solo subapartado y de los títulos numerados o en mayúsculas.
 - **Número de página** arriba a la derecha en todas las páginas, también en la portada, y nada más en el encabezado.
 - **Limpieza**: quita los párrafos vacíos usados para dejar espacio, los tabuladores o espacios usados como sangría y el color, el resaltado y el subrayado del texto (los enlaces se conservan). No toca la portada ni las tablas.
 - **Avisos** de lo que conviene revisar a mano sin que la herramienta lo cambie: saltos de línea manuales, viñetas escritas a mano, dobles espacios entre palabras y texto que estaba en otra fuente (suele venir de pegarlo de una web).

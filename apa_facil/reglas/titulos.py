@@ -1,7 +1,8 @@
 """
-Reglas 4.1 a 4.3: estilos de título de Word (Título 1 a Título 5) con el
-formato APA, cada título detectado con el estilo de su nivel, y sin formato
-puesto a mano que contradiga ese nivel.
+Reglas de la fase 4 (pasos 4.1 a 4.5): estilos de título de Word (Título 1 a
+Título 5) con el formato APA, cada título detectado con el estilo de su nivel y
+sin formato puesto a mano que contradiga ese nivel, el título del trabajo al
+principio del texto y los niveles 4 y 5 en la misma línea que su texto.
 
 Usar los estilos de Word, y no formato directo, mantiene el panel de
 navegación y el índice de Word, y es lo que recomienda APA por accesibilidad.
@@ -30,17 +31,18 @@ Qué hace:
      de una especie, el título de un libro) APA la usa, y se deja. El color, el
      subrayado y el resaltado ya los quita la limpieza (paso 3.5).
   5. Avisa de lo que APA desaconseja en la estructura: un apartado con un solo
-     subapartado y un título que se salta un nivel (de 1 a 3). Y de lo que se
-     deja para más adelante: la numeración automática de Word en un título
-     (paso 4.3) y el punto final de los niveles 4 y 5, porque añadirlo modifica
-     el texto (decisión del propietario: se añade en el paso 4.5, al unir el
-     título con su párrafo).
+     subapartado y un título que se salta un nivel (de 1 a 3). Y de la
+     numeración automática de Word en un título, que se deja.
 
   6. Paso 4.3: los títulos numerados ("1.1. Objetivos") o escritos en
      mayúsculas ("RESUMEN"). Cambiarlos modifica el texto, así que por defecto
      solo se avisa (decisión del propietario); con las opciones
      --quitar-numeracion y --quitar-mayusculas se cambian, y cada cambio se anota
      como cambio previsto para la comprobación de integridad.
+  7. Paso 4.4: el título del trabajo, copiado de la portada, al principio del
+     texto, y el rótulo «Introducción» (aviso, o --quitar-introduccion).
+  8. Paso 4.5: los títulos de nivel 4 y 5, en la misma línea que su texto (con
+     el separador de estilo de Word) y terminados en punto.
 
 Fuera de eso, no toca el texto de los títulos. Los rótulos de referencias y de
 anexos tienen sus propios pasos (6.4 y 6.7); si ya usaban Título 1, cambian con
@@ -55,7 +57,7 @@ from docx.oxml import OxmlElement
 
 from apa_facil.documento import (NUMERACION_DE_APARTADO, Estilos, es_rotulo_de_introduccion, lineas_de_texto,
                                  texto_parrafo, w)
-from apa_facil.estructura import ACABA_EN_PUNTO, BAJA, clasificar
+from apa_facil.estructura import BAJA, clasificar
 from apa_facil.reglas.fuente import _letras, _runs_propios
 
 NIVELES = range(1, 6)
@@ -623,6 +625,104 @@ def _titulo_del_trabajo(doc, informe, clasificados, quitado):
                       "texto.")
 
 
+# --- 4.5 Títulos de nivel 4 y 5 en la misma línea que su texto --------------------------
+#
+# APA pone los títulos de nivel 4 y 5 en la misma línea que el párrafo que los
+# sigue, terminados en punto. No se unen los dos párrafos: se usa el «separador de
+# estilo» de Word (lo que hace Ctrl+Alt+Intro), que oculta la marca de párrafo del
+# título. Así Word muestra título y texto en una línea, pero en el documento siguen
+# siendo dos párrafos: el título conserva su estilo (panel de navegación, índice) y
+# el texto no se toca. Lo único que cambia es el final del título: el punto y un
+# espacio (decisión del propietario: por defecto). LibreOffice no entiende el
+# separador de estilo y muestra el título en su propia línea.
+
+ACABA_CON_SIGNO = re.compile(r"[.…?!][\"'»”)]*$")
+ACABA_CON_DOS_PUNTOS = re.compile(r"[:;][\"'»”)]*$")
+ETIQUETAS_DE_BLOQUE = (w("p"), w("tbl"), w("sdt"), w("sectPr"))
+
+
+def siguiente_bloque(p):
+    """Lo que va justo después del párrafo en el documento (otro párrafo, una tabla…), sin contar marcadores."""
+    siguiente = p.getnext()
+    while siguiente is not None and siguiente.tag not in ETIQUETAS_DE_BLOQUE:
+        siguiente = siguiente.getnext()
+    return siguiente
+
+
+def en_linea(p):
+    """¿Tiene el párrafo la marca de párrafo oculta (el separador de estilo de Word)?"""
+    rpr = p.find(f"{w('pPr')}/{w('rPr')}")
+    return rpr is not None and all(_encendido(rpr.find(w(e))) for e in ("vanish", "specVanish"))
+
+
+def _ocultar_marca_de_parrafo(p):
+    ppr = p.get_or_add_pPr()
+    rpr = ppr.find(w("rPr"))
+    if rpr is None:
+        rpr = OxmlElement("w:rPr")
+        despues = next((ppr.find(w(e)) for e in ("sectPr", "pPrChange") if ppr.find(w(e)) is not None), None)
+        if despues is not None:
+            despues.addprevious(rpr)
+        else:
+            ppr.append(rpr)
+    for etiqueta in ("vanish", "specVanish"):
+        _activar(rpr.find(w(etiqueta)) if rpr.find(w(etiqueta)) is not None
+                 else getattr(rpr, f"get_or_add_{etiqueta}")())
+
+
+def _anadir_al_final(p, anadido):
+    """Un fragmento nuevo al final del párrafo, con el formato del último que tiene texto."""
+    ultimo = next((r for r in reversed(fragmentos_con_letras(p))), None)
+    r = OxmlElement("w:r")
+    if ultimo is not None and ultimo.find(w("rPr")) is not None:
+        r.append(copy.deepcopy(ultimo.find(w("rPr"))))
+    t = OxmlElement("w:t")
+    t.text = anadido
+    t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+    r.append(t)
+    p.append(r)
+
+
+def _titulos_en_linea(informe, clasificados, seguros):
+    por_elemento = {c.elemento: c for c in clasificados}
+    unidos, sin_texto, con_dos_puntos = [], [], []
+    for c in seguros:
+        if c.nivel < 4 or c.elemento.getparent() is None:
+            continue
+        siguiente = siguiente_bloque(c.elemento)
+        detras = por_elemento.get(siguiente)
+        if detras is None or detras.tipo != "cuerpo":
+            sin_texto.append(c.texto)
+            continue
+        texto = texto_parrafo(c.elemento)
+        if not texto.strip() or texto[-1].isspace():
+            sin_texto.append(c.texto)   # acaba en espacio: no se le puede poner el punto detrás
+            continue
+        anadido = " " if ACABA_CON_SIGNO.search(texto) or ACABA_CON_DOS_PUNTOS.search(texto) else ". "
+        if ACABA_CON_DOS_PUNTOS.search(texto):
+            con_dos_puntos.append(c.texto)
+        _anadir_al_final(c.elemento, anadido)
+        _ocultar_marca_de_parrafo(c.elemento)
+        informe.cambio_previsto(c.numero, "añadir_al_final", nuevo=anadido)
+        unidos.append(c.texto)
+
+    if unidos:
+        varios = len(unidos) > 1
+        informe.cambio(f"Títulos: {len(unidos)} título{'s' if varios else ''} de nivel 4 o 5 ({_lista(unidos)}) "
+                       f"va{'n' if varios else ''} ahora en la misma línea que su texto y termina"
+                       f"{'n' if varios else ''} en punto, como pide APA. En Word siguen siendo títulos (salen en "
+                       "el panel de navegación); en LibreOffice se ven en su propia línea.")
+    if con_dos_puntos:
+        informe.aviso(f"{_lista(con_dos_puntos)} termina{'n' if len(con_dos_puntos) > 1 else ''} en dos puntos o "
+                      "punto y coma. En APA, los títulos de nivel 4 y 5 terminan en punto: cámbialo tú.")
+    if sin_texto:
+        varios = len(sin_texto) > 1
+        informe.aviso(f"{len(sin_texto)} título{'s' if varios else ''} de nivel 4 o 5 ({_lista(sin_texto)}) no "
+                      f"va{'n' if varios else ''} seguido{'s' if varios else ''} de un párrafo de texto, así que no "
+                      "se ha podido poner en la misma línea que el texto, como pide APA, ni terminar en punto. "
+                      "Revisa si debería ser de otro nivel.")
+
+
 def _antes_y_despues(pares, maximo=3):
     texto = ", ".join(f"«{_extracto(a)}» → «{_extracto(d)}»" for a, d in pares[:maximo])
     return texto + ("…" if len(pares) > maximo else "")
@@ -736,12 +836,6 @@ def aplicar(doc, opciones, informe, estructura=None):
         informe.aviso(f"{len(numerados)} título{'s' if varios else ''} ({_lista(numerados)}) "
                       f"lleva{'n' if varios else ''} la numeración automática de Word. APA no numera los "
                       "títulos, pero se ha dejado así: quítala en Word si no la exige tu universidad.")
-    sin_punto = [c.texto for c in seguros if c.nivel >= 4 and not ACABA_EN_PUNTO.search(c.texto)]
-    if sin_punto:
-        varios = len(sin_punto) > 1
-        informe.aviso(f"{len(sin_punto)} título{'s' if varios else ''} de nivel 4 o 5 ({_lista(sin_punto)}) "
-                      f"no termina{'n' if varios else ''} en punto. En APA, estos títulos terminan en punto y "
-                      "el texto sigue en la misma línea; de momento se han dejado como estaban.")
 
     # 6. El rótulo «Introducción» (paso 4.4): se avisa, y se quita solo si se pide.
     quitado = _quitar_introduccion(doc, opciones, informe, clasificados)
@@ -749,5 +843,8 @@ def aplicar(doc, opciones, informe, estructura=None):
     # 7. Numeración y mayúsculas (paso 4.3): se avisa, y se cambia solo si se pide.
     _texto_de_titulos(doc, opciones, informe, clasificados, [c for c in seguros if c is not quitado])
 
-    # 8. El título del trabajo al principio del texto (paso 4.4).
+    # 8. Los títulos de nivel 4 y 5, en la misma línea que su texto y terminados en punto (paso 4.5).
+    _titulos_en_linea(informe, clasificados, [c for c in seguros if c is not quitado])
+
+    # 9. El título del trabajo al principio del texto (paso 4.4).
     _titulo_del_trabajo(doc, informe, clasificados, quitado)

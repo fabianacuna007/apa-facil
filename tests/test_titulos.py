@@ -18,7 +18,7 @@ from apa_facil import estructura, pipeline
 from apa_facil.documento import CambioPrevisto, Estilos, comparar, radiografia, texto_parrafo, w
 from apa_facil.informe import Informe
 from apa_facil.reglas import titulos
-from herramientas.verificar import FORMATO_TITULOS, TITULO_TRABAJO, TITULOS, verificar
+from herramientas.verificar import FORMATO_TITULOS, TITULO_TRABAJO, TITULOS, TITULOS_EN_LINEA, verificar
 
 PRUEBAS = sorted((Path(__file__).resolve().parent.parent / "pruebas").glob("*.docx"))
 TEXTO = ("Este es un párrafo normal de texto con bastantes palabras para que no parezca un título "
@@ -388,19 +388,116 @@ def test_numeracion_de_word_en_un_titulo_solo_se_avisa():
         "dejado así: quítala en Word si no la exige tu universidad."]
 
 
-def test_aviso_de_nivel_4_y_5_sin_punto_final():
-    """Decisión del propietario: el punto se añade en el paso 4.5; de momento, solo se avisa."""
+# --- 4.5 Niveles 4 y 5 en la misma línea que su texto ----------------------------------------
+
+def con_niveles(*titulos_de_nivel):
+    """Un documento con títulos de nivel 1 a 3 y, debajo, los de nivel 4 y 5 indicados, cada uno con su texto."""
     doc = documento_con_portada()
-    for texto, nivel in (("Método", 1), ("Muestra", 2), ("Edad", 3), ("Niños", 4), ("Niñas.", 4),
-                         ("Menores de 6", 5), ("Mayores de 6.", 5)):
-        titulo(doc, texto, nivel)
+    for texto_titulo, nivel in (("Método", 1), ("Muestra", 2), ("Edad", 3), *titulos_de_nivel):
+        titulo(doc, texto_titulo, nivel)
+    return doc
+
+
+def parrafo_que_empieza(doc, inicio):
+    return next(p for p in doc.element.body.iter(w("p")) if texto_parrafo(p).startswith(inicio))
+
+
+def el_parrafo(doc, inicio):
+    """El mismo párrafo, como objeto de python-docx (con sus fragmentos de texto, runs)."""
+    return next(par for par in doc.paragraphs if par.text.startswith(inicio))
+
+
+@pytest.mark.parametrize("original, queda", [
+    ("Niños", "Niños. "),                      # se añade el punto y un espacio
+    ("Niñas.", "Niñas. "),                     # ya tenía el punto: solo el espacio
+    ("¿Por qué leen?", "¿Por qué leen? "),     # con interrogación, APA no añade punto
+    ("Los «nativos digitales»", "Los «nativos digitales». "),
+])
+def test_nivel_4_en_la_misma_linea_con_su_punto(original, queda):
+    doc = con_niveles((original, 4))
     antes = radiografia(doc)
     informe = aplicar(doc)
-    avisos = [a for a in informe.avisos if "punto" in a]
-    assert avisos == ["2 títulos de nivel 4 o 5 («Niños», «Menores de 6») no terminan en punto. En APA, estos "
-                      "títulos terminan en punto y el texto sigue en la misma línea; de momento se han dejado "
-                      "como estaban."]
+    p = parrafo_que_empieza(doc, original)
+    assert texto_parrafo(p) == queda
+    assert titulos.en_linea(p), "la marca de párrafo, oculta (separador de estilo de Word)"
+    assert texto_parrafo(p.getnext()) == TEXTO, "el texto de debajo no cambia"
+    assert Estilos(doc).nombre(Estilos(doc).estilo_de(p)).lower() == "heading 4", "sigue siendo un título"
     assert comparar(antes, radiografia(doc), informe.cambios_previstos) == []
+    assert problemas_del_verificador(doc, TITULOS_EN_LINEA) == []
+
+
+def test_nivel_5_tambien_y_el_punto_va_con_el_formato_del_titulo():
+    doc = con_niveles(("Niños", 4), ("Menores de 6", 5))
+    par = el_parrafo(doc, "Menores de 6")
+    par.runs[0].italic = True
+    p = par._p
+    informe = aplicar(doc)
+    assert texto_parrafo(p) == "Menores de 6. " and titulos.en_linea(p)
+    assert p.findall(w("r"))[-1].find(f"{w('rPr')}/{w('i')}") is not None, "el punto, con el formato del título"
+    assert any(c.startswith("Títulos: 2 títulos de nivel 4 o 5 («Niños», «Menores de 6») van ahora en la "
+                            "misma línea que su texto y terminan en punto") for c in informe.cambios)
+
+
+def test_con_dos_puntos_se_une_pero_se_avisa():
+    doc = con_niveles(("Factores de riesgo:", 4))
+    informe = aplicar(doc)
+    p = parrafo_que_empieza(doc, "Factores")
+    assert texto_parrafo(p) == "Factores de riesgo: " and titulos.en_linea(p)
+    assert any("termina en dos puntos o punto y coma" in a for a in informe.avisos)
+    assert [h.regla for h in verificar(doc).excepciones if h.regla == TITULOS_EN_LINEA] == [TITULOS_EN_LINEA]
+
+
+@pytest.mark.parametrize("detras", ["tabla", "titulo", "lista", "nada"])
+def test_si_no_le_sigue_texto_no_se_une(detras):
+    doc = con_niveles()
+    p = doc.add_heading("Niños", level=4)
+    if detras == "tabla":
+        doc.add_table(rows=1, cols=1)
+    elif detras == "titulo":
+        doc.add_heading("Niñas", level=4)
+        doc.add_paragraph(TEXTO)
+    elif detras == "lista":
+        doc.add_paragraph("primer elemento", style="List Bullet")
+    antes = radiografia(doc)
+    informe = aplicar(doc)
+    assert texto_parrafo(p._p) == "Niños" and not titulos.en_linea(p._p)
+    assert any(a.startswith("1 título de nivel 4 o 5 («Niños») no va seguido de un párrafo de texto")
+               for a in informe.avisos)
+    assert comparar(antes, radiografia(doc), informe.cambios_previstos) == []
+    assert problemas_del_verificador(doc, TITULOS_EN_LINEA) == []
+
+
+def test_un_marcador_entre_el_titulo_y_el_texto_no_estorba():
+    doc = con_niveles(("Niños", 4))
+    p = parrafo_que_empieza(doc, "Niños")
+    p.addnext(p.makeelement(w("bookmarkEnd"), {w("id"): "0"}))
+    aplicar(doc)
+    assert titulos.en_linea(p)
+
+
+def test_la_integridad_solo_acepta_el_punto_y_el_espacio():
+    doc = con_niveles(("Niños", 4))
+    antes = radiografia(doc)
+    numero = next(i for i, (_, t) in enumerate(antes.textos, start=1) if t == "Niños")
+    par = el_parrafo(doc, "Niños")
+    par.runs[0].text = "Niños. "
+    assert comparar(antes, radiografia(doc), [CambioPrevisto(numero, "añadir_al_final", nuevo=". ")]) == []
+    par.runs[0].text = "Niños y niñas. "
+    assert comparar(antes, radiografia(doc), [CambioPrevisto(numero, "añadir_al_final", nuevo=" y niñas. ")])
+    doc2 = con_niveles(("Niños.", 4))
+    antes2 = radiografia(doc2)
+    el_parrafo(doc2, "Niños").runs[0].text = "Niños.. "
+    assert comparar(antes2, radiografia(doc2), [CambioPrevisto(numero, "añadir_al_final", nuevo=". ")]), \
+        "no se pone un segundo punto"
+
+
+def test_el_verificador_ve_un_nivel_4_que_no_va_en_linea():
+    doc = con_niveles(("Niños", 4))
+    aplicar(doc)
+    p = parrafo_que_empieza(doc, "Niños")
+    p.find(f"{w('pPr')}/{w('rPr')}").getparent().remove(p.find(f"{w('pPr')}/{w('rPr')}"))
+    assert problemas_del_verificador(doc, TITULOS_EN_LINEA) == [
+        "Título de nivel 4: no va en la misma línea que su texto."]
 
 
 # --- 4.3 Numeración y mayúsculas --------------------------------------------------------------
@@ -814,8 +911,9 @@ def test_documentos_de_prueba(original, tmp_path):
     copia = docx.Document(str(salida))
     assert problemas_del_verificador(copia) == problemas_del_verificador(copia, FORMATO_TITULOS) == []
     assert formato_corregido(informe) == [], "en los 5 documentos no queda formato a mano que contradiga"
-    sin_punto = [a for a in informe.avisos if "no terminan en punto" in a or "no termina en punto" in a]
-    assert len(sin_punto) == (1 if clave == "05" else 0)   # «a) Evolución demográfica» y «b) Percepción…»
+    en_linea = [c for c in informe.cambios if "en la misma línea que su texto" in c]
+    assert len(en_linea) == (1 if clave == "05" else 0)   # «a) Evolución demográfica» y «b) Percepción…»
+    assert problemas_del_verificador(copia, TITULOS_EN_LINEA) == []
     for nivel in titulos.NIVELES:
         ids = [e.get(w("styleId")) for e in titulos.estilos_de_titulo(copia)[nivel]]
         assert len(ids) == len(set(ids)), f"«Título {nivel}» sin duplicados"

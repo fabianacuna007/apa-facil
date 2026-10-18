@@ -209,7 +209,11 @@ class CambioPrevisto:
         texto `nuevo`, que tiene que ser una copia exacta de los párrafos
         `desde` del original, línea a línea y sin el espacio de los extremos ni
         los saltos de página (el título del trabajo de la portada, y su
-        subtítulo, separados por un salto de línea) (paso 4.4).
+        subtítulo, separados por un salto de línea) (paso 4.4);
+      - "añadir_al_final": se añade `nuevo` al final del párrafo, que solo puede
+        ser ". " (punto y espacio) o " " si ya acababa en punto o con otro signo,
+        y nunca detrás de un espacio (paso 4.5: títulos de nivel 4 y 5 en la misma
+        línea que su texto).
     Si un párrafo tiene varios, se comprueban en el orden en que se anotaron.
     """
     parrafo: int     # número del párrafo en el original: desde 1, contando los de las tablas
@@ -278,12 +282,16 @@ def _aplicar_previstos(antes, previstos):
             borrar.add(i)
         elif cambio.accion == "añadir_titulo" and copia_de_la_portada(cambio):
             insertar.setdefault(i, []).append(("Título del trabajo, añadido", cambio.nuevo))
+        elif cambio.accion == "añadir_al_final" and texto.strip() and not texto[-1].isspace() and \
+                (cambio.nuevo == " " or (cambio.nuevo == ". " and not texto.rstrip("\"'»”)").endswith((".", "…")))):
+            textos[i] = (donde, texto + cambio.nuevo)
         else:
             problemas.append(f"{donde}: una regla anotó «{cambio.accion}», pero eso cambiaría el texto "
                              f"(«{_extracto(texto)}»). Solo se pueden borrar párrafos vacíos y el rótulo "
                              "«Introducción», quitar espacios o tabuladores del principio, quitar la numeración "
-                             "de un título, pasar a minúsculas un título escrito en mayúsculas y repetir el "
-                             "título de la portada al principio del texto.")
+                             "de un título, pasar a minúsculas un título escrito en mayúsculas, repetir el "
+                             "título de la portada al principio del texto y poner el punto final a los títulos "
+                             "de nivel 4 y 5.")
     resultado = []
     for i, t in enumerate(textos):
         resultado += insertar.get(i, [])

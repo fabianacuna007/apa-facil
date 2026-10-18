@@ -51,8 +51,9 @@ TITULOS = "4.1 Estilos de título"
 FORMATO_TITULOS = "4.2 Formato de los títulos"
 TEXTO_TITULOS = "4.3 Numeración y mayúsculas de los títulos"
 TITULO_TRABAJO = "4.4 Título del trabajo"
+TITULOS_EN_LINEA = "4.5 Títulos de nivel 4 y 5 en línea"
 REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS, TEXTO_TITULOS,
-          TITULO_TRABAJO]
+          TITULO_TRABAJO, TITULOS_EN_LINEA]
 
 MAXIMO_POR_REGLA = 8   # incumplimientos que se muestran de cada regla; del resto, solo cuántos son
 
@@ -157,7 +158,7 @@ class Verificacion:
     def comprobar(self):
         for comprobacion in (self.margenes, self.fuente, self.interlineado, self.alineacion,
                              self.sangria, self.paginacion, self.titulos, self.formato_de_titulos,
-                             self.texto_de_titulos, self.titulo_del_trabajo):
+                             self.texto_de_titulos, self.titulo_del_trabajo, self.titulos_en_linea):
             comprobacion()
         return self.resultado
 
@@ -632,6 +633,42 @@ class Verificacion:
                               "Rótulo «Introducción»: APA no lo usa, pero se deja (se avisa en el informe; "
                               "--quitar-introduccion lo quita si no tiene subapartados).")
 
+    # --- 4.5 Títulos de nivel 4 y 5 en línea -----------------------------------------------
+
+    def titulos_en_linea(self):
+        """
+        Los títulos de nivel 4 y 5 seguidos de un párrafo de texto van en su misma línea
+        (marca de párrafo oculta: el separador de estilo de Word) y terminan en punto y
+        un espacio. Los que no van seguidos de texto no se pueden poner en línea, y los que
+        terminan en dos puntos se dejan: son excepciones admitidas (se avisa en el informe).
+        """
+        por_elemento = {c.elemento: c for c in self.clasificados}
+        for c in self.clasificados:
+            if c.tipo != "titulo" or not c.nivel or c.nivel < 4 or c.confianza == estructura.BAJA:
+                continue
+            info, texto = self.por_elemento[c.elemento], texto_parrafo(c.elemento)
+            detras = por_elemento.get(titulos.siguiente_bloque(c.elemento))
+            if detras is None or detras.tipo != "cuerpo":
+                if titulos.en_linea(c.elemento):
+                    self.fallo_en(TITULOS_EN_LINEA, info, "Tiene la marca de párrafo oculta, pero no le sigue un "
+                                                          "párrafo de texto: se uniría con lo que venga detrás.")
+                else:
+                    self.excepcion_en(TITULOS_EN_LINEA, info, "No va seguido de un párrafo de texto: no se puede "
+                                                              "poner en la misma línea (se avisa en el informe).")
+                continue
+            problemas = []
+            if not titulos.en_linea(c.elemento):
+                problemas.append("no va en la misma línea que su texto")
+            if not texto.endswith(" "):
+                problemas.append("no termina con un espacio (el texto quedaría pegado)")
+            if titulos.ACABA_CON_DOS_PUNTOS.search(texto.rstrip()):
+                self.excepcion_en(TITULOS_EN_LINEA, info, "Termina en dos puntos o punto y coma: se deja (se avisa "
+                                                          "en el informe).")
+            elif not titulos.ACABA_CON_SIGNO.search(texto.rstrip()):
+                problemas.append("no termina en punto")
+            if problemas:
+                self.fallo_en(TITULOS_EN_LINEA, info, f"Título de nivel {c.nivel}: {'; '.join(problemas)}.")
+
     def _capa_de_parrafo(self, p, etiqueta):
         """El primer `etiqueta` en las capas de formato del párrafo (directo, estilos, por defecto)."""
         for capa in self.estilos._capas_parrafo(p):
@@ -643,7 +680,7 @@ class Verificacion:
 
 def verificar(origen):
     """
-    Comprueba las reglas de la fase 1 y los títulos (pasos 4.1 a 4.4) en un documento: una ruta a un .docx o un
+    Comprueba las reglas de la fase 1 y los títulos (pasos 4.1 a 4.5) en un documento: una ruta a un .docx o un
     documento ya abierto con python-docx. Devuelve un Resultado.
     """
     if isinstance(origen, (str, Path)):
