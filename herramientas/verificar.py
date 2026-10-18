@@ -1,7 +1,7 @@
 """
 Verificador: comprueba si un documento Word cumple las reglas APA de la
-fase 1 y lista cada incumplimiento con su ubicación (sección, número de
-párrafo y un extracto del texto). No modifica nada.
+fase 1 y los estilos de título (paso 4.1), y lista cada incumplimiento con su
+ubicación (sección, número de párrafo y un extracto del texto). No modifica nada.
 
 Cómo comprueba:
 - Lee el XML del documento y calcula el formato efectivo de cada párrafo y de
@@ -11,13 +11,13 @@ Cómo comprueba:
 - Respeta las mismas excepciones que las reglas (portada, código, párrafos con
   tabulador…), usando los mismos detectores. Lo que entra por excepción no es
   un incumplimiento: se lista aparte, como "excepción admitida".
-- Qué párrafos deben llevar sangría lo decide el clasificador de párrafos
-  (apa_facil/estructura.py), igual que en la regla. El verificador solo tiene
-  la copia, así que la clasifica a ella; el programa, en cambio, clasificó el
-  original. Pueden diferir en títulos que solo se distinguían por el tamaño de
-  letra, que la regla de fuente iguala: en los 5 documentos de prueba coincide
-  qué párrafos son de texto, y si alguna vez no, aparecería como incumplimiento.
-  La fase 4 lo resuelve al dar estilos de Word a los títulos.
+- Qué párrafos deben llevar sangría y cuáles son títulos lo decide el
+  clasificador de párrafos (apa_facil/estructura.py), igual que en las reglas.
+  El verificador solo tiene la copia, así que la clasifica a ella; el
+  programa, en cambio, clasificó el original. Desde el paso 4.1 cada título de
+  la copia lleva su estilo de Word, así que su estructura queda escrita en ella
+  y las dos clasificaciones coinciden (lo comprueba test_cinco_documentos.py).
+  Un título que se quedara sin estilo aparece como incumplimiento.
 - Limitación: si el clasificador se equivoca (por ejemplo, toma un párrafo de
   texto por un título), el verificador no lo ve. Para eso están las pruebas del
   clasificador con la clasificación esperada de los documentos de prueba.
@@ -35,10 +35,11 @@ from pathlib import Path
 # Para encontrar el paquete apa_facil al ejecutar este archivo directamente.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from apa_facil import documento  # noqa: E402
+from apa_facil import documento, estructura  # noqa: E402
 from apa_facil.__main__ import configurar_terminal  # noqa: E402
 from apa_facil.documento import ErrorDocumento, Estilos, cm, en_ecuacion, texto_parrafo, w  # noqa: E402
-from apa_facil.reglas import alineacion, fuente, interlineado, margenes, paginacion, sangria  # noqa: E402
+from apa_facil.reglas import (alineacion, fuente, interlineado, margenes, paginacion, sangria,  # noqa: E402
+                               titulos)
 
 MARGENES = "1.1 Márgenes"
 FUENTE = "1.2 Fuente"
@@ -46,7 +47,8 @@ INTERLINEADO = "1.3 Interlineado"
 ALINEACION = "1.4 Alineación"
 SANGRIA = "1.5 Sangría"
 PAGINACION = "1.6 Número de página"
-REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION]
+TITULOS = "4.1 Estilos de título"
+REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS]
 
 MAXIMO_POR_REGLA = 8   # incumplimientos que se muestran de cada regla; del resto, solo cuántos son
 
@@ -133,6 +135,8 @@ class Verificacion:
         self.por_elemento = {info.p: info for info in self.parrafos}
         # Los del texto principal: ni en tablas ni en cuadros de texto (como en las reglas).
         self.principales = [i for i in self.parrafos if not i.en_tabla and not i.en_cuadro]
+        self.clasificados = estructura.clasificar(doc, self.estilos)
+        self.clasificado_de = {c.elemento: c for c in self.clasificados}
 
     def fallo(self, regla, mensaje, donde, extracto="", seccion=None, parrafo=None):
         self.resultado.incumplimientos.append(Hallazgo(regla, mensaje, donde, extracto, seccion, parrafo))
@@ -148,7 +152,7 @@ class Verificacion:
 
     def comprobar(self):
         for comprobacion in (self.margenes, self.fuente, self.interlineado, self.alineacion,
-                             self.sangria, self.paginacion):
+                             self.sangria, self.paginacion, self.titulos):
             comprobacion()
         return self.resultado
 
@@ -329,7 +333,7 @@ class Verificacion:
         return sangria._sangria(self.estilos, p, "firstLine")
 
     def sangria(self):
-        for p, motivo in sangria.motivos_sin_sangria(self.doc, self.estilos):
+        for p, motivo in sangria.motivos_sin_sangria(self.doc, self.estilos, self.clasificados):
             info = self.por_elemento[p]
             primera = self._primera_linea(p)
             francesa = sangria._sangria(self.estilos, p, "hanging")
@@ -342,6 +346,8 @@ class Verificacion:
                                                  f"línea (tiene {actual}).")
             elif motivo == "centrado o a la derecha" and self._alineacion(p) in alineacion.A_LA_DERECHA:
                 continue   # el problema es la alineación (1.4); con ella corregida, se vería su sangría
+            elif self._titulo_con_sangria(p):
+                continue   # los títulos de nivel 4 y 5 la llevan: la pone su estilo (se comprueba en 4.1)
             elif motivo == "tabulador":
                 self.excepcion_en(SANGRIA, info, "Empieza con un tabulador o espacios usados como sangría: "
                                                  "no se le pone sangría (se avisa en el informe).")
@@ -349,6 +355,10 @@ class Verificacion:
                 medida = "en caracteres" if primera is None else f"de {cm(primera)} cm"
                 self.fallo_en(SANGRIA, info, f"Lleva sangría de primera línea {medida}, pero no es un "
                                              f"párrafo de texto ({motivo}): no debe llevarla.")
+
+    def _titulo_con_sangria(self, p):
+        c = self.clasificado_de.get(p)
+        return c is not None and c.tipo == "titulo" and c.nivel is not None and titulos.FORMATO[c.nivel][2] > 0
 
     # --- 1.6 Número de página -------------------------------------------------------------
 
@@ -421,9 +431,85 @@ class Verificacion:
                                    _extracto(paginacion._texto_sin_campos(p)), numero)
 
 
+    # --- 4.1 Estilos de título -----------------------------------------------------------
+
+    def _del_estilo(self, estilo, capa, etiqueta, atributo=None):
+        """El primer `etiqueta` de `capa` (pPr o rPr) en el estilo, en los que hereda o en los valores por defecto."""
+        base = estilo.find(w("basedOn"))
+        cadena = [estilo, *self.estilos.cadena(base.get(w("val")) if base is not None else None)]
+        capas = [e.find(w(capa)) for e in cadena]
+        capas.append(self.estilos.ppr_defecto if capa == "pPr" else self.estilos.rpr_defecto)
+        for c in capas:
+            el = c.find(w(etiqueta)) if c is not None else None
+            if el is not None and (atributo is None or el.get(w(atributo)) is not None):
+                return el
+        return None
+
+    def _problemas_de_estilo(self, estilo, nivel):
+        """Lo que le falta a un estilo «Título N» para tener el formato APA de su nivel."""
+        alineacion_apa, cursiva, primera_linea = titulos.FORMATO[nivel]
+        problemas = []
+        jc = self._del_estilo(estilo, "pPr", "jc", "val")
+        jc = jc.get(w("val")) if jc is not None else "left"
+        if {"start": "left"}.get(jc, jc) != alineacion_apa:
+            problemas.append("no está centrado" if alineacion_apa == "center" else "no está a la izquierda")
+        if not _activado(self._del_estilo(estilo, "rPr", "b")):
+            problemas.append("no va en negrita")
+        if _activado(self._del_estilo(estilo, "rPr", "i")) != cursiva:
+            problemas.append("no va en cursiva" if cursiva else "va en cursiva")
+        medidas = {}
+        for atributo in ("firstLine", "hanging", "left"):
+            el = self._del_estilo(estilo, "pPr", "ind", atributo)
+            medidas[atributo] = _entero(el.get(w(atributo))) if el is not None else 0
+        if medidas["firstLine"] != primera_linea or medidas["hanging"] or medidas["left"]:
+            esperada = "1,27 cm en la primera línea" if primera_linea else "ninguna"
+            problemas.append(f"la sangría no es la de su nivel ({esperada})")
+        if not _activado(self._del_estilo(estilo, "pPr", "keepNext")):
+            problemas.append("no tiene «Conservar con el siguiente»")
+        esquema = self._del_estilo(estilo, "pPr", "outlineLvl", "val")
+        if esquema is None or esquema.get(w("val")) != str(nivel - 1):
+            problemas.append(f"no tiene el nivel de esquema {nivel} (el que usa el panel de navegación)")
+        color = self._del_estilo(estilo, "rPr", "color", "val")
+        if color is not None and color.get(w("val")) != "auto":
+            problemas.append("va en color")
+        subrayado = self._del_estilo(estilo, "rPr", "u")
+        if subrayado is not None and subrayado.get(w("val")) != "none":
+            problemas.append("va subrayado")
+        if any(_activado(self._del_estilo(estilo, "rPr", e)) for e in ("caps", "smallCaps")):
+            problemas.append("pone el texto en mayúsculas")
+        if self._del_estilo(estilo, "pPr", "pBdr") is not None:
+            problemas.append("tiene bordes")
+        return problemas
+
+    def titulos(self):
+        por_nivel = titulos.estilos_de_titulo(self.doc)
+        for nivel, estilos in por_nivel.items():
+            ids = [e.get(w("styleId")) for e in estilos]
+            if len(ids) != len(set(ids)):
+                self.fallo(TITULOS, f"El estilo «Título {nivel}» está definido varias veces: Word puede usar "
+                                    "cualquiera de las definiciones.", "Estilos de Word")
+            for estilo in estilos:
+                problemas = self._problemas_de_estilo(estilo, nivel)
+                if problemas:
+                    self.fallo(TITULOS, f"El estilo «Título {nivel}» no tiene el formato APA: "
+                                        f"{'; '.join(problemas)}.", "Estilos de Word")
+
+        for c in self.clasificados:
+            if c.tipo != "titulo" or not c.nivel:
+                continue
+            if self.estilos.estilo_de(c.elemento) in {e.get(w("styleId")) for e in por_nivel[c.nivel]}:
+                continue
+            info = self.por_elemento[c.elemento]
+            if c.confianza == estructura.BAJA:
+                self.excepcion_en(TITULOS, info, "Parece un título, pero no es seguro: no se le pone estilo "
+                                                 "(se avisa en el informe).")
+            else:
+                self.fallo_en(TITULOS, info, f"Título de nivel {c.nivel} sin el estilo «Título {c.nivel}» de Word.")
+
+
 def verificar(origen):
     """
-    Comprueba las reglas de la fase 1 en un documento: una ruta a un .docx o un
+    Comprueba las reglas de la fase 1 y los estilos de título en un documento: una ruta a un .docx o un
     documento ya abierto con python-docx. Devuelve un Resultado.
     """
     if isinstance(origen, (str, Path)):
@@ -458,7 +544,7 @@ def mostrar(resultado):
         L += [_linea(h).replace("   · ", f"   · {h.regla} · ", 1) for h in resultado.excepciones]
 
     total = len(resultado.incumplimientos)
-    L.append("\nResultado: " + ("cumple todas las reglas de la fase 1." if resultado.cumple else
+    L.append("\nResultado: " + ("cumple todas las reglas comprobadas." if resultado.cumple else
                                 f"{total} incumplimiento{'s' if total > 1 else ''}."))
     return "\n".join(L)
 

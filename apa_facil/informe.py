@@ -34,6 +34,7 @@ NOMBRES = {
     "interlineado": "Interlineado",
     "alineacion": "Alineación",
     "sangria": "Sangría",
+    "titulos": "Títulos",
     "paginacion": "Número de página",
 }
 

@@ -7,7 +7,7 @@ salida/) y sobre esa copia se comprueba:
 2. que el contenido es idéntico al del original (texto, tablas, imágenes,
    notas y secciones), leyendo la copia desde el disco, salvo los cambios
    previstos que las reglas anotan en el informe (paso 3.5);
-3. que el verificador no encuentra ningún incumplimiento de la fase 1, y que se
+3. que el verificador no encuentra ningún incumplimiento (fase 1 y estilos de título), y que se
    genera su informe en JSON (paso 2.3);
 4. que el original no se ha modificado;
 5. que las excepciones admitidas son exactamente las esperadas. Si un detector
@@ -22,7 +22,7 @@ from pathlib import Path
 import docx
 import pytest
 
-from apa_facil import pipeline
+from apa_facil import estructura, pipeline
 from apa_facil.documento import comparar, radiografia
 from herramientas.verificar import ALINEACION, mostrar, verificar
 
@@ -69,6 +69,17 @@ def test_el_contenido_es_identico(procesado):
 def test_cumple_todas_las_reglas(procesado):
     resultado = procesado["verificacion"]
     assert resultado.cumple, mostrar(resultado)
+
+
+def test_la_copia_lleva_su_estructura(procesado):
+    """
+    Desde el paso 4.1 cada título lleva su estilo de Word, así que la copia se
+    clasifica igual que el original (el verificador solo tiene la copia).
+    """
+    def titulos(ruta):
+        return [(c.tipo, c.nivel, c.texto) for c in estructura.clasificar(docx.Document(str(ruta)))
+                if c.tipo in ("titulo", "titulo_referencias", "anexo")]
+    assert titulos(procesado["salida"]) == titulos(procesado["original"])
 
 
 def test_el_original_no_se_toca(procesado):

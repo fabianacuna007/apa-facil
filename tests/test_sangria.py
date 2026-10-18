@@ -17,7 +17,7 @@ from docx.shared import Cm, Pt
 from apa_facil import estructura, pipeline
 from apa_facil.documento import Estilos, texto_parrafo, w
 from apa_facil.informe import Informe
-from apa_facil.reglas import sangria
+from apa_facil.reglas import sangria, titulos
 from apa_facil.reglas.sangria import motivos_sin_sangria
 
 PRUEBAS = sorted((Path(__file__).resolve().parent.parent / "pruebas").glob("*.docx"))
@@ -258,7 +258,11 @@ def test_sin_la_estructura_del_original_el_titulo_se_tomaria_por_texto():
 
 
 def test_las_reglas_reciben_la_estructura_del_original(tmp_path, monkeypatch):
-    """En el 04, la copia formateada se clasificaría distinto (sin la letra más grande de sus títulos)."""
+    """
+    En el 04, la copia formateada se clasificaría distinto (sin la letra más grande de sus títulos)
+    si sus títulos no recibieran su estilo de Word (paso 4.1). Con los estilos, la copia lleva su
+    estructura escrita y se clasifica igual que el original.
+    """
     original = next(p for p in PRUEBAS if p.name.startswith("04"))
     recibidas = []
     espia = SimpleNamespace(__name__="espia", aplicar=lambda doc, opciones, informe, estructura: recibidas.append(
@@ -271,7 +275,15 @@ def test_las_reglas_reciben_la_estructura_del_original(tmp_path, monkeypatch):
     assert recibidas[1] == [c for c in del_original if c[0] not in borrados],         "la misma estructura después de las reglas, sin los párrafos vacíos borrados"
     copia = docx.Document(str(tmp_path / "04_formato_caotico_APA.docx"))
     de_la_copia = [(c.tipo, c.nivel) for c in estructura.clasificar(copia)]
-    assert de_la_copia != [(c[1], c[2]) for c in recibidas[1]]
+    assert de_la_copia == [(c[1], c[2]) for c in recibidas[1]]
+
+    sin_titulos = [r for r in pipeline.REGLAS if r is not titulos and r is not espia]
+    monkeypatch.setattr(pipeline, "REGLAS", sin_titulos)
+    otra = tmp_path / "sin_titulos"
+    otra.mkdir()
+    pipeline.procesar(original, otra)
+    sin_estilos = [(c.tipo, c.nivel) for c in estructura.clasificar(docx.Document(str(otra / original.name.replace(".docx", "_APA.docx"))))]
+    assert sin_estilos != [(c[1], c[2]) for c in recibidas[1]], "sin los estilos de título, la copia se clasifica distinto"
 
 
 def test_aviso_de_tabulador():
@@ -304,13 +316,16 @@ def test_documentos_de_prueba(original, tmp_path):
     copia = docx.Document(str(salida))
     estilos = Estilos(copia)
     clasificados = motivos_sin_sangria(copia)
+    # Los títulos de nivel 4 y 5 llevan sangría de primera línea: la pone su estilo (paso 4.1).
+    con_sangria_de_titulo = {c.elemento for c in estructura.clasificar(copia)
+                             if c.tipo == "titulo" and c.nivel in (4, 5)}
 
     sangrados = [p for p, m in clasificados if m is None]
     assert len(sangrados) == CON_SANGRIA[clave]
     for p, m in clasificados:
         esperada = 720 if m is None else None
         primera = int(estilos.parrafo(p, "ind", "firstLine") or 0)
-        if esperada:
+        if esperada or p in con_sangria_de_titulo:
             assert primera == 720
         elif m != "tabulador":
             assert primera == 0, f"«{texto_parrafo(p)[:30]}» ({m}) no debe llevar sangría"

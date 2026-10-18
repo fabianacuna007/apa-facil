@@ -67,7 +67,7 @@ Cada fila lleva el número de párrafo, el tipo, la confianza (alta, media o baj
 
 ## Comprobar si un documento cumple APA
 
-El verificador comprueba las reglas de formato básico (márgenes, fuente, interlineado, alineación, sangría y número de página) y lista cada incumplimiento con su sección, su número de párrafo y un extracto del texto. Lo que la herramienta deja así a propósito (la portada de la universidad, el código de programación…) aparece aparte, como excepción admitida. Termina con código 0 si todo cumple y 1 si no:
+El verificador comprueba las reglas de formato básico (márgenes, fuente, interlineado, alineación, sangría y número de página) y los estilos de título, y lista cada incumplimiento con su sección, su número de párrafo y un extracto del texto. Lo que la herramienta deja así a propósito (la portada de la universidad, el código de programación…) aparece aparte, como excepción admitida. Termina con código 0 si todo cumple y 1 si no:
 
 ```
 python herramientas\verificar.py salida\04_formato_caotico_APA.docx

@@ -14,8 +14,8 @@ from docx.enum.section import WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.oxml import OxmlElement
 
-from apa_facil import pipeline
-from apa_facil.documento import Estilos, editar_partes_de_texto, w
+from apa_facil import estructura, pipeline
+from apa_facil.documento import Estilos, editar_partes_de_texto, texto_parrafo, w
 from apa_facil.informe import Informe
 from apa_facil.reglas import alineacion
 
@@ -194,6 +194,13 @@ def _alineaciones(doc):
     return cuenta
 
 
+def _centrados(doc):
+    """Los textos de los párrafos centrados del cuerpo y de las tablas, con cuántas veces sale cada uno."""
+    estilos = Estilos(doc)
+    return Counter(" ".join(texto_parrafo(p).split()) for p in doc.element.body.iter(w("p"))
+                   if (estilos.parrafo(p, "jc", "val") or "left") == "center")
+
+
 DERECHA_ESPERADA = {"05": 3}   # las tres líneas de la portada del TFG
 
 
@@ -205,9 +212,13 @@ def test_documentos_de_prueba(original, tmp_path):
 
     assert not [k for k in despues if k[1] in alineacion.JUSTIFICADOS]
     assert despues[("cuerpo", "right")] == DERECHA_ESPERADA.get(original.name[:2], 0)
+    # Lo centrado sigue centrado; lo único que se centra son los títulos de nivel 1 (paso 4.1).
+    centrados_antes, centrados_despues = _centrados(docx.Document(str(original))), _centrados(docx.Document(str(salida)))
+    assert not centrados_antes - centrados_despues, "lo centrado no cambia"
+    nivel_1 = {" ".join(c.texto.split()) for c in estructura.clasificar(docx.Document(str(salida)))
+               if c.tipo in ("titulo", "titulo_referencias", "anexo") and (c.nivel or 1) == 1}
+    assert set(centrados_despues - centrados_antes) <= nivel_1
     for clave, n in antes.items():
-        if clave[1] == "center" and clave[0] in ("cuerpo", "tabla"):
-            assert despues[clave] == n, f"lo centrado no cambia: {clave}"
         if clave[0].endswith(("footnotes.xml", "endnotes.xml")):   # encabezados y pies: paso 1.6
             assert despues[clave] == n, f"las notas no cambian: {clave}"
     avisos_portada = [a for a in informe.avisos if "portada" in a]

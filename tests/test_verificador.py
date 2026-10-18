@@ -311,7 +311,7 @@ def test_main_codigos_de_salida(base, capsys):
     assert main([]) == 2
     assert main(["no_existe.docx"]) == 1
     salida = capsys.readouterr().out
-    assert "cumple todas las reglas de la fase 1" in salida
+    assert "cumple todas las reglas comprobadas" in salida
     assert "✘ 1.1 Márgenes" in salida and "No se encuentra el archivo" in salida
 
 
