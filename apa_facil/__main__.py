@@ -3,10 +3,14 @@ Línea de comandos:
 
     python -m apa_facil mi_trabajo.docx [otro.docx ...] [--fuente "Arial"]
                         [--quitar-numeracion] [--quitar-mayusculas] [--quitar-introduccion]
+                        [--datos datos.json] [--titulo "…"] [--autor "…"] … [--fecha 16/10/2026]
     python -m apa_facil mi_trabajo.docx --diagnostico
 
 Guarda cada copia en salida/ como nombre_APA.docx y muestra un resumen de lo
 que se ha cambiado y de lo que el estudiante debe revisar.
+
+Los datos de la portada llegan en un archivo JSON (--datos) o con opciones
+sueltas (--titulo, --autor…), que mandan sobre el archivo dato a dato.
 
 Con --diagnostico no se genera ninguna copia: solo se muestra qué es cada
 párrafo (título, cuerpo, lista…) según el clasificador, para revisarlo.
@@ -18,7 +22,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from apa_facil import documento, estructura, pipeline
+from apa_facil import datos_portada, documento, estructura, pipeline
 from apa_facil.documento import ErrorDocumento
 from apa_facil.reglas import fuente
 
@@ -41,6 +45,9 @@ class _Ordenes(argparse.ArgumentParser):
             texto = "Opción no reconocida: " + message.split(":", 1)[1].strip()
         elif "--fuente" in message and "expected one argument" in message:
             texto = f'Falta indicar la fuente después de --fuente. Ejemplo: {EJEMPLO} --fuente "Arial"'
+        elif "expected one argument" in message:
+            opcion = message.split(":", 1)[0].removeprefix("argument ").split("/")[-1]
+            texto = f"Falta indicar el valor después de {opcion}."
         elif message.startswith("argument "):   # mensaje propio de una opción (p. ej. --fuente)
             texto = message.split(": ", 1)[1]
         else:
@@ -79,6 +86,22 @@ def crear_ordenes():
                          help="quita el rótulo «Introducción» del primer apartado, que APA no usa (el título del "
                               "trabajo hace sus veces), si el apartado no tiene subapartados. Sin esta opción solo "
                               "se avisa")
+    portada = ordenes.add_argument_group(
+        "datos de la portada", "En un archivo JSON (--datos) o con estas opciones, que mandan sobre el archivo. "
+        "Lo que falte no se rellena: se avisa")
+    portada.add_argument("--datos", metavar="datos.json",
+                         help="archivo con los datos de la portada (ver el ejemplo en docs/datos_ejemplo.json)")
+    portada.add_argument("--titulo", metavar='"…"', help="título del trabajo")
+    portada.add_argument("--autor", action="append", metavar='"…"',
+                         help="autor o autora; se repite para cada uno (--autor \"Ana Pérez\" --autor \"Luis Gómez\")")
+    portada.add_argument("--departamento", metavar='"…"', help="departamento o facultad")
+    portada.add_argument("--universidad", metavar='"…"', help="universidad")
+    portada.add_argument("--codigo-asignatura", metavar='"…"', help="código de la asignatura, p. ej. \"HIS 201\"")
+    portada.add_argument("--asignatura", metavar='"…"', help="nombre de la asignatura")
+    portada.add_argument("--profesor", action="append", metavar='"…"',
+                         help="profesor o profesora; se repite si son varios")
+    portada.add_argument("--fecha", metavar="FECHA",
+                         help=f"fecha de entrega: {datos_portada.FORMATOS_FECHA.replace('«', '').replace('»', '')}")
     ordenes.add_argument("--diagnostico", action="store_true",
                          help="no genera ninguna copia: muestra qué es cada párrafo (título, cuerpo, lista…), "
                               "con qué confianza y por qué, para revisar cómo se ha entendido el documento")
@@ -141,9 +164,16 @@ def diagnosticar(archivos, ancho=None):
     return 0 if bien == total else 1
 
 
+def opciones_de_portada(args):
+    """{dato: valor} de las opciones sueltas de portada; None si no se usó la opción."""
+    return {clave: getattr(args, opcion.removeprefix("--").replace("-", "_"))
+            for clave, (opcion, _) in datos_portada.DATOS.items()}
+
+
 def main(argv=None, carpeta_salida=None):
     configurar_terminal()
-    args = crear_ordenes().parse_args(argv)
+    ordenes = crear_ordenes()
+    args = ordenes.parse_args(argv)
     opciones = {"fuente": args.fuente} if args.fuente else {}
     for opcion in ("quitar_numeracion", "quitar_mayusculas", "quitar_introduccion"):
         if getattr(args, opcion):
@@ -156,7 +186,18 @@ def main(argv=None, carpeta_salida=None):
                               ("--quitar-introduccion", args.quitar_introduccion)):
             if usada:
                 print(f"Aviso: la opción {nombre} no se usa en el modo diagnóstico, que no cambia nada.")
+        if args.datos or any(v is not None for v in opciones_de_portada(args).values()):
+            print("Aviso: los datos de la portada no se usan en el modo diagnóstico, que no cambia nada.")
         return diagnosticar(archivos)
+
+    try:
+        portada = datos_portada.combinar(args.datos, opciones_de_portada(args))
+    except datos_portada.ErrorDatos as e:
+        ordenes.error(f"{e} No se ha procesado ningún documento.")
+    if portada:
+        opciones["portada"] = portada
+        if len(archivos) > 1:
+            print(f"Aviso: se usarán los mismos datos de portada en los {len(archivos)} documentos.")
     bien = 0
     for archivo in archivos:
         nombre = Path(archivo).name

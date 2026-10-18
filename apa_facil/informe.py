@@ -24,10 +24,12 @@ from dataclasses import dataclass, field
 
 from apa_facil.documento import CambioPrevisto, ErrorDocumento
 
-VERSION = 3   # versión del formato del JSON: se sube si cambia su estructura (2 y 3: opciones de los títulos)
+VERSION = 4   # versión del formato del JSON: se sube si cambia su estructura (2 y 3: opciones de los títulos;
+              # 4: datos de la portada)
 
 # Nombre legible de cada regla (el módulo de apa_facil/reglas/ que la aplica).
 NOMBRES = {
+    "portada": "Portada",
     "avisos": "Revisión del texto",
     "limpieza": "Limpieza de formato",
     "margenes": "Márgenes",
@@ -105,12 +107,19 @@ class Informe:
             "opciones": {"fuente": self.opciones.get("fuente"),
                          "quitar_numeracion": bool(self.opciones.get("quitar_numeracion")),
                          "quitar_mayusculas": bool(self.opciones.get("quitar_mayusculas")),
-                         "quitar_introduccion": bool(self.opciones.get("quitar_introduccion"))},
+                         "quitar_introduccion": bool(self.opciones.get("quitar_introduccion")),
+                         "portada": self._portada()},
             "resumen": {clave: sum(1 for e in self.entradas if e.tipo == tipo) for tipo, clave, _ in GRUPOS},
         }
         for tipo, clave, _ in GRUPOS:
             datos[clave] = [entrada(e) for e in self.entradas if e.tipo == tipo]
         return datos
+
+    def _portada(self):
+        # Solo qué datos se han dado y cuáles faltan, no sus valores: son datos personales
+        # (nombres) y la web ya los tiene.
+        datos = self.opciones.get("portada")
+        return {"dados": datos.dados(), "faltan": datos.faltan()} if datos else None
 
     def a_json(self):
         # ensure_ascii=False: las tildes se guardan tal cual ("á", no "á").

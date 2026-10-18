@@ -44,6 +44,18 @@ Con `--quitar-introduccion` se quita el rótulo «Introducción» del primer apa
 
 Las tres opciones son independientes. Sin ellas solo se avisa, porque cambian el texto y muchas universidades exigen numerar los títulos. Al quitar las mayúsculas se respetan los nombres propios y las siglas que el trabajo escribe así en el texto.
 
+### Datos de la portada
+
+Los datos de la portada de estudiante (título, autores, departamento, universidad, código y nombre de la asignatura, profesor y fecha de entrega) se dan en un archivo JSON con `--datos`. Hay un ejemplo en `docs\datos_ejemplo.json`:
+
+```
+python -m apa_facil pruebas\01_ensayo_basico.docx --datos docs\datos_ejemplo.json
+```
+
+También se pueden dar con opciones sueltas, que mandan sobre el archivo dato a dato: `--titulo`, `--autor` (una vez por autor), `--departamento`, `--universidad`, `--codigo-asignatura`, `--asignatura`, `--profesor` (una vez por profesor) y `--fecha`. La fecha se escribe como `16/10/2026`, `2026-10-16` o `16 de octubre de 2026`.
+
+Los datos se usan tal cual se escriben: solo se quitan los espacios de los extremos. Lo que falte no se rellena, ni siquiera la fecha: se avisa en el informe. Si el archivo está mal escrito (una coma de más, una clave desconocida, una fecha que no existe), no se procesa nada y se explica qué corregir. El informe JSON solo dice qué datos se han dado, no sus valores. De momento los datos solo se leen y se comprueban: la portada APA llegará en el siguiente paso.
+
 ### Qué hace (formato básico, títulos y limpieza)
 
 - **Márgenes** de 2,54 cm en todas las secciones; las páginas horizontales siguen horizontales.

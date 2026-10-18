@@ -8,7 +8,7 @@ Las reglas se van añadiendo a REGLAS a lo largo de la fase 1.
 from datetime import datetime
 from pathlib import Path
 
-from apa_facil import documento, estructura
+from apa_facil import datos_portada, documento, estructura
 from apa_facil.documento import ErrorDocumento
 from apa_facil.informe import Informe
 from apa_facil.reglas import alineacion, avisos, fuente, interlineado, limpieza, margenes, paginacion, sangria, titulos
@@ -36,6 +36,10 @@ def procesar(entrada, carpeta_salida=None, opciones=None):
     # después de la regla de fuente, por ejemplo, ya no se ve qué títulos tenían
     # la letra más grande.
     clasificados = estructura.clasificar(doc)
+    # Datos de la portada (paso 5.1): de momento solo se avisa de los que faltan.
+    if opciones.get("portada"):
+        informe.regla = "portada"
+        datos_portada.avisar(opciones["portada"], informe)
     for regla in REGLAS:
         informe.regla = regla.__name__.rsplit(".", 1)[-1]   # cada mensaje sabe de qué regla viene
         regla.aplicar(doc, opciones, informe, clasificados)

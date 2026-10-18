@@ -188,7 +188,7 @@ def test_opciones_de_los_titulos(tmp_path, capsys):
     assert "--quitar-numeracion" not in salida and "--quitar-mayusculas" not in salida, "sin los avisos"
     datos = json.loads((tmp_path / f"{original.stem}_APA.json").read_text(encoding="utf-8"))
     assert datos["opciones"] == {"fuente": None, "quitar_numeracion": True, "quitar_mayusculas": True,
-                                 "quitar_introduccion": False}
+                                 "quitar_introduccion": False, "portada": None}
 
 
 def test_opciones_de_los_titulos_en_el_diagnostico(capsys):
