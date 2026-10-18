@@ -5,7 +5,8 @@ Cada documento se procesa una sola vez (en una carpeta temporal, nunca en
 salida/) y sobre esa copia se comprueba:
 1. que se procesa sin errores;
 2. que el contenido es idéntico al del original (texto, tablas, imágenes,
-   notas y secciones), leyendo la copia desde el disco;
+   notas y secciones), leyendo la copia desde el disco, salvo los cambios
+   previstos que las reglas anotan en el informe (paso 3.5);
 3. que el verificador no encuentra ningún incumplimiento de la fase 1, y que se
    genera su informe en JSON (paso 2.3);
 4. que el original no se ha modificado;
@@ -23,7 +24,7 @@ import pytest
 
 from apa_facil import pipeline
 from apa_facil.documento import comparar, radiografia
-from herramientas.verificar import ALINEACION, SANGRIA, mostrar, verificar
+from herramientas.verificar import ALINEACION, mostrar, verificar
 
 CARPETA = Path(__file__).resolve().parent.parent / "pruebas"
 PRUEBAS = sorted(CARPETA.glob("*.docx"))
@@ -34,7 +35,7 @@ EXCEPCIONES = {
     "01_ensayo_basico": set(),
     "02_informe_tablas": set(),
     "03_trabajo_imagenes_listas": set(),
-    "04_formato_caotico": {(SANGRIA, 7), (SANGRIA, 8), (SANGRIA, 61)},          # empiezan con tabulador
+    "04_formato_caotico": set(),   # sus 3 párrafos con tabulador se limpian desde el paso 3.5
     "05_tfg_completo": {(ALINEACION, 8), (ALINEACION, 9), (ALINEACION, 10)},   # portada: Autora, Tutor, Convocatoria
 }
 
@@ -61,7 +62,7 @@ def test_se_procesa_sin_errores(procesado):
 def test_el_contenido_es_identico(procesado):
     antes = radiografia(docx.Document(str(procesado["original"])))
     despues = radiografia(docx.Document(str(procesado["salida"])))
-    diferencias = comparar(antes, despues)
+    diferencias = comparar(antes, despues, procesado["informe"].cambios_previstos)
     assert diferencias == [], "\n".join(diferencias)
 
 

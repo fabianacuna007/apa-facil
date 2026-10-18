@@ -31,11 +31,12 @@ def test_estan_los_cinco_documentos():
 @pytest.mark.parametrize("original", PRUEBAS, ids=lambda p: p.stem)
 def test_ida_y_vuelta(original, tmp_path):
     antes = huella(original)
-    salida, _ = pipeline.procesar(original, tmp_path)
+    salida, informe = pipeline.procesar(original, tmp_path)
 
     assert salida == tmp_path / f"{original.stem}_APA.docx"
     copia, orig = docx.Document(str(salida)), docx.Document(str(original))
-    assert len(copia.paragraphs) == len(orig.paragraphs)
+    borrados = sum(1 for c in informe.cambios_previstos if c.accion == "borrar")   # párrafos vacíos (3.5)
+    assert len(copia.paragraphs) == len(orig.paragraphs) - borrados
     assert len(copia.tables) == len(orig.tables)
     assert len(copia.sections) == len(orig.sections)
     assert huella(original) == antes, "el original no debe cambiar"

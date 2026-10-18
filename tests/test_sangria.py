@@ -262,14 +262,16 @@ def test_las_reglas_reciben_la_estructura_del_original(tmp_path, monkeypatch):
     original = next(p for p in PRUEBAS if p.name.startswith("04"))
     recibidas = []
     espia = SimpleNamespace(__name__="espia", aplicar=lambda doc, opciones, informe, estructura: recibidas.append(
-        [(c.tipo, c.nivel) for c in estructura]))
+        [(c.numero, c.tipo, c.nivel) for c in estructura]))
     monkeypatch.setattr(pipeline, "REGLAS", [espia] + pipeline.REGLAS + [espia])
-    pipeline.procesar(original, tmp_path)
-    del_original = [(c.tipo, c.nivel) for c in estructura.clasificar(docx.Document(str(original)))]
-    assert recibidas == [del_original, del_original], "la misma estructura antes y después de las reglas"
+    _, informe = pipeline.procesar(original, tmp_path)
+    del_original = [(c.numero, c.tipo, c.nivel) for c in estructura.clasificar(docx.Document(str(original)))]
+    borrados = {c.parrafo for c in informe.cambios_previstos if c.accion == "borrar"}
+    assert recibidas[0] == del_original
+    assert recibidas[1] == [c for c in del_original if c[0] not in borrados],         "la misma estructura después de las reglas, sin los párrafos vacíos borrados"
     copia = docx.Document(str(tmp_path / "04_formato_caotico_APA.docx"))
     de_la_copia = [(c.tipo, c.nivel) for c in estructura.clasificar(copia)]
-    assert de_la_copia != del_original
+    assert de_la_copia != [(c[1], c[2]) for c in recibidas[1]]
 
 
 def test_aviso_de_tabulador():
@@ -282,13 +284,14 @@ def test_aviso_de_tabulador():
 
 # --- Documentos de prueba --------------------------------------------------------------
 
-CON_SANGRIA = {"01": 8, "02": 8, "03": 6, "04": 4, "05": 13}   # 04: «Más información en…» es texto (paso 3.4)
+# 04: «Más información en…» es texto (paso 3.4) y sus 3 párrafos con tabulador se limpian (paso 3.5).
+CON_SANGRIA = {"01": 8, "02": 8, "03": 6, "04": 7, "05": 13}
 EMPIEZAN_POR = {   # algunos párrafos que NO deben llevar sangría, con el motivo
     "01": [("BIBLIOGRAFÍA", "rótulo de referencias"), ("Ramírez Soto", "referencia"), ("1. Cambios", "título")],
     "02": [("Este informe analiza", "primer párrafo del resumen"), ("Castro, P.", "referencia")],
     "03": [("Mejorar el aislamiento", "lista"), ("Herrero, C.", "referencia")],
     "04": [("•", "lista"), ("Webgrafía", "rótulo de referencias"), ("Martínez, J.", "referencia"),
-           ("Las redes sociales son", "tabulador"), ("Efectos sobre", "título")],
+           ("Efectos sobre", "título")],
     "05": [("Este trabajo analiza", "primer párrafo del resumen"), ('"El turismo rural', "cita en bloque"),
            ("Fuente:", "leyenda de tabla"), ("1. ¿Desde", "lista"), ("Molina, R.", "referencia")],
 }

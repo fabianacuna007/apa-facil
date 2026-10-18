@@ -11,9 +11,9 @@ from pathlib import Path
 from apa_facil import documento, estructura
 from apa_facil.documento import ErrorDocumento
 from apa_facil.informe import Informe
-from apa_facil.reglas import alineacion, fuente, interlineado, margenes, paginacion, sangria
+from apa_facil.reglas import alineacion, fuente, interlineado, limpieza, margenes, paginacion, sangria
 
-REGLAS = [margenes, fuente, interlineado, alineacion, sangria, paginacion]   # en este orden
+REGLAS = [limpieza, margenes, fuente, interlineado, alineacion, sangria, paginacion]   # en este orden
 
 
 def procesar(entrada, carpeta_salida=None, opciones=None):
@@ -42,9 +42,11 @@ def procesar(entrada, carpeta_salida=None, opciones=None):
     ruta_informe = salida.with_suffix(".json")
 
     # Verificación: se vuelve a abrir la copia ya guardada y se compara con el
-    # original. Si el contenido no coincide, la copia no se entrega (ni su informe,
-    # ni el de una vez anterior).
-    diferencias = documento.comparar(antes, documento.radiografia(documento.abrir(salida)))
+    # original. Solo se admiten los cambios de contenido que las reglas han anotado
+    # (y que son de los permitidos). Si no coincide, la copia no se entrega (ni su
+    # informe, ni el de una vez anterior).
+    diferencias = documento.comparar(antes, documento.radiografia(documento.abrir(salida)),
+                                     informe.cambios_previstos)
     if diferencias:
         salida.unlink(missing_ok=True)
         ruta_informe.unlink(missing_ok=True)

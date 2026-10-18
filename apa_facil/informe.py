@@ -5,6 +5,11 @@ El informe de cada documento procesado. Distingue tres cosas:
 - avisos: lo que el estudiante debe revisar a mano;
 - errores: lo que no se pudo procesar.
 
+Además guarda los cambios de contenido previstos (documento.CambioPrevisto):
+los párrafos vacíos borrados y los tabuladores quitados del principio. Con
+ellos, la comprobación de integridad sabe qué diferencias son a propósito. No
+van en el JSON: no hacen falta para el estudiante y así no se guarda su texto.
+
 Cada entrada recuerda qué regla la produjo. Las reglas no tienen que decirlo:
 el pipeline anota en el informe qué regla se está aplicando antes de llamarla.
 
@@ -16,12 +21,13 @@ pensados para un estudiante.
 import json
 from dataclasses import dataclass, field
 
-from apa_facil.documento import ErrorDocumento
+from apa_facil.documento import CambioPrevisto, ErrorDocumento
 
 VERSION = 1   # versión del formato del JSON: se sube si cambia su estructura
 
 # Nombre legible de cada regla (el módulo de apa_facil/reglas/ que la aplica).
 NOMBRES = {
+    "limpieza": "Limpieza de formato",
     "margenes": "Márgenes",
     "fuente": "Fuente",
     "interlineado": "Interlineado",
@@ -52,6 +58,7 @@ class Informe:
     copia: str = None        # nombre de la copia generada
     opciones: dict = field(default_factory=dict)
     fecha: str = None        # cuándo se procesó, p. ej. "2026-10-17T11:05:00"
+    cambios_previstos: list = field(default_factory=list)   # CambioPrevisto
 
     def cambio(self, mensaje):
         self.entradas.append(Entrada("cambio", self.regla, mensaje))
@@ -61,6 +68,10 @@ class Informe:
 
     def error(self, mensaje):
         self.entradas.append(Entrada("error", self.regla, mensaje))
+
+    def cambio_previsto(self, parrafo, accion, quitado=""):
+        """Anota un cambio de contenido hecho a propósito (ver documento.CambioPrevisto)."""
+        self.cambios_previstos.append(CambioPrevisto(parrafo, accion, quitado))
 
     def _mensajes(self, tipo):
         return [e.mensaje for e in self.entradas if e.tipo == tipo]

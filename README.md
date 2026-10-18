@@ -34,7 +34,7 @@ python -m apa_facil pruebas\01_ensayo_basico.docx --fuente "Arial"
 
 Las fuentes recomendadas por APA, con su tamaño, son Aptos 12, Calibri 11, Arial 11, Lucida Sans Unicode 10, Times New Roman 12, Georgia 11 y Computer Modern 10. Si no se indica `--fuente`, se mantiene la del documento si es una de ellas, o se usa la más parecida.
 
-### Qué hace (fase 1: formato básico)
+### Qué hace (formato básico y limpieza)
 
 - **Márgenes** de 2,54 cm en todas las secciones; las páginas horizontales siguen horizontales.
 - **Una sola fuente** recomendada por APA en todo el trabajo, con su tamaño (salvo el código de programación, los símbolos y las ecuaciones).
@@ -42,6 +42,7 @@ Las fuentes recomendadas por APA, con su tamaño, son Aptos 12, Calibri 11, Aria
 - **Texto alineado a la izquierda**, sin justificar ni guiones automáticos.
 - **Sangría de 1,27 cm** en la primera línea de los párrafos de texto (no en títulos, listas, referencias, citas en bloque…).
 - **Número de página** arriba a la derecha en todas las páginas, también en la portada, y nada más en el encabezado.
+- **Limpieza**: quita los párrafos vacíos usados para dejar espacio, los tabuladores o espacios usados como sangría y el color, el resaltado y el subrayado del texto (los enlaces se conservan). No toca la portada ni las tablas.
 
 Al terminar, muestra para cada documento qué ha cambiado y qué conviene revisar a mano, y guarda ese mismo informe en JSON junto a la copia (`salida\nombre_APA.json`), con la regla de la que viene cada mensaje. Antes de entregar la copia comprueba que el texto, las tablas, las imágenes, las notas y las secciones son exactamente los del original; si no, no la entrega.
 

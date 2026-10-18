@@ -30,10 +30,10 @@ def texto_completo(r):
 
 @pytest.mark.parametrize("original", PRUEBAS, ids=lambda p: p.stem)
 def test_la_ida_y_vuelta_conserva_todo(original, tmp_path):
-    salida, _ = pipeline.procesar(original, tmp_path)
+    salida, informe = pipeline.procesar(original, tmp_path)
     antes = radiografia(docx.Document(str(original)))
     despues = radiografia(docx.Document(str(salida)))
-    assert comparar(antes, despues) == []
+    assert comparar(antes, despues, informe.cambios_previstos) == []
 
 
 @pytest.mark.parametrize("nombre, atributo, valor", [

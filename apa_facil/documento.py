@@ -180,10 +180,50 @@ def _extracto(texto, desde=0, largo=60):
     return ("…" if inicio else "") + trozo + ("…" if inicio + largo < len(texto) else "")
 
 
-def comparar(antes, despues, maximo=10):
+@dataclass
+class CambioPrevisto:
+    """
+    Un cambio de contenido que una regla hace a propósito (está previsto en
+    ROADMAP.md y la regla lo anota en el informe). Solo hay dos:
+      - "borrar": se borra un párrafo sin texto (paso 3.5, párrafos vacíos);
+      - "recortar": se quita `quitado` del principio del párrafo, que solo
+        puede ser espacio en blanco (paso 3.5, tabuladores usados como sangría).
+    """
+    parrafo: int     # número del párrafo en el original: desde 1, contando los de las tablas
+    accion: str      # "borrar" o "recortar"
+    quitado: str = ""
+
+
+def _aplicar_previstos(antes, previstos):
+    """
+    Los textos que debería tener la copia si solo se han hecho los cambios
+    previstos, y los problemas si un cambio previsto no es de los permitidos.
+    """
+    textos = list(antes.textos)
+    problemas, borrar = [], set()
+    for cambio in previstos:
+        i = cambio.parrafo - 1   # en la radiografía, los párrafos van primero y en orden
+        if not 0 <= i < len(textos) or not textos[i][0].startswith(f"Párrafo {cambio.parrafo}"):
+            problemas.append(f"Párrafo {cambio.parrafo}: una regla anotó un cambio, pero el párrafo no existe.")
+            continue
+        donde, texto = textos[i]
+        if cambio.accion == "borrar" and not texto.strip():
+            borrar.add(i)
+        elif cambio.accion == "recortar" and cambio.quitado and not cambio.quitado.strip() \
+                and texto.startswith(cambio.quitado):
+            textos[i] = (donde, texto[len(cambio.quitado):])
+        else:
+            problemas.append(f"{donde}: una regla anotó «{cambio.accion}», pero eso cambiaría el texto "
+                             f"(«{_extracto(texto)}»). Solo se pueden borrar párrafos vacíos y quitar "
+                             "espacios o tabuladores del principio.")
+    return [t for i, t in enumerate(textos) if i not in borrar], problemas
+
+
+def comparar(antes, despues, previstos=(), maximo=10):
     """
     Diferencias de contenido entre dos radiografías, explicadas en español.
-    Lista vacía = el contenido es idéntico.
+    Lista vacía = el contenido es idéntico, salvo los cambios previstos
+    (CambioPrevisto) que se indiquen, que tienen que haberse hecho tal cual.
     """
     diferencias = []
     for atributo, nombre in ELEMENTOS:
@@ -191,6 +231,9 @@ def comparar(antes, despues, maximo=10):
         if a != d:
             diferencias.append(f"Había {a} {nombre} y ahora hay {d}.")
 
+    esperados, problemas = _aplicar_previstos(antes, previstos)
+    diferencias += problemas
+    antes = Radiografia(textos=esperados)
     textos_a = [t for _, t in antes.textos]
     textos_d = [t for _, t in despues.textos]
     cambios = difflib.SequenceMatcher(None, textos_a, textos_d, autojunk=False).get_opcodes()
