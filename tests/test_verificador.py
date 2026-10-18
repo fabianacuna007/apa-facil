@@ -211,7 +211,10 @@ def test_tablas_admiten_sencillo_1_5_y_doble_pero_no_1_15(doc):
     for celda, linea in zip(tabla.rows[0].cells, (240, 360, 480, 276)):
         celda.paragraphs[0].add_run("dato")
         espaciado(celda.paragraphs[0]._p, line=linea, lineRule="auto", before=0, after=0)
-    h = unico(doc, INTERLINEADO)
+    # Sin número ni título, la tabla incumple también 6.1: aquí solo importa el interlineado.
+    hallados = [h for h in incumplimientos(doc) if h.regla == INTERLINEADO]
+    assert len(hallados) == 1
+    h = hallados[0]
     assert h.donde.endswith("(en una tabla)") and "Interlineado 1,15" in h.mensaje
 
 

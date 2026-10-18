@@ -97,8 +97,10 @@ def _avisar_de_lo_que_no_cabe(doc, informe):
             nombre = f"{tipo} {contador[tipo]}"
             if tabla is not None:
                 nombre += _primera_fila(tabla)
-                remedio = ("En Word, haz clic en la tabla y, en la pestaña «Disposición», "
-                           "usa «Autoajustar» → «Autoajustar a la ventana».")
+                remedio = ("APA recomienda ponerla en una página horizontal: en Word, selecciónala entera y, en "
+                           "la pestaña «Disposición», abre «Márgenes» → «Márgenes personalizados», elige "
+                           "«Horizontal» y, en «Aplicar a», «Texto seleccionado». Si cabe estrechándola, también "
+                           "puedes hacer clic en la tabla y usar «Autoajustar» → «Autoajustar a la ventana».")
             else:
                 remedio = "En Word, redúcela arrastrando una de sus esquinas."
             informe.aviso(f"{nombre[0].upper()}{nombre[1:]} mide {cm(ancho)} cm de ancho y entre los "

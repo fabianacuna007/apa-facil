@@ -28,6 +28,7 @@ Uso:
 Termina con código 0 si todos los documentos cumplen y 1 si alguno no.
 """
 
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -42,6 +43,7 @@ from apa_facil.reglas import (alineacion, fuente, interlineado, margenes, pagina
                                titulos)
 from apa_facil.reglas import portada as regla_portada  # noqa: E402
 from apa_facil.reglas import resumen as resumen_regla  # noqa: E402
+from apa_facil.reglas import tablas as regla_tablas  # noqa: E402
 
 MARGENES = "1.1 Márgenes"
 FUENTE = "1.2 Fuente"
@@ -59,8 +61,11 @@ PORTADA = "5.2 Portada"
 PORTADA_PROPIA = "5.3 Portada propia"
 INDICE = "5.4 Índice"
 RESUMEN = "5.5 Resumen"
+TABLAS = "6.1 Tablas"
 REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS, TEXTO_TITULOS,
-          TITULO_TRABAJO, TITULOS_EN_LINEA, MAYUSCULAS_TITULOS, PORTADA, PORTADA_PROPIA, INDICE, RESUMEN]
+          TITULO_TRABAJO, TITULOS_EN_LINEA, MAYUSCULAS_TITULOS, PORTADA, PORTADA_PROPIA, INDICE, RESUMEN, TABLAS]
+SIN_LINEA = (None, "nil", "none")
+SIN_FONDO = (None, "auto", "FFFFFF", "ffffff")
 
 MAXIMO_POR_REGLA = 8   # incumplimientos que se muestran de cada regla; del resto, solo cuántos son
 
@@ -166,7 +171,7 @@ class Verificacion:
         for comprobacion in (self.margenes, self.fuente, self.interlineado, self.alineacion,
                              self.sangria, self.paginacion, self.titulos, self.formato_de_titulos,
                              self.texto_de_titulos, self.titulo_del_trabajo, self.titulos_en_linea,
-                             self.mayusculas_de_titulos, self.portada, self.indice, self.resumen):
+                             self.mayusculas_de_titulos, self.portada, self.indice, self.resumen, self.tablas):
             comprobacion()
         return self.resultado
 
@@ -811,6 +816,101 @@ class Verificacion:
         if siguiente is not None and not regla_portada._termina_en_salto(ultimo) and \
                 not alineacion._salto_antes(self.estilos, siguiente.p):
             self.fallo_en(RESUMEN, self.por_elemento[ultimo], "Lo que sigue al resumen no empieza en una página nueva.")
+
+    # --- 6.1 Tablas ---------------------------------------------------------------------------
+
+    def tablas(self):
+        """
+        Cada tabla del texto, como la describe la web oficial de APA (Table setup y
+        Sample tables): encima, «Tabla N» en negrita y, en la línea siguiente, el
+        título en cursiva, los dos a la izquierda, sin sangría y con «Conservar con el
+        siguiente»; debajo, si hay nota, «Nota.» en cursiva y el resto sin cursiva; la
+        fila de encabezados se repite en cada página; sin bordes verticales ni colores
+        de fondo en las celdas. No se miran las tablas de la portada o del índice, los
+        recuadros de una sola celda ni las tablas que colocan imágenes (como la regla).
+        """
+        bloques = estructura._bloques(self.doc)
+        for k, tbl in enumerate(bloques):
+            if tbl.tag != w("tbl") or not regla_tablas._es_tabla_de_datos(tbl):
+                continue
+            vecino = next((self.clasificado_de[b] for b in reversed(bloques[:k]) if b in self.clasificado_de), None)
+            if vecino is not None and vecino.zona in regla_tablas.ZONAS_SIN_TABLAS_APA:
+                continue
+            info = self.por_elemento[tbl.find(f".//{w('p')}")]
+            encima = self._con_texto(bloques, k, -1, 2)
+            numero, titulo = encima if len(encima) == 2 else (None, None)
+            if numero is None or not regla_tablas.NUMERO_O_LETRA.fullmatch(texto_parrafo(numero)):
+                self.fallo_en(TABLAS, info, "La tabla no tiene encima su número («Tabla 1») y, debajo, su título.")
+            else:
+                for p, negrita, cursiva, que in ((numero, True, False, "El número"), (titulo, False, True, "El título")):
+                    problemas = self._problemas_de_leyenda(p, negrita, cursiva, True)
+                    if problemas:
+                        self.fallo_en(TABLAS, self.por_elemento[p], f"{que} de la tabla: {'; '.join(problemas)}.")
+            nota = next(iter(self._con_texto(bloques, k, +1, 1)), None)
+            if nota is not None and estructura.NOTA.match(texto_parrafo(nota)):
+                rotulo = re.match(r"Nota\.", texto_parrafo(nota))
+                problemas = (self._problemas_de_leyenda(nota, False, rotulo.end(), False) if rotulo
+                             else ["no empieza por «Nota.»"])
+                if problemas:
+                    self.fallo_en(TABLAS, self.por_elemento[nota], f"Nota de la tabla: {'; '.join(problemas)}.")
+            problemas = []
+            primera = tbl.find(w("tr"))
+            if not _activado(primera.find(f"{w('trPr')}/{w('tblHeader')}") if primera is not None else None):
+                problemas.append("la fila de encabezados no se repite en cada página")
+            if self._bordes_verticales(tbl):
+                problemas.append("tiene bordes verticales")
+            if any(shd.get(w("fill")) not in SIN_FONDO for tc in tbl.iter(w("tc"))
+                   for shd in tc.findall(f"{w('tcPr')}/{w('shd')}")):
+                problemas.append("tiene colores de fondo")
+            for problema in problemas:
+                self.fallo_en(TABLAS, info, f"Tabla: {problema}.")
+
+    def _con_texto(self, bloques, k, paso, cuantos):
+        """Los `cuantos` párrafos con texto seguidos encima (paso -1) o debajo (+1) del bloque k, sin los vacíos."""
+        encontrados, j = [], k + paso
+        while 0 <= j < len(bloques) and len(encontrados) < cuantos and bloques[j].tag == w("p"):
+            if texto_parrafo(bloques[j]).strip():
+                encontrados.append(bloques[j])
+            j += paso
+        return encontrados[::-1] if paso < 0 else encontrados
+
+    def _problemas_de_leyenda(self, p, negrita, cursiva, conservar):
+        """`cursiva`: True (todo), False (nada) o hasta qué posición del texto (el rótulo «Nota.»)."""
+        problemas = []
+        if {"start": "left"}.get(self._alineacion(p), self._alineacion(p)) != "left":
+            problemas.append("no está a la izquierda")
+        if any(_entero(self.estilos.parrafo(p, "ind", a)) for a in ("firstLine", "hanging", "left")):
+            problemas.append("tiene sangría")
+        if conservar and not _activado(self._capa_de_parrafo(p, "keepNext")):
+            problemas.append("no tiene «Conservar con el siguiente»")
+        desde = 0
+        for r in fuente._runs_propios(p):
+            texto = "".join(t.text or "" for t in r.iter(w("t")))
+            quiere = cursiva if isinstance(cursiva, bool) else desde < cursiva
+            desde += len(texto)
+            if not texto.strip():
+                continue
+            if _activado(self._de_texto(r, p, "b")) != negrita:
+                problemas.append("va en negrita" if not negrita else "no va en negrita")
+            if _activado(self._de_texto(r, p, "i")) != quiere:
+                problemas.append("«Nota.» va en cursiva y el resto no" if not isinstance(cursiva, bool)
+                                 else "va en cursiva" if not quiere else "no va en cursiva")
+        return list(dict.fromkeys(problemas))
+
+    def _bordes_verticales(self, tbl):
+        """¿Se ve alguna línea vertical? (bordes de la tabla, de su estilo o de sus celdas)"""
+        tblpr = tbl.find(w("tblPr"))
+        estilo = tblpr.find(w("tblStyle")) if tblpr is not None else None
+        cadena = self.estilos.cadena(estilo.get(w("val"))) if estilo is not None else []
+        capas = [tblpr] + [e.find(w("tblPr")) for e in cadena]
+        for lado in ("left", "right", "insideV"):
+            borde = next((b for capa in capas if capa is not None
+                          for b in capa.findall(f"{w('tblBorders')}/{w(lado)}")), None)
+            if borde is not None and borde.get(w("val")) not in SIN_LINEA:
+                return True
+        return any(b.get(w("val")) not in SIN_LINEA for tc in tbl.iter(w("tc"))
+                   for lado in ("left", "right", "start", "end")
+                   for b in tc.findall(f"{w('tcPr')}/{w('tcBorders')}/{w(lado)}"))
 
     def _con_estilo_title(self, p):
         estilo = self.estilos.por_id.get(self.estilos.estilo_de(p))

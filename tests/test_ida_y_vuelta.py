@@ -36,7 +36,9 @@ def test_ida_y_vuelta(original, tmp_path):
     assert salida == tmp_path / f"{original.stem}_APA.docx"
     copia, orig = docx.Document(str(salida)), docx.Document(str(original))
     borrados = sum(1 for c in informe.cambios_previstos if c.accion == "borrar")   # párrafos vacíos (3.5)
-    anadidos = sum(1 for c in informe.cambios_previstos if c.accion == "añadir_titulo")   # título del trabajo (4.4)
+    # El título del trabajo (4.4) y, en las tablas (6.1), el título separado de su número y el número añadido.
+    anadidos = sum(1 for c in informe.cambios_previstos
+                   if c.accion in ("añadir_titulo", "dividir_leyenda", "añadir_numero_de_tabla"))
     assert len(copia.paragraphs) == len(orig.paragraphs) - borrados + anadidos
     assert len(copia.tables) == len(orig.tables)
     assert len(copia.sections) == len(orig.sections)

@@ -35,7 +35,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Optional
 
-from apa_facil.documento import MC, ROTULOS_DE_INDICE, WP, Estilos, texto_parrafo, w
+from apa_facil.documento import LEYENDA_CON_NUMERO, MC, ROTULOS_DE_INDICE, WP, Estilos, texto_parrafo, w
 from apa_facil.reglas.alineacion import _salto_antes, _salto_en
 
 TIPOS = ("portada", "indice", "titulo", "cuerpo", "lista", "leyenda_tabla", "leyenda_figura",
@@ -652,6 +652,9 @@ class _Clasificador:
             return leyenda
         if r.lista_de_word:
             return "lista", ALTA, "lista de Word (con viñetas o numerada)", None
+        numero = LEYENDA_CON_NUMERO.match(r.anterior.texto) if r.anterior else None
+        if numero and not numero.group(3) and r.despues == "tabla":   # como lo deja el paso 6.1
+            return "leyenda_tabla", ALTA, f"título de tabla: debajo de «{r.anterior.texto}» y encima de la tabla", None
         if _parece_titulo(r) and r.despues == "tabla":
             return "leyenda_tabla", MEDIA, f"{_forma_de_titulo(r)}, justo encima de una tabla", None
         if _parece_titulo(r) and (r.antes == "imagen" or r.despues == "imagen"):
@@ -749,12 +752,32 @@ class _Clasificador:
         return "leyenda_tabla", "tabla"
 
 
+class Clasificacion(list):
+    """
+    La lista de párrafos clasificados (Parrafo) y, en `tablas`, el número de párrafo
+    del primero de cada tabla del cuerpo en el documento clasificado (paso 6.1: la
+    integridad nombra los párrafos por su número en el original, y las tablas no
+    tienen Parrafo; después de borrar párrafos ya no se puede contar).
+    """
+
+    def __init__(self, parrafos=(), tablas=None):
+        super().__init__(parrafos)
+        self.tablas = dict(tablas or {})
+
+
 def clasificar(doc, estilos=None):
     """
     Clasifica los párrafos del cuerpo de un documento abierto con python-docx.
-    Devuelve una lista de Parrafo en el orden del documento.
+    Devuelve una Clasificacion: una lista de Parrafo en el orden del documento.
     """
-    return _Clasificador(doc, estilos).clasificar()
+    clasificador = _Clasificador(doc, estilos)
+    parrafos = clasificador.clasificar()
+    tablas = {}
+    for tabla in (b for b in _bloques(doc) if b.tag == w("tbl")):
+        primero = tabla.find(f".//{w('p')}")
+        if primero is not None:
+            tablas[tabla] = clasificador.numeros[primero]
+    return Clasificacion(parrafos, tablas)
 
 
 # --- Modo diagnóstico (paso 3.3) ------------------------------------------------------

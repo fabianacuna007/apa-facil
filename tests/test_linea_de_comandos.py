@@ -193,6 +193,7 @@ def test_opciones_de_los_titulos(tmp_path, capsys):
     assert datos["opciones"] == {"fuente": None, "quitar_numeracion": True, "titulos_tal_cual": False,
                                  "quitar_introduccion": False,
                                  "titulo_tal_cual": False, "mantener_portada": False, "quitar_indice": False,
+                                 "tablas_tal_cual": False,
                                  "portada": None}
 
 

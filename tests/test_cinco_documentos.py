@@ -44,7 +44,8 @@ EXCEPCIONES = {
                                   | {(TITULO_TRABAJO, 4), (PORTADA_PROPIA, 1)},       # «1. Introducción»; la portada
     "04_formato_caotico": {(PORTADA_PROPIA, 1)},
     "05_tfg_completo": {(ALINEACION, 8), (ALINEACION, 9), (ALINEACION, 10)}   # portada: Autora, Tutor, Convocatoria
-                       | {(TEXTO_TITULOS, n) for n in (20, 23, 24, 26, 27, 29, 31, 35, 37, 38, 63, 65)}
+                       # «4.2.» y «5.» van uno más allá desde el 6.1: el título de la tabla 1 va en su propio párrafo
+                       | {(TEXTO_TITULOS, n) for n in (20, 23, 24, 26, 27, 29, 31, 35, 37, 38, 64, 66)}
                        | {(TITULO_TRABAJO, 20), (PORTADA_PROPIA, 2)}          # «1. Introducción»; la portada
                        | {(INDICE, 16)},                                      # el índice (paso 5.4)
 }
@@ -130,7 +131,7 @@ def test_estan_todos_los_documentos_de_la_lista():
 # pero solo eso (la integridad lo comprueba) y desaparecen sus excepciones.
 # Numeraciones quitadas y títulos con otras mayúsculas (pasos 4.3 y 4.6): cada cambio, una vez.
 TITULOS_CAMBIADOS = {"01_ensayo_basico": 3 + 3, "02_informe_tablas": 0, "03_trabajo_imagenes_listas": 5 + 3,
-                     "04_formato_caotico": 0 + 3, "05_tfg_completo": 12 + 8}
+                     "04_formato_caotico": 0 + 3 + 1, "05_tfg_completo": 12 + 8}   # 04: y el título de la tabla (6.1)
 
 
 @pytest.mark.parametrize("original", PRUEBAS, ids=lambda p: p.stem)

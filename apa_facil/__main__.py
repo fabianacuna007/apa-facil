@@ -3,6 +3,7 @@ Línea de comandos:
 
     python -m apa_facil mi_trabajo.docx [otro.docx ...] [--fuente "Arial"]
                         [--quitar-numeracion] [--titulos-tal-cual] [--quitar-introduccion] [--quitar-indice]
+                        [--tablas-tal-cual]
                         [--datos datos.json] [--titulo "…"] [--autor "…"] … [--fecha 16/10/2026]
                         [--titulo-tal-cual] [--mantener-portada]
     python -m apa_facil mi_trabajo.docx --diagnostico
@@ -83,7 +84,7 @@ def crear_ordenes():
                          help="deja las mayúsculas de los títulos de los apartados como están. Sin esta opción "
                               "llevan mayúscula inicial en las palabras principales, como pide APA («RESUMEN» → "
                               "«Resumen», «Marco teórico» → «Marco Teórico»), respetando los nombres propios y las "
-                              "siglas que el trabajo escribe así en el texto")
+                              "siglas que el trabajo escribe así en el texto. También los títulos de las tablas")
     ordenes.add_argument("--quitar-introduccion", action="store_true",
                          help="quita el rótulo «Introducción» del primer apartado, que APA no usa (el título del "
                               "trabajo hace sus veces), si el apartado no tiene subapartados. Sin esta opción solo "
@@ -114,6 +115,10 @@ def crear_ordenes():
     ordenes.add_argument("--quitar-indice", action="store_true",
                          help="quita el índice, que APA no usa en los trabajos de estudiante. Sin esta opción "
                               "se deja y se avisa, porque muchas universidades lo exigen")
+    ordenes.add_argument("--tablas-tal-cual", action="store_true",
+                         help="deja los bordes y los colores de las tablas como están. Sin esta opción llevan el "
+                              "estilo de APA: solo líneas horizontales (arriba, debajo de los encabezados y abajo), "
+                              "sin bordes verticales ni colores de fondo")
     ordenes.add_argument("--diagnostico", action="store_true",
                          help="no genera ninguna copia: muestra qué es cada párrafo (título, cuerpo, lista…), "
                               "con qué confianza y por qué, para revisar cómo se ha entendido el documento")
@@ -188,7 +193,7 @@ def main(argv=None, carpeta_salida=None):
     args = ordenes.parse_args(argv)
     opciones = {"fuente": args.fuente} if args.fuente else {}
     for opcion in ("quitar_numeracion", "titulos_tal_cual", "quitar_introduccion", "titulo_tal_cual",
-                   "mantener_portada", "quitar_indice"):
+                   "mantener_portada", "quitar_indice", "tablas_tal_cual"):
         if getattr(args, opcion):
             opciones[opcion] = True
 
@@ -198,6 +203,7 @@ def main(argv=None, carpeta_salida=None):
                               ("--titulos-tal-cual", args.titulos_tal_cual),
                               ("--mantener-portada", args.mantener_portada),
                               ("--quitar-indice", args.quitar_indice),
+                              ("--tablas-tal-cual", args.tablas_tal_cual),
                               ("--quitar-introduccion", args.quitar_introduccion),
                               ("--titulo-tal-cual", args.titulo_tal_cual)):
             if usada:
