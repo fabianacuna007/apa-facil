@@ -1,18 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Download, LoaderCircle, Sparkles } from "lucide-react";
+import { LoaderCircle, Sparkles } from "lucide-react";
 import OpcionesFormato from "@/componentes/OpcionesFormato";
 import Portada from "@/componentes/Portada";
+import Resultado, { type Estado } from "@/componentes/Resultado";
 import SubidaArchivo from "@/componentes/SubidaArchivo";
 import { Boton, Tarjeta } from "@/componentes/ui";
-import { archivoDescargable, ErrorApi, procesar, type DatosPortada, type Opciones, type Resultado } from "@/lib/api";
-
-type Estado =
-  | { fase: "inicial" }
-  | { fase: "procesando" }
-  | { fase: "hecho"; resultado: Resultado; enlace: string }
-  | { fase: "error"; mensaje: string };
+import { archivoDescargable, ErrorApi, procesar, type DatosPortada, type Opciones } from "@/lib/api";
 
 /** La herramienta: el trabajo, la portada y las opciones a la izquierda, y el resultado a la derecha. */
 export default function Herramienta() {
@@ -22,11 +17,19 @@ export default function Herramienta() {
   const [estado, setEstado] = useState<Estado>({ fase: "inicial" });
   const procesando = estado.fase === "procesando";
 
+  /** «Formatear otro trabajo»: se quita el archivo y el resultado; la portada y las opciones se quedan. */
+  function otro() {
+    if (estado.fase === "hecho") URL.revokeObjectURL(estado.enlace);
+    setArchivo(null);
+    setEstado({ fase: "inicial" });
+    document.getElementById("seccion-1")?.scrollIntoView({ behavior: "smooth" });
+  }
+
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
     if (!archivo) return;
     if (estado.fase === "hecho") URL.revokeObjectURL(estado.enlace);
-    setEstado({ fase: "procesando" });
+    setEstado({ fase: "procesando", nombre: archivo.name });
     try {
       const resultado = await procesar(archivo, opciones, portada);
       setEstado({ fase: "hecho", resultado, enlace: URL.createObjectURL(archivoDescargable(resultado.documento)) });
@@ -57,15 +60,11 @@ export default function Herramienta() {
             : <><Sparkles className="size-5" aria-hidden /> Aplicar formato APA</>}
         </Boton>
       </form>
-      <section aria-live="polite" className="bg-hundido/60 p-5 sm:p-7">
-        <h2 className="font-titulo text-xl font-bold">Resultado</h2>
-        {estado.fase === "hecho" && (
-          <a href={estado.enlace} download={estado.resultado.documento.nombre} className="mt-4 inline-flex items-center gap-2 font-semibold text-primario">
-            <Download className="size-4" aria-hidden /> Descargar {estado.resultado.documento.nombre}
-          </a>
-        )}
-        {estado.fase === "error" && <p role="alert" className="mt-4 text-error">{estado.mensaje}</p>}
-      </section>
+      <div className="bg-hundido/60 p-5 sm:p-7">
+        <div className="lg:sticky lg:top-24">
+          <Resultado estado={estado} onOtro={otro} />
+        </div>
+      </div>
     </Tarjeta>
   );
 }

@@ -88,7 +88,7 @@ function ListaDeNombres({ id, etiqueta, singular, nombres, onChange, ejemplo }: 
             <Boton
               variante="fantasma"
               tamano="pequeno"
-              className="h-auto shrink-0"
+              className="shrink-0 self-center"
               onClick={() => onChange(nombres.filter((_, j) => j !== i))}
               aria-label={`Quitar ${singular} ${i + 1}`}
             >

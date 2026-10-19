@@ -36,9 +36,31 @@ export type DatosPortada = {
   fecha?: string;
 };
 
+/** Un caso concreto de un aviso de citas y referencias (fase 7): dónde está y cómo se corrige. */
+export type Caso = {
+  donde: string;
+  extracto: string | null;
+  correccion: string | null;
+  explicacion: string | null;
+  parrafo: number | null;
+};
+
+/** Una línea del informe: la regla de la que viene y el mensaje para el estudiante. */
+export type Entrada = { regla: string; nombre: string; mensaje: string; casos?: Caso[] };
+
+/** El informe (apa_facil/informe.py): lo que se ha cambiado, lo que hay que revisar y lo que no se pudo hacer. */
+export type Informe = {
+  archivo: string;
+  copia: string;
+  resumen: { cambios: number; avisos: number; errores: number };
+  cambios: Entrada[];
+  avisos: Entrada[];
+  errores: Entrada[];
+};
+
 export type Resultado = {
-  /** El informe completo, el mismo que guarda la línea de comandos. Se detalla en el paso 9.6. */
-  informe: Record<string, unknown>;
+  /** El informe completo, el mismo que guarda la línea de comandos. */
+  informe: Informe;
   /** El informe en texto legible. */
   resumen: string;
   /** La copia corregida, con su contenido en base64. */
