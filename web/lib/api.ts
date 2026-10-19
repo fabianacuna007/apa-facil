@@ -105,25 +105,41 @@ export async function salud(): Promise<boolean> {
   }
 }
 
+function formulario(opciones: Opciones, portada: DatosPortada): FormData {
+  const datos = new FormData();
+  for (const [clave, valor] of Object.entries(opciones)) {
+    if (valor === true) datos.append(clave, "true");
+    else if (typeof valor === "string" && valor.trim()) datos.append(clave, valor);
+  }
+  for (const [clave, valor] of Object.entries(portada)) {
+    // autor y profesor se repiten, uno por persona, como espera el servidor.
+    for (const v of Array.isArray(valor) ? valor : [valor]) {
+      if (typeof v === "string" && v.trim()) datos.append(clave, v);
+    }
+  }
+  return datos;
+}
+
 /** Envía el Word con sus opciones y datos de portada, y devuelve la copia y el informe. */
 export async function procesar(
   archivo: File,
   opciones: Opciones = {},
   portada: DatosPortada = {},
 ): Promise<Resultado> {
-  const formulario = new FormData();
-  formulario.append("archivo", archivo);
-  for (const [clave, valor] of Object.entries(opciones)) {
-    if (valor === true) formulario.append(clave, "true");
-    else if (typeof valor === "string" && valor.trim()) formulario.append(clave, valor);
-  }
-  for (const [clave, valor] of Object.entries(portada)) {
-    // autor y profesor se repiten, uno por persona, como espera el servidor.
-    for (const v of Array.isArray(valor) ? valor : [valor]) {
-      if (typeof v === "string" && v.trim()) formulario.append(clave, v);
-    }
-  }
-  return (await pedir("/procesar", { method: "POST", body: formulario })) as Resultado;
+  const datos = formulario(opciones, portada);
+  datos.append("archivo", archivo);
+  return (await pedir("/procesar", { method: "POST", body: datos })) as Resultado;
+}
+
+/** Paso 9.7: lo mismo con el trabajo pegado como texto (un párrafo por línea). */
+export async function procesarTexto(
+  texto: string,
+  opciones: Opciones = {},
+  portada: DatosPortada = {},
+): Promise<Resultado> {
+  const datos = formulario(opciones, portada);
+  datos.append("texto", texto);
+  return (await pedir("/procesar-texto", { method: "POST", body: datos })) as Resultado;
 }
 
 /** Convierte la copia en un archivo que el navegador puede descargar. */

@@ -20,7 +20,7 @@ def test_las_fuentes_de_la_web_son_las_del_nucleo():
 
 def test_las_casillas_de_la_web_son_las_opciones_del_servidor():
     casillas = re.findall(r'clave: "(\w+)", bandera: "(--[\w-]+)"', OPCIONES_WEB)
-    parametros = inspect.signature(servidor_app.procesar).parameters
+    parametros = inspect.signature(servidor_app._opciones).parameters
     del_servidor = {nombre for nombre, p in parametros.items() if p.annotation.__origin__ is bool}
     assert {clave for clave, _ in casillas} == del_servidor
     for clave, bandera in casillas:

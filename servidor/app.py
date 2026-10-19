@@ -12,6 +12,9 @@ portada, y devuelve un JSON con:
   - "resumen": el informe en texto legible (lo que se ha corregido y lo que hay que revisar);
   - "documento": la copia corregida, con su nombre y su contenido en base64.
 
+POST /procesar-texto (paso 9.7) recibe el trabajo pegado como texto («texto») en
+vez del archivo, con las mismas opciones, y devuelve lo mismo.
+
 El archivo se guarda en una carpeta temporal con un nombre fijo (nunca el del
 estudiante: «con.docx» o «com1.docx» son nombres reservados de Windows), y la
 carpeta se borra al terminar, vaya bien o mal.
@@ -40,12 +43,12 @@ import time
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import Depends, FastAPI, File, Form, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from apa_facil import datos_portada, documento
+from apa_facil import datos_portada, desde_texto, documento
 from apa_facil.documento import ErrorDocumento
 from apa_facil.reglas import fuente
 from servidor import seguridad, trabajo
@@ -154,9 +157,19 @@ def salud():
     return {"estado": "bien"}
 
 
-@app.post("/procesar")
-def procesar(
-    archivo: Annotated[UploadFile, File(description="El trabajo en Word (.docx)")],
+class _Rechazo(Exception):
+    """Una petición que no se procesa, con su código y el mensaje en español."""
+    def __init__(self, estado, mensaje):
+        super().__init__(mensaje)
+        self.estado, self.mensaje = estado, mensaje
+
+
+@app.exception_handler(_Rechazo)
+def _rechazada(peticion, exc):
+    return _error(exc.estado, exc.mensaje)
+
+
+def _opciones(
     fuente_elegida: Annotated[str | None, Form(alias="fuente")] = None,
     quitar_numeracion: Annotated[bool, Form()] = False,
     titulos_tal_cual: Annotated[bool, Form()] = False,
@@ -178,8 +191,10 @@ def procesar(
     profesor: Annotated[list[str] | None, Form(description="Se repite si son varios")] = None,
     fecha: Annotated[str | None, Form(description="16/10/2026, 2026-10-16 o 16 de octubre de 2026")] = None,
 ):
-    # `def` y no `async def`: el núcleo tarda y FastAPI lo ejecuta aparte, sin bloquear otras peticiones.
-    nombre = _nombre_original(archivo.filename)
+    """
+    Las opciones y los datos de portada del formulario, como los espera el núcleo.
+    Las comparten /procesar y /procesar-texto (paso 9.7).
+    """
     banderas = dict(quitar_numeracion=quitar_numeracion, titulos_tal_cual=titulos_tal_cual,
                     quitar_introduccion=quitar_introduccion, titulo_tal_cual=titulo_tal_cual,
                     mantener_portada=mantener_portada, quitar_indice=quitar_indice,
@@ -190,8 +205,8 @@ def procesar(
     if _texto(fuente_elegida):
         elegida = fuente.familia(_texto(fuente_elegida))
         if elegida is None:
-            return _error(422, f"«{fuente_elegida.strip()}» no es una de las fuentes recomendadas por APA. "
-                               f"Elige una de estas: {FUENTES}.")
+            raise _Rechazo(422, f"«{fuente_elegida.strip()}» no es una de las fuentes recomendadas por APA. "
+                                f"Elige una de estas: {FUENTES}.")
         opciones["fuente"] = elegida
 
     sueltas = {"titulo": titulo, "autores": autor, "departamento": departamento, "universidad": universidad,
@@ -200,9 +215,19 @@ def procesar(
     try:
         portada = datos_portada.combinar(None, {clave: _texto(valor) for clave, valor in sueltas.items()})
     except datos_portada.ErrorDatos as e:
-        return _error(422, str(e))
+        raise _Rechazo(422, str(e))
     if portada:
         opciones["portada"] = portada
+    return opciones
+
+
+@app.post("/procesar")
+def procesar(
+    archivo: Annotated[UploadFile, File(description="El trabajo en Word (.docx)")],
+    opciones: Annotated[dict, Depends(_opciones)],
+):
+    # `def` y no `async def`: el núcleo tarda y FastAPI lo ejecuta aparte, sin bloquear otras peticiones.
+    nombre = _nombre_original(archivo.filename)
 
     # Antes de copiar nada: la extensión, con el nombre original (el núcleo trabaja con el temporal).
     try:
@@ -217,27 +242,48 @@ def procesar(
             seguridad.comprobar(entrada, nombre)
         except seguridad.ErrorEntrada as e:
             return _error(e.estado, str(e))
+        return _procesar(carpeta, entrada, nombre, opciones)
 
-        copia = f"{Path(nombre).stem}{documento.SUFIJO}.docx"
-        if not TURNOS.acquire(timeout=ESPERA_MAXIMA):
-            return _error(503, "Ahora mismo hay muchos documentos en cola. Inténtalo de nuevo dentro de un momento.")
-        try:
-            resultado = trabajo.procesar(entrada, Path(carpeta) / "salida", opciones, nombre, copia, TIEMPO_MAXIMO)
-        except trabajo.TiempoAgotado:
-            return _error(504, f"«{nombre}» ha tardado demasiado en procesarse (más de {TIEMPO_MAXIMO:g} "
-                               "segundos) y se ha detenido. No se ha guardado nada. Si es muy largo, prueba "
-                               "a dividirlo en partes.")
-        finally:
-            TURNOS.release()
 
-        if resultado[0] == "error":
-            return _error(422, resultado[1].replace(NOMBRE_TEMPORAL, nombre))
-        if resultado[0] == "fallo":   # sin detalles: podrían llevar texto del documento
-            REGISTRO.error("Error inesperado en el núcleo (%s).", resultado[1])
-            return _error(500, _MENSAJE_FALLO)
-        _, salida, informe, resumen = resultado
-        contenido = Path(salida).read_bytes()
+@app.post("/procesar-texto")
+def procesar_texto(
+    texto: Annotated[str, Form(description="El trabajo pegado como texto: un párrafo por línea")],
+    opciones: Annotated[dict, Depends(_opciones)],
+):
+    """
+    Paso 9.7: el texto pegado se convierte en un .docx (apa_facil/desde_texto.py)
+    y se procesa igual que un archivo subido. La copia se llama texto_pegado_APA.docx.
+    """
+    try:
+        desde_texto.comprobar(texto)
+    except ErrorDocumento as e:
+        return _error(422, str(e))
+    with _carpeta_temporal() as carpeta:
+        entrada = desde_texto.crear(texto, Path(carpeta) / NOMBRE_TEMPORAL)
+        return _procesar(carpeta, entrada, desde_texto.NOMBRE, opciones)
 
+
+def _procesar(carpeta, entrada, nombre, opciones):
+    """Llama al núcleo (en un proceso aparte, con tiempo máximo) y prepara la respuesta."""
+    copia = f"{Path(nombre).stem}{documento.SUFIJO}.docx"
+    if not TURNOS.acquire(timeout=ESPERA_MAXIMA):
+        return _error(503, "Ahora mismo hay muchos documentos en cola. Inténtalo de nuevo dentro de un momento.")
+    try:
+        resultado = trabajo.procesar(entrada, Path(carpeta) / "salida", opciones, nombre, copia, TIEMPO_MAXIMO)
+    except trabajo.TiempoAgotado:
+        return _error(504, f"«{nombre}» ha tardado demasiado en procesarse (más de {TIEMPO_MAXIMO:g} "
+                           "segundos) y se ha detenido. No se ha guardado nada. Si es muy largo, prueba "
+                           "a dividirlo en partes.")
+    finally:
+        TURNOS.release()
+
+    if resultado[0] == "error":
+        return _error(422, resultado[1].replace(NOMBRE_TEMPORAL, nombre))
+    if resultado[0] == "fallo":   # sin detalles: podrían llevar texto del documento
+        REGISTRO.error("Error inesperado en el núcleo (%s).", resultado[1])
+        return _error(500, _MENSAJE_FALLO)
+    _, salida, informe, resumen = resultado
+    contenido = Path(salida).read_bytes()
     return {"informe": informe, "resumen": resumen,
             "documento": {"nombre": copia, "contenido": base64.b64encode(contenido).decode("ascii")}}
 

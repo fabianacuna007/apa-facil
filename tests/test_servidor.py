@@ -312,3 +312,47 @@ def test_la_web_puede_leer_los_errores(tmp_path):
 def test_otras_webs_no_pueden_leer_las_respuestas():
     respuesta = cliente.get("/salud", headers={"Origin": "https://otra-web.example"})
     assert "access-control-allow-origin" not in respuesta.headers
+
+
+# --- Paso 9.7: el trabajo pegado como texto ------------------------------------------------
+
+from tests.test_desde_texto import TRABAJO   # noqa: E402
+
+
+def test_procesa_texto_pegado():
+    respuesta = cliente.post("/procesar-texto", data={"texto": TRABAJO, "fuente": "Arial", "autor": ["Ana Pérez"],
+                                                      "titulo": "El trabajo infantil en la Revolución Industrial"})
+    assert respuesta.status_code == 200, respuesta.text
+    datos = respuesta.json()
+    assert datos["documento"]["nombre"] == "texto_pegado_APA.docx"
+    assert datos["informe"]["archivo"] == "texto_pegado.docx"
+    assert datos["informe"]["opciones"]["fuente"] == "Arial"
+    assert not datos["informe"]["errores"]
+    copia = docx.Document(io.BytesIO(base64.b64decode(datos["documento"]["contenido"])))
+    assert "Introducción" in [p.text for p in copia.paragraphs]
+
+
+def test_texto_pegado_vacio_o_que_falta():
+    vacio = cliente.post("/procesar-texto", data={"texto": "  "})
+    assert vacio.status_code == 422
+    assert vacio.json()["error"].startswith("No has pegado ningún texto")
+    falta = cliente.post("/procesar-texto", data={"fuente": "Arial"})
+    assert falta.status_code == 422
+    assert list(falta.json()) == ["error"]
+
+
+def test_texto_pegado_con_opciones_no_validas():
+    respuesta = cliente.post("/procesar-texto", data={"texto": TRABAJO, "fuente": "Papyrus"})
+    assert respuesta.status_code == 422
+    assert "Papyrus" in respuesta.json()["error"]
+
+
+def test_texto_pegado_no_deja_nada_en_la_carpeta_temporal(tmp_path, monkeypatch):
+    monkeypatch.setattr(servidor_app, "CARPETA_TEMPORAL", str(tmp_path))
+    assert cliente.post("/procesar-texto", data={"texto": TRABAJO}).status_code == 200
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_la_web_puede_leer_el_texto_procesado():
+    respuesta = cliente.post("/procesar-texto", headers=WEB, data={"texto": TRABAJO})
+    assert respuesta.headers["access-control-allow-origin"] == "http://localhost:3000"

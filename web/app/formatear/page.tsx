@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Herramienta from "@/componentes/Herramienta";
 
 export const metadata: Metadata = { title: "Formatear mi trabajo" };
@@ -12,7 +13,10 @@ export default function Formatear() {
           Sube tu trabajo, rellena la portada si quieres una nueva y descárgalo con el formato APA 7 de estudiante.
         </p>
       </div>
-      <Herramienta />
+      {/* Herramienta lee ?modo=texto de la dirección, así que va dentro de Suspense. */}
+      <Suspense>
+        <Herramienta />
+      </Suspense>
     </main>
   );
 }

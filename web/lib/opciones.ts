@@ -94,7 +94,8 @@ export const CASILLAS: Casilla[] = [
 export function mensajeParaLaWeb(mensaje: string): string {
   let texto = mensaje
     .replace(/dalos en un archivo con --datos o con las opciones de portada/g, "rellénalos en «Portada»")
-    .replace(/Añádelo en tu archivo de datos o con la opción --titulo\./g, "Añádelo en «Portada».");
+    .replace(/Añádelo en tu archivo de datos o con la opción --titulo\./g, "Añádelo en «Portada».")
+    .replace(/añádelos en tu archivo de datos o con (la opción|las opciones) [^.]*\./g, "añádelos en «Portada».");
   for (const c of CASILLAS) {
     texto = texto.replaceAll(c.bandera, `«${c.etiqueta}»`);
   }
