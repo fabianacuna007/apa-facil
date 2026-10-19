@@ -12,7 +12,7 @@ from apa_facil import datos_portada, documento, estructura
 from apa_facil.documento import ErrorDocumento
 from apa_facil.informe import Informe
 from apa_facil.reglas import (alineacion, avisos, citas, figuras, fuente, indice, interlineado, limpieza, margenes,
-                              paginacion, portada, referencias, resumen, sangria, tablas, titulos)
+                              orden, paginacion, portada, referencias, resumen, sangria, tablas, titulos)
 
 # En este orden. Los avisos van primero: después la regla de fuente lo iguala todo.
 # Los títulos, después de la sangría: esa regla quita la sangría de primera línea
@@ -21,7 +21,7 @@ from apa_facil.reglas import (alineacion, avisos, citas, figuras, fuente, indice
 # títulos: sus títulos llevan las mayúsculas de APA, como los de los apartados. Las figuras, detrás de las
 # tablas: un solo recordatorio de dónde colocarlas, que amplía el de las tablas.
 REGLAS = [avisos, limpieza, margenes, fuente, interlineado, alineacion, sangria, titulos, resumen, tablas,
-          figuras, citas, referencias, portada, indice, paginacion]
+          figuras, citas, referencias, orden, portada, indice, paginacion]
 
 
 def procesar(entrada, carpeta_salida=None, opciones=None):

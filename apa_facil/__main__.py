@@ -3,7 +3,7 @@ Línea de comandos:
 
     python -m apa_facil mi_trabajo.docx [otro.docx ...] [--fuente "Arial"]
                         [--quitar-numeracion] [--titulos-tal-cual] [--quitar-introduccion] [--quitar-indice]
-                        [--tablas-tal-cual] [--rotulo-tal-cual]
+                        [--tablas-tal-cual] [--rotulo-tal-cual] [--orden-tal-cual]
                         [--datos datos.json] [--titulo "…"] [--autor "…"] … [--fecha 16/10/2026]
                         [--titulo-tal-cual] [--mantener-portada]
     python -m apa_facil mi_trabajo.docx --diagnostico
@@ -122,6 +122,9 @@ def crear_ordenes():
     ordenes.add_argument("--rotulo-tal-cual", action="store_true",
                          help="deja el rótulo de la lista de referencias como está («Bibliografía», «Webgrafía»…). "
                               "Sin esta opción pasa a ser «Referencias», como pide APA")
+    ordenes.add_argument("--orden-tal-cual", action="store_true",
+                         help="deja las referencias en el orden en que están. Sin esta opción se ordenan "
+                              "alfabéticamente, como pide APA")
     ordenes.add_argument("--diagnostico", action="store_true",
                          help="no genera ninguna copia: muestra qué es cada párrafo (título, cuerpo, lista…), "
                               "con qué confianza y por qué, para revisar cómo se ha entendido el documento")
@@ -197,7 +200,7 @@ def main(argv=None, carpeta_salida=None):
     opciones = {"fuente": args.fuente} if args.fuente else {}
     for opcion in ("quitar_numeracion", "titulos_tal_cual", "quitar_introduccion", "titulo_tal_cual",
                    "mantener_portada", "quitar_indice", "tablas_tal_cual",
-                   "rotulo_tal_cual"):
+                   "rotulo_tal_cual", "orden_tal_cual"):
         if getattr(args, opcion):
             opciones[opcion] = True
 
@@ -209,6 +212,7 @@ def main(argv=None, carpeta_salida=None):
                               ("--quitar-indice", args.quitar_indice),
                               ("--tablas-tal-cual", args.tablas_tal_cual),
                               ("--rotulo-tal-cual", args.rotulo_tal_cual),
+                              ("--orden-tal-cual", args.orden_tal_cual),
                               ("--quitar-introduccion", args.quitar_introduccion),
                               ("--titulo-tal-cual", args.titulo_tal_cual)):
             if usada:

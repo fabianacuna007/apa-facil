@@ -108,7 +108,9 @@ APA no admite «Bibliografía», «Webgrafía» ni «Lista de referencias», as�
 python -m apa_facil pruebas_tfg_completo.docx --rotulo-tal-cual
 ```
 
-Si hay varias listas (por ejemplo, una bibliografía y una webgrafía), no se cambia ningún rótulo y se avisa.
+Las referencias se ordenan alfabéticamente, como pide APA: por los apellidos del primer autor (las obras sin autor, por el título), luego por el año (sin fecha, primero) y luego por el título. Las tildes no cuentan y la «ñ» va después de la «n». Una línea que solo es una dirección web va al final, con un aviso. Para dejar el orden que tenían, usa `--orden-tal-cual`.
+
+Si hay varias listas (por ejemplo, una bibliografía y una webgrafía), no se cambia ningún rótulo ni se ordena nada, y se avisa: únelas en una sola.
 
 ### Qué hace (formato básico, títulos y limpieza)
 

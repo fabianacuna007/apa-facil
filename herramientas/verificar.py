@@ -45,6 +45,7 @@ from apa_facil.reglas import portada as regla_portada  # noqa: E402
 from apa_facil.reglas import resumen as resumen_regla  # noqa: E402
 from apa_facil.reglas import citas as regla_citas  # noqa: E402
 from apa_facil.reglas import leyendas  # noqa: E402
+from apa_facil.reglas import orden as regla_orden  # noqa: E402
 from apa_facil.reglas import referencias as regla_referencias  # noqa: E402
 from apa_facil.reglas import tablas as regla_tablas  # noqa: E402
 
@@ -68,9 +69,10 @@ TABLAS = "6.1 Tablas"
 FIGURAS = "6.2 Figuras"
 CITAS = "6.3 Citas en bloque"
 REFERENCIAS = "6.4 Referencias"
+ORDEN = "6.5 Orden alfabético"
 REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS, TEXTO_TITULOS,
           TITULO_TRABAJO, TITULOS_EN_LINEA, MAYUSCULAS_TITULOS, PORTADA, PORTADA_PROPIA, INDICE, RESUMEN, TABLAS,
-          FIGURAS, CITAS, REFERENCIAS]
+          FIGURAS, CITAS, REFERENCIAS, ORDEN]
 SIN_LINEA = (None, "nil", "none")
 SIN_FONDO = (None, "auto", "FFFFFF", "ffffff")
 
@@ -179,7 +181,8 @@ class Verificacion:
                              self.sangria, self.paginacion, self.titulos, self.formato_de_titulos,
                              self.texto_de_titulos, self.titulo_del_trabajo, self.titulos_en_linea,
                              self.mayusculas_de_titulos, self.portada, self.indice, self.resumen, self.tablas,
-                             self.figuras, self.citas, self.referencias):
+                             self.figuras, self.citas, self.referencias,
+                             self.orden):
             comprobacion()
         return self.resultado
 
@@ -1024,6 +1027,28 @@ class Verificacion:
                 if izquierda != regla_referencias.SANGRIA or francesa != regla_referencias.SANGRIA or \
                         _entero(self.estilos.parrafo(q, "ind", "firstLine")):
                     self.fallo_en(REFERENCIAS, self.por_elemento[q], "Referencia sin la sangría francesa de 1,27 cm.")
+
+    # --- 6.5 Orden alfabético ------------------------------------------------------------------------
+
+    def orden(self):
+        """
+        Las referencias, en orden alfabético (la clave de reglas/orden.py: autores
+        palabra a palabra, año y título; las direcciones web sueltas, al final). Con
+        varias listas no se ordenan: es una excepción admitida (se avisa).
+        """
+        todas = regla_referencias.listas(self.clasificados)
+        if len(todas) > 1:
+            rotulo = todas[0][0]
+            self.excepcion_en(ORDEN, self.por_elemento[rotulo.elemento], f"Hay {len(todas)} listas de referencias: no "
+                                                                         "se ordenan hasta que se unan (se avisa).")
+            return
+        for _, referencias in todas:
+            claves = [regla_orden.clave(texto_parrafo(c.elemento)) for c in referencias]
+            for anterior, (c, k) in zip(claves, list(zip(referencias, claves))[1:]):
+                if k < anterior:
+                    self.fallo_en(ORDEN, self.por_elemento[c.elemento],
+                                  "Referencia fuera del orden alfabético (va antes que la anterior).")
+                    break
 
     def _con_estilo_title(self, p):
         estilo = self.estilos.por_id.get(self.estilos.estilo_de(p))

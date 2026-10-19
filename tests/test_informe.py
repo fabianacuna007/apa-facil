@@ -68,7 +68,7 @@ def test_el_json_se_guarda_junto_a_la_copia(procesado_03):
     assert datos["opciones"] == {"fuente": None, "quitar_numeracion": False, "titulos_tal_cual": False,
                                  "quitar_introduccion": False,
                                  "titulo_tal_cual": False, "mantener_portada": False, "quitar_indice": False,
-                                 "tablas_tal_cual": False, "rotulo_tal_cual": False,
+                                 "tablas_tal_cual": False, "rotulo_tal_cual": False, "orden_tal_cual": False,
                                  "portada": None}
     datetime.fromisoformat(datos["fecha"])   # una fecha válida
 
@@ -95,7 +95,7 @@ def test_el_json_recoge_la_fuente_pedida(tmp_path):
     assert datos["opciones"] == {"fuente": "Georgia", "quitar_numeracion": False, "titulos_tal_cual": False,
                                  "quitar_introduccion": False,
                                  "titulo_tal_cual": False, "mantener_portada": False, "quitar_indice": False,
-                                 "tablas_tal_cual": False, "rotulo_tal_cual": False,
+                                 "tablas_tal_cual": False, "rotulo_tal_cual": False, "orden_tal_cual": False,
                                  "portada": None}
 
 

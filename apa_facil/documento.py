@@ -290,6 +290,10 @@ class CambioPrevisto:
       - "cambiar_rotulo": la palabra del principio de una leyenda con número
         (`quitado`: «Cuadro», «Gráfico», «Imagen»…) pasa a ser `nuevo`, que solo
         puede ser la de APA para esa palabra («Tabla» o «Figura») (paso 6.2);
+      - "reordenar_referencias": los párrafos `desde` (números del original), que
+        tienen que tener texto y estar seguidos (solo con párrafos vacíos en medio),
+        empezando por el párrafo, pasan a ir en el orden de `desde` en los mismos
+        sitios: no cambia ninguna letra (paso 6.5, orden alfabético de las referencias);
       - "rotulo_de_referencias": el párrafo, que tiene que ser un rótulo de lista de
         referencias («Bibliografía», «WEBGRAFÍA:»…: ROTULOS_DE_REFERENCIAS), pasa a ser
         `nuevo`, que solo puede ser «Referencias» o «Referencia» (paso 6.4);
@@ -348,6 +352,7 @@ def _aplicar_previstos(antes, previstos):
     despues = {}    # párrafos que salen de dividir uno: van justo detrás de él
     movidos = {}    # destino → los párrafos que se ponen justo antes de él (leyendas de tabla)
     notas = []      # párrafos a los que se pone «Nota. »: se comprueban al final
+    reordenar = []  # listas de referencias reordenadas: se comprueban al final
     titulo_de_la_portada, portada_quitada, indice_quitado = None, [], []
 
     def en_tabla(k):
@@ -442,6 +447,8 @@ def _aplicar_previstos(antes, previstos):
                 datos_portada.solo_cambian_mayusculas(leyenda["titulo"], cambio.nuevo):
             textos[i] = (donde, leyenda["numero"])
             despues.setdefault(i, []).append((f"{donde}, su título (separado)", cambio.nuevo))
+        elif cambio.accion == "reordenar_referencias":
+            reordenar.append(cambio)
         elif cambio.accion == "rotulo_de_referencias" and rotulo_normalizado(texto) in ROTULOS_DE_REFERENCIAS \
                 and cambio.nuevo in ROTULOS_APA_DE_REFERENCIAS:
             textos[i] = (donde, cambio.nuevo)
@@ -466,7 +473,7 @@ def _aplicar_previstos(antes, previstos):
                              "de nivel 4 y 5, añadir la portada APA con los datos del estudiante, quitar el "
                              "índice si se pide, el punto final de las palabras clave y, en las tablas y figuras, "
                              "subir su leyenda, separar el número del título, poner «Tabla» o «Figura» y añadir "
-                             "su número y «Nota.», y poner el rótulo «Referencias».")
+                             "su número y «Nota.», y poner el rótulo «Referencias» y ordenar las referencias.")
 
     if indice_quitado:
         numeros = sorted(n for _, n, _ in indice_quitado)
@@ -505,6 +512,24 @@ def _aplicar_previstos(antes, previstos):
         else:
             problemas.append(f"{textos[i][0]}: una regla anotó «añadir_nota», pero el párrafo no está justo debajo "
                              "de una tabla o una imagen.")
+    tocados = set(borrar) | set(insertar) | set(despues) | set(movidos) | set(destino_de)
+    for cambio in reordenar:
+        orden = [n - 1 for n in cambio.desde]
+        posiciones = sorted(orden)
+        validos = (len(set(orden)) == len(orden) > 1 and posiciones[0] == cambio.parrafo - 1
+                   and all(0 <= k < len(antes.textos) and antes.textos[k][0].startswith("Párrafo ")
+                           and not en_tabla(k) and antes.textos[k][1].strip() for k in orden)
+                   and all(k in orden or vacio(k) for k in range(posiciones[0], posiciones[-1] + 1))
+                   and not any(k in tocados for k in orden))
+        if validos:
+            nuevos = [textos[k] for k in orden]
+            for k, texto in zip(posiciones, nuevos):
+                textos[k] = texto
+            tocados.update(orden)
+        else:
+            problemas.append(f"Párrafo {cambio.parrafo}: una regla anotó «reordenar_referencias», pero solo se pueden "
+                             "cambiar de orden los párrafos con texto de una lista seguida (sin tablas ni otros "
+                             "párrafos en medio).")
 
     def con_lo_suyo(i):
         """El párrafo i con lo que se le añade delante y detrás (o sin él, si se borra)."""
