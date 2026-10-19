@@ -141,6 +141,12 @@ def _texto(valor):
     return valor.strip() if valor and valor.strip() else None
 
 
+@app.get("/salud")
+def salud():
+    """Para Docker y el alojamiento: responde si el servidor está en marcha."""
+    return {"estado": "bien"}
+
+
 @app.post("/procesar")
 def procesar(
     archivo: Annotated[UploadFile, File(description="El trabajo en Word (.docx)")],

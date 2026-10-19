@@ -191,3 +191,10 @@ lo que devuelve (copia corregida, informe y resumen) en `salida/`:
 ```
 python herramientas/probar_servidor.py pruebas/01_ensayo_basico.docx
 ```
+
+Con Docker (solo el núcleo y el servidor):
+
+```
+docker build -t apa-facil .
+docker run --rm -p 8000:8000 apa-facil
+```

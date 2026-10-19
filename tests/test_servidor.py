@@ -265,3 +265,18 @@ def test_los_errores_son_json_con_mensaje_en_espanol(tmp_path):
     for respuesta in (enviar(vacio), cliente.post("/procesar"), enviar(PRUEBAS[1], fuente="Papyrus")):
         assert respuesta.headers["content-type"] == "application/json"
         assert list(respuesta.json()) == ["error"]
+
+
+# --- Paso 8.5: despliegue --------------------------------------------------------------
+
+def test_salud():
+    assert cliente.get("/salud").json() == {"estado": "bien"}
+
+
+def test_requisitos_del_servidor_coinciden_con_los_de_desarrollo():
+    def versiones(nombre):
+        return {linea.split("==")[0]: linea for linea in (RAIZ / nombre).read_text(encoding="utf-8").splitlines()
+                if "==" in linea}
+    desarrollo = versiones("requirements.txt")
+    for paquete, linea in versiones("requirements-servidor.txt").items():
+        assert desarrollo[paquete] == linea
