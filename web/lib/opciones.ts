@@ -45,6 +45,11 @@ export const CASILLAS: Casilla[] = [
     ayuda: "Por defecto se ordenan alfabéticamente, como pide APA.",
   },
   {
+    clave: "citas_tal_cual", bandera: "--citas-tal-cual", principal: true,
+    etiqueta: "No corregir las citas y referencias (solo avisar)",
+    ayuda: "Por defecto corregimos su forma (la coma antes del año, «et al.», «s. f.», «y» entre autores, el punto tras la fecha…) y te lo contamos en el informe. Lo que obligaría a inventar datos solo se avisa.",
+  },
+  {
     clave: "quitar_numeracion", bandera: "--quitar-numeracion",
     etiqueta: "Quitar la numeración de los títulos",
     ayuda: "«1.1. Objetivos» pasa a «Objetivos». APA no numera los títulos, pero muchas universidades sí.",

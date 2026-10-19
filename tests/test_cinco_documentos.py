@@ -164,9 +164,10 @@ def test_con_las_opciones_de_los_titulos(original, tmp_path):
 
 
 # Paso 7.5: los avisos de «Citas y referencias» (la tabla de la fase 7 del ROADMAP), por el principio de su
-# mensaje y con cuántos casos. Lo que ya avisa el paso 6.5 (el orden alfabético, las referencias que son solo
-# una dirección web) no se repite. El 02 es el caso de control: ninguno.
-REVISION = {
+# mensaje y con cuántos casos, con --citas-tal-cual (sin las correcciones del paso 7.7). Lo que ya avisa el
+# paso 6.5 (el orden alfabético, las referencias que son solo una dirección web) no se repite. El 02 es el
+# caso de control: ninguno.
+REVISION_SIN_CORREGIR = {
     "01_ensayo_basico": [("Una obra citada en el texto no está", 1), ("Ciudad de la editorial", 2),
                          ("Año sin paréntesis", 1)],
     "02_informe_tablas": [],
@@ -181,9 +182,57 @@ REVISION = {
                         ("Falta el año", 1)],
 }
 
+# Paso 7.7: por defecto se corrige lo que no obliga a inventar nada, y solo quedan estos avisos…
+REVISION = {
+    "01_ensayo_basico": [("Una obra citada en el texto no está", 1)],
+    "02_informe_tablas": [],
+    "03_trabajo_imagenes_listas": [],
+    "04_formato_caotico": [("2 obras citadas en el texto no están", 3),
+                           ("Año sin paréntesis", 1),           # el año va detrás del título: habría que moverlo
+                           ("Número de la revista con «nº»", 1),   # sin volumen: no se sabe dónde va
+                           ("Referencia incompleta", 1)],
+    "05_tfg_completo": [("Una obra citada en el texto no está", 1), ("Una obra de la lista de referencias no se cita", 1),
+                        ("Falta el año", 1)],
+}
+# …y estos cambios (por el principio del mensaje).
+CORREGIDO = {
+    "01_ensayo_basico": {"Referencias: se ha quitado la ciudad de la editorial, que APA 7 ya no pone en 2 referencias",
+                         "Referencias: se ha puesto el año entre paréntesis"},
+    "02_informe_tablas": set(),
+    "03_trabajo_imagenes_listas": {"Referencias: se ha unido el último autor con «y»"},
+    "04_formato_caotico": {"Referencias: se ha añadido el punto después de la fecha",
+                           "Referencias: se han separado los autores con comas",
+                           "Citas: se ha añadido la coma entre el autor y el año en 1 cita",
+                           "Citas: se ha escrito «et al.» como pide APA",
+                           "Citas: se ha escrito la fecha como pide APA en español («s. f.», «en prensa») en 3 citas"},
+    "05_tfg_completo": {"Referencias: se ha añadido el punto después del autor",
+                        "Referencias: se ha quitado la ciudad de la editorial",
+                        "Referencias: se ha escrito el DOI como enlace",
+                        "Citas: se ha añadido el espacio entre «p.» y el número de página"},
+}
+
+
+def test_correcciones_de_citas_y_referencias(procesado):
+    cambios = [e.mensaje for e in procesado["informe"].entradas if e.regla == "revision" and e.tipo == "cambio"]
+    esperados = CORREGIDO[procesado["original"].stem]
+    assert len(cambios) == len(esperados), cambios
+    for principio in esperados:
+        assert any(m.startswith(principio) for m in cambios), (principio, cambios)
+
+
+@pytest.mark.parametrize("original", PRUEBAS, ids=lambda p: p.stem)
+def test_avisos_sin_corregir_las_citas(original, tmp_path):
+    _, informe = pipeline.procesar(original, tmp_path, {"citas_tal_cual": True})
+    revision = [e for e in informe.entradas if e.regla == "revision"]
+    esperados = REVISION_SIN_CORREGIR[original.stem]
+    assert [e.tipo for e in revision] == ["aviso"] * len(revision)
+    assert len(revision) == len(esperados), [e.mensaje for e in revision]
+    for entrada, (principio, casos) in zip(revision, esperados):
+        assert entrada.mensaje.startswith(principio) and len(entrada.casos) == casos, entrada.mensaje
+
 
 def test_avisos_de_citas_y_referencias(procesado):
-    revision = [e for e in procesado["informe"].entradas if e.regla == "revision"]
+    revision = [e for e in procesado["informe"].entradas if e.regla == "revision" and e.tipo == "aviso"]
     esperados = REVISION[procesado["original"].stem]
     assert len(revision) == len(esperados), [e.mensaje for e in revision]
     for entrada, (principio, casos) in zip(revision, esperados):

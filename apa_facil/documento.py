@@ -419,7 +419,12 @@ class CambioPrevisto:
       - "añadir_nota": se añade «Nota. » al principio del párrafo, que tiene que
         empezar por «Fuente:» o «Fuentes:» e ir justo detrás de una tabla o de una
         imagen (solo con párrafos vacíos, o leyendas que se suben, en medio)
-        (pasos 6.1 y 6.2).
+        (pasos 6.1 y 6.2);
+      - "corregir_forma": la aparición número `datos` (desde 0) de `quitado` en el
+        párrafo pasa a ser `nuevo`: una corrección de forma de una cita o una
+        referencia («(Martínez 2019)» → «(Martínez, 2019)»), que solo puede quitar
+        unas pocas palabras y añadir las de APA (correccion_de_forma_permitida)
+        (paso 7.7, sin la opción --citas-tal-cual).
     Si un párrafo tiene varios, se comprueban en el orden en que se anotaron.
     """
     parrafo: int     # número del párrafo en el original: desde 1, contando los de las tablas
@@ -429,6 +434,46 @@ class CambioPrevisto:
     desde: tuple = ()   # en "añadir_titulo": los números de los párrafos copiados; en "mover_leyenda", el destino
     parrafos: tuple = ()   # en "añadir_portada": el texto de cada párrafo añadido
     datos: object = None   # en "añadir_portada": los datos de la portada (DatosPortada)
+
+
+# Paso 7.7: palabras que una corrección de forma puede añadir, y cuántas puede quitar.
+PALABRAS_QUE_AÑADE_APA = {"y", "s", "f", "en", "prensa", "https", "doi", "org", "p", "pp"}
+MAXIMO_DE_PALABRAS_QUITADAS = 4   # «Santa Cruz de Tenerife», «Recuperado de», «n. d.»
+PALABRA = re.compile(r"\w+")
+
+
+def correccion_de_forma_permitida(quitado, nuevo):
+    """
+    Si cambiar `quitado` por `nuevo` es una corrección de forma de las del paso
+    7.7: las palabras que quedan son las de antes, en el mismo orden, salvo las
+    que añade APA, y no se quitan más de unas pocas (la ciudad de la editorial,
+    «Recuperado de», «nº», «n. d.»).
+    """
+    if not quitado or quitado == nuevo:
+        return False
+    antes = PALABRA.findall(quitado)
+    quedan = [p for p in PALABRA.findall(nuevo) if p.lower() not in PALABRAS_QUE_AÑADE_APA]
+    i = 0
+    for palabra in quedan:
+        while i < len(antes) and antes[i] != palabra:
+            i += 1
+        if i == len(antes):
+            return False
+        i += 1
+    return len(antes) - len(quedan) <= MAXIMO_DE_PALABRAS_QUITADAS
+
+
+def _con_correccion_de_forma(texto, cambio):
+    """El texto con la corrección «corregir_forma» hecha, o None si no es de las permitidas o no se encuentra."""
+    if not isinstance(cambio.datos, int) or not correccion_de_forma_permitida(cambio.quitado, cambio.nuevo):
+        return None
+    desde = 0
+    for _ in range(cambio.datos + 1):
+        sitio = texto.find(cambio.quitado, desde)
+        if sitio < 0:
+            return None
+        desde = sitio + len(cambio.quitado)
+    return texto[:sitio] + cambio.nuevo + texto[desde:]
 
 
 def lineas_de_texto(texto):
@@ -577,6 +622,8 @@ def _aplicar_previstos(antes, previstos):
         elif cambio.accion == "añadir_nota" and cambio.nuevo == ROTULO_DE_NOTA and NOTA_SIN_ROTULO.match(texto) \
                 and not en_tabla(i):
             notas.append(i)   # justo detrás de su tabla o imagen: se comprueba al final
+        elif cambio.accion == "corregir_forma" and _con_correccion_de_forma(texto, cambio) is not None:
+            textos[i] = (donde, _con_correccion_de_forma(texto, cambio))
         else:
             problemas.append(f"{donde}: una regla anotó «{cambio.accion}», pero eso cambiaría el texto "
                              f"(«{_extracto(texto)}»). Solo se pueden borrar párrafos vacíos y el rótulo "

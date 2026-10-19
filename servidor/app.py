@@ -180,6 +180,7 @@ def _opciones(
     tablas_tal_cual: Annotated[bool, Form()] = False,
     rotulo_tal_cual: Annotated[bool, Form()] = False,
     orden_tal_cual: Annotated[bool, Form()] = False,
+    citas_tal_cual: Annotated[bool, Form()] = False,
     rotulo_apendice: Annotated[bool, Form()] = False,
     comentarios: Annotated[bool, Form()] = False,
     titulo: Annotated[str | None, Form()] = None,
@@ -199,7 +200,8 @@ def _opciones(
                     quitar_introduccion=quitar_introduccion, titulo_tal_cual=titulo_tal_cual,
                     mantener_portada=mantener_portada, quitar_indice=quitar_indice,
                     tablas_tal_cual=tablas_tal_cual, rotulo_tal_cual=rotulo_tal_cual,
-                    orden_tal_cual=orden_tal_cual, rotulo_apendice=rotulo_apendice, comentarios=comentarios)
+                    orden_tal_cual=orden_tal_cual, citas_tal_cual=citas_tal_cual,
+                    rotulo_apendice=rotulo_apendice, comentarios=comentarios)
     opciones = {opcion: True for opcion, marcada in banderas.items() if marcada}
 
     if _texto(fuente_elegida):

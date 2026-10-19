@@ -99,11 +99,10 @@ def test_salida_completa_de_un_documento(tmp_path, capsys):
     assert salida.startswith(f"✔ {original.name} → {tmp_path.name}/{original.stem}_APA.docx\n   Lo que hemos cambiado (")
     # Encabezado, un solo subapartado, numeración, «Introducción» y la portada que se mantiene (sin datos, paso 5.3);
     # y de las figuras (6.2), «(elaboración propia)» en un título, la línea en blanco y dónde colocarlas;
-    # y de las referencias (7.5), el «&» de Campos y Vidal, con su caso debajo.
-    assert "   Lo que debes revisar tú (9):" in salida
-    assert ("     · «&» en lugar de «y» en la lista de referencias. En APA en español, el último autor va unido con «y».\n"
-            "         – En la lista de referencias: «Campos, F., & Vidal, N. (2022). Autoconsumo…»: "
-            "«Campos, F., & Vidal, N.» → «Campos, F. y Vidal, N.»") in salida
+    # el «&» de Campos y Vidal ya no se avisa: se corrige (paso 7.7), y va en lo que hemos cambiado.
+    assert "   Lo que debes revisar tú (8):" in salida
+    assert ("     · Referencias: se ha unido el último autor con «y», como pide APA en español en 1 referencia: "
+            "«Campos, F., & Vidal, N.» → «Campos, F. y Vidal, N.».") in salida
     assert f"   Informe completo: {tmp_path.name}/{original.stem}_APA.json" in salida
     assert "todavía incompleto" not in salida
     assert salida.rstrip().endswith("1 de 1 documento(s) procesado(s).")
@@ -198,7 +197,7 @@ def test_opciones_de_los_titulos(tmp_path, capsys):
     assert datos["opciones"] == {"fuente": None, "quitar_numeracion": True, "titulos_tal_cual": False,
                                  "quitar_introduccion": False,
                                  "titulo_tal_cual": False, "mantener_portada": False, "quitar_indice": False,
-                                 "tablas_tal_cual": False, "rotulo_tal_cual": False, "orden_tal_cual": False,
+                                 "tablas_tal_cual": False, "rotulo_tal_cual": False, "orden_tal_cual": False, "citas_tal_cual": False,
                                  "rotulo_apendice": False,
                                  "comentarios": False,
                                  "portada": None}

@@ -44,6 +44,8 @@ class Revision:
     lugares: object = None
     # Paso 7.6: (mensaje del aviso, caso, Ancla) de cada caso, para poner sus comentarios en la copia.
     anclas: list = field(default_factory=list)
+    # Paso 7.7: los id() de los errores de forma ya corregidos en la copia, que no se avisan.
+    corregidos: set = field(default_factory=set)
 
 
 @dataclass
@@ -166,7 +168,7 @@ def avisar(revision, informe):
         aviso("La cita puede corresponder a varias referencias de la lista: APA pide que cada cita lleve a una "
                       "sola.", casos_de_citas(ambiguas, con_detalle=True))
 
-    errores = [e for e in revision.errores if _hay_que_avisar(e)]
+    errores = [e for e in revision.errores if _hay_que_avisar(e) and id(e) not in revision.corregidos]
     for en in (revisor.CITA, revisor.REFERENCIA):
         tipos = list(dict.fromkeys(e.tipo for e in errores if e.en == en))
         for tipo in tipos:

@@ -11,7 +11,7 @@ from pathlib import Path
 from apa_facil import datos_portada, documento, estructura
 from apa_facil.documento import ErrorDocumento
 from apa_facil.informe import Informe
-from apa_facil.revision import comentarios, revisar
+from apa_facil.revision import comentarios, corregir, revisar
 from apa_facil.reglas import (alineacion, apendices, avisos, citas, figuras, fuente, indice, interlineado, limpieza, margenes,
                               orden, paginacion, portada, referencias, resumen, sangria, tablas, titulos)
 
@@ -54,6 +54,10 @@ def procesar(entrada, carpeta_salida=None, opciones=None):
         informe.regla = regla.__name__.rsplit(".", 1)[-1]   # cada mensaje sabe de qué regla viene
         regla.aplicar(doc, opciones, informe, clasificados)
     informe.regla = "revision"
+    # Paso 7.7: los errores de forma que se pueden corregir sin inventar nada se corrigen
+    # (salvo con --citas-tal-cual); los demás, y todo el cruce, solo se avisan.
+    if not opciones.get("citas_tal_cual"):
+        revision.corregidos = corregir.corregir(revision, informe)
     revisar.avisar(revision, informe)
     if opciones.get("comentarios"):   # paso 7.6: los avisos, también como comentarios en la copia
         comentarios.comentar(doc, revision, informe)

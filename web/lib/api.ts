@@ -20,6 +20,7 @@ export type Opciones = {
   tablas_tal_cual?: boolean;
   rotulo_tal_cual?: boolean;
   orden_tal_cual?: boolean;
+  citas_tal_cual?: boolean;
   rotulo_apendice?: boolean;
   comentarios?: boolean;
 };

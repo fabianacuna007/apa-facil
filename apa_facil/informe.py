@@ -24,13 +24,13 @@ from dataclasses import dataclass, field
 
 from apa_facil.documento import CambioPrevisto, ErrorDocumento
 
-VERSION = 14   # versión del formato del JSON: se sube si cambia su estructura (2 y 3: opciones de los títulos;
+VERSION = 15   # versión del formato del JSON: se sube si cambia su estructura (2 y 3: opciones de los títulos;
               # 4: datos de la portada; 5: --titulo-tal-cual; 6: --titulos-tal-cual en vez de
               # --quitar-mayusculas; 7: --mantener-portada;
               # 8: --quitar-indice; 9: --tablas-tal-cual;
               # 10: --rotulo-tal-cual; 11: --orden-tal-cual;
               # 12: --rotulo-apendice; 13: los casos de los avisos de citas y referencias;
-              # 14: --comentarios)
+              # 14: --comentarios; 15: --citas-tal-cual)
 
 # Nombre legible de cada regla (el módulo de apa_facil/reglas/ que la aplica).
 NOMBRES = {
@@ -139,6 +139,7 @@ class Informe:
                          "rotulo_tal_cual": bool(self.opciones.get("rotulo_tal_cual")),
                          "orden_tal_cual": bool(self.opciones.get("orden_tal_cual")),
                          "rotulo_apendice": bool(self.opciones.get("rotulo_apendice")),
+                         "citas_tal_cual": bool(self.opciones.get("citas_tal_cual")),
                          "comentarios": bool(self.opciones.get("comentarios")),
                          "portada": self._portada()},
             "resumen": {clave: sum(1 for e in self.entradas if e.tipo == tipo) for tipo, clave, _ in GRUPOS},

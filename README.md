@@ -124,6 +124,15 @@ python -m apa_facil pruebas_tfg_completo.docx --rotulo-apendice
 
 Si las tablas o figuras de un apéndice no llevan su letra («Tabla A1»), o si los apéndices van antes de las referencias, solo se avisa.
 
+### Citas y referencias
+
+Además de avisar de las citas sin referencia y de las referencias que no se citan, la herramienta corrige la forma
+de las citas y de las referencias cuando no hace falta inventar nada: la coma antes del año («(Martínez 2019)» →
+«(Martínez, 2019)»), «et al.», «s. f.», «&» por «y», «p. 45», los autores separados por «;», el año entre
+paréntesis, el punto después del autor y de la fecha, «nº», el DOI antiguo, la ciudad de la editorial y
+«Recuperado de». Cada corrección aparece en el informe. Lo que obligaría a inventar datos (una referencia sin
+volumen ni páginas, una obra sin año) solo se avisa. Con `--citas-tal-cual` no se corrige nada y solo se avisa.
+
 ### Qué hace (formato básico, títulos y limpieza)
 
 - **Márgenes** de 2,54 cm en todas las secciones; las páginas horizontales siguen horizontales.

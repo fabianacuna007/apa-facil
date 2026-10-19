@@ -25,7 +25,7 @@ from herramientas.verificar import verificar
 
 RAIZ = Path(__file__).resolve().parent.parent
 PRUEBAS = {ruta.name[:2]: ruta for ruta in sorted((RAIZ / "pruebas").glob("*.docx"))}
-CON_COMENTARIOS = {"comentarios": True}
+CON_COMENTARIOS = {"comentarios": True, "citas_tal_cual": True}   # paso 7.7: sin corregir, para que haya avisos
 
 
 def marcados(ruta):
@@ -150,7 +150,7 @@ def test_las_referencias_reordenadas_se_llevan_su_comentario(tmp_path):
 @pytest.mark.parametrize("clave", ["04", "05"])
 def test_el_texto_no_cambia_y_la_copia_cumple(clave, tmp_path):
     copia, _ = pipeline.procesar(PRUEBAS[clave], tmp_path, CON_COMENTARIOS)
-    sin, _ = pipeline.procesar(PRUEBAS[clave], tmp_path / "sin")
+    sin, _ = pipeline.procesar(PRUEBAS[clave], tmp_path / "sin", {"citas_tal_cual": True})
     assert documento.comparar(documento.radiografia(docx.Document(str(sin))),
                               documento.radiografia(docx.Document(str(copia)))) == []
     assert verificar(copia).incumplimientos == []
@@ -263,7 +263,7 @@ def test_texto_del_comentario():
 # --- Línea de comandos y JSON ---------------------------------------------------------
 
 def test_opcion_en_la_linea_de_comandos(tmp_path, capsys):
-    assert main([str(PRUEBAS["03"]), "--comentarios"], carpeta_salida=tmp_path) == 0
+    assert main([str(PRUEBAS["03"]), "--comentarios", "--citas-tal-cual"], carpeta_salida=tmp_path) == 0
     salida = capsys.readouterr().out
     assert "se han puesto 1 comentario en la copia" in salida
     copia = tmp_path / "03_trabajo_imagenes_listas_APA.docx"
