@@ -74,9 +74,9 @@ NUMERADOS = {"vol.", "vols.", "no.", "núm.", "n.º", "cap.", "parte", "part", "
 PAGINAS = r"(?:pp?\.\s*)?[A-Za-z]?\d+(?:\s*[-–—]\s*[A-Za-z]?\d+)?"
 FINAL_DE_REVISTA = re.compile(rf"""
     ,\s*(?:
-        (?P<volumen>\d+)\s*(?:\((?P<numero>[^()]+)\))?
+        (?:vol\.\s*)?(?P<volumen>\d+)\s*(?:\((?P<numero>[^()]+)\))?
       | \((?P<solo_numero>[^()]+)\)
-      | (?:nº|n\.º|n°|núm\.|no\.)\s*(?P<numero_escrito>\d+)
+      | (?:(?:vol\.\s*)?(?P<volumen_escrito>\d+)\s*,\s*)?(?:nº|n\.º|n°|núm\.|no\.)\s*(?P<numero_escrito>\d+)
     )
     (?:\s*,\s*(?:(?P<articulo>(?:Art[ií]culo|Article)\s+\S+?)|(?P<paginas>{PAGINAS})))?
     \s*\.?\s*$""", re.X | re.I)
@@ -439,7 +439,7 @@ def _fuente(ref, fuente, es_capitulo):
     revista = FINAL_DE_REVISTA.search(fuente.texto)
     if revista and revista.start() > 0:
         ref.tipo = ARTICULO
-        ref.volumen = revista.group("volumen")
+        ref.volumen = revista.group("volumen") or revista.group("volumen_escrito")
         ref.numero_de_revista = (revista.group("numero") or revista.group("solo_numero")
                                  or revista.group("numero_escrito"))
         ref.paginas, ref.articulo = revista.group("paginas"), revista.group("articulo")

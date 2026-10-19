@@ -221,6 +221,14 @@ def test_el_titulo_y_la_revista_separados_por_una_coma():
     assert len(ref.autores) == 4
 
 
+@pytest.mark.parametrize("final", [", 12, nº 7, 1-9.", ", vol. 12, nº 7, 1-9.", ", vol. 12(7), 1-9."])
+def test_volumen_y_numero_escritos_con_abreviaturas(final):
+    """Formas que no son de APA, pero que el lector debe entender (el 7.4 las señala)."""
+    ref = leer(f"Pérez, L. (2020). Autoestima digital. Revista Joven{final}")
+    assert partes(ref, "fuente", "volumen", "numero_de_revista", "paginas") == {
+        "fuente": "Revista Joven", "volumen": "12", "numero_de_revista": "7", "paginas": "1-9"}
+
+
 def test_sin_autor_el_titulo_va_delante():
     """APA (Missing reference information): «Título. (Fecha). Fuente.» Por la forma no se distingue de una organización."""
     ref = leer("*Merriam-Webster’s collegiate dictionary*. (2019). Merriam-Webster.")

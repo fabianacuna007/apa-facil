@@ -11,6 +11,7 @@ Línea de comandos:
     python -m apa_facil mi_trabajo.docx --citas
     python -m apa_facil mi_trabajo.docx --referencias
     python -m apa_facil mi_trabajo.docx --cruce
+    python -m apa_facil mi_trabajo.docx --forma
 
 Guarda cada copia en salida/ como nombre_APA.docx y muestra un resumen de lo
 que se ha cambiado y de lo que el estudiante debe revisar.
@@ -25,7 +26,9 @@ Con --citas tampoco se genera ninguna copia: se muestran las citas que hay en
 el texto (autores, año, páginas), tal como se han reconocido. Con --referencias,
 las partes de cada referencia de la lista (autores, año, título, fuente…). Con
 --cruce, qué citas no tienen referencia, qué referencias no se citan y en cuáles
-no coinciden el año o los autores.
+no coinciden el año o los autores. Con --forma, los errores de forma de las citas
+y las referencias («et. al», «s.f», «doi:», la ciudad de la editorial…), cada uno
+con la forma correcta.
 """
 
 import argparse
@@ -37,7 +40,7 @@ from pathlib import Path
 from apa_facil import datos_portada, documento, estructura, pipeline
 from apa_facil.documento import ErrorDocumento
 from apa_facil.reglas import fuente
-from apa_facil.revision import citas, cruce, referencias
+from apa_facil.revision import citas, cruce, forma, referencias
 
 EJEMPLO = "python -m apa_facil mi_trabajo.docx"
 FUENTES = ", ".join(list(fuente.RECOMENDADAS)[:-1]) + " o " + list(fuente.RECOMENDADAS)[-1]
@@ -152,6 +155,10 @@ def crear_ordenes():
                          help="no genera ninguna copia: cruza las citas del texto con la lista de referencias y "
                               "muestra las citas sin referencia, las referencias que no se citan y las que no "
                               "coinciden en el año o en los autores")
+    ordenes.add_argument("--forma", action="store_true",
+                         help="no genera ninguna copia: muestra los errores de forma de las citas y las referencias "
+                              "(«et. al», «s.f», «doi:», la ciudad de la editorial, «p.45»…), cada uno con la forma "
+                              "correcta")
     ordenes.add_argument("-h", "--help", action="help", help="muestra esta ayuda")
     return ordenes
 
@@ -231,6 +238,18 @@ def mostrar_cruce(archivos, ancho=None):
     return _sin_copias(archivos, mostrar, "revisado(s)")
 
 
+def mostrar_forma(archivos, ancho=None):
+    """Muestra los errores de forma de las citas y las referencias, sin generar copias (paso 7.4)."""
+    ancho = ancho or shutil.get_terminal_size((100, 24)).columns - 1
+
+    def mostrar(doc, nombre):
+        clasificacion = estructura.clasificar(doc)
+        errores = forma.revisar(citas.detectar(doc, clasificacion), referencias.leer(doc, clasificacion))
+        print(f"\nErrores de forma de {nombre}\n")
+        print(forma.como_texto(errores, ancho))
+    return _sin_copias(archivos, mostrar, "revisado(s)")
+
+
 def _sin_copias(archivos, mostrar, hecho):
     """Abre cada documento y lo muestra con `mostrar(doc, nombre)`, sin generar copias."""
     bien = 0
@@ -269,9 +288,10 @@ def main(argv=None, carpeta_salida=None):
             opciones[opcion] = True
 
     archivos = expandir_comodines(args.archivos)
-    if args.diagnostico or args.citas or args.referencias or args.cruce:
+    if args.diagnostico or args.citas or args.referencias or args.cruce or args.forma:
         modo = ("el modo diagnóstico" if args.diagnostico else "la revisión de citas" if args.citas
-                else "la revisión de referencias" if args.referencias else "el cruce de citas y referencias")
+                else "la revisión de referencias" if args.referencias
+                else "el cruce de citas y referencias" if args.cruce else "la revisión de la forma")
         for nombre, usada in (("--fuente", args.fuente), ("--quitar-numeracion", args.quitar_numeracion),
                               ("--titulos-tal-cual", args.titulos_tal_cual),
                               ("--mantener-portada", args.mantener_portada),
@@ -289,7 +309,8 @@ def main(argv=None, carpeta_salida=None):
         resultado = diagnosticar(archivos) if args.diagnostico else 0
         resultado = max(resultado, mostrar_citas(archivos)) if args.citas else resultado
         resultado = max(resultado, mostrar_referencias(archivos)) if args.referencias else resultado
-        return max(resultado, mostrar_cruce(archivos)) if args.cruce else resultado
+        resultado = max(resultado, mostrar_cruce(archivos)) if args.cruce else resultado
+        return max(resultado, mostrar_forma(archivos)) if args.forma else resultado
 
     try:
         portada = datos_portada.combinar(args.datos, opciones_de_portada(args))
