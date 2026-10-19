@@ -1,26 +1,64 @@
 @import "tailwindcss";
 
+/*
+ * Estética de APA Fácil (paso 9.2), a partir de diseno/estilo de referencia.jfif:
+ * fondo gris muy claro, tarjetas blancas con borde fino y esquinas redondeadas,
+ * un azul intenso para lo que se pulsa y títulos grandes en negrita.
+ *
+ * Los colores se usan en Tailwind con su nombre: bg-fondo, text-tinta-suave,
+ * border-borde, bg-primario… Todos los textos cumplen el contraste AA (4,5:1)
+ * sobre blanco y sobre el fondo.
+ */
+@theme {
+  --color-fondo: #f6f8fb;          /* fondo de la página */
+  --color-superficie: #ffffff;     /* tarjetas y campos */
+  --color-hundido: #f1f4f9;        /* zonas dentro de una tarjeta (dropzone, panel de resultado) */
+  --color-borde: #e2e8f0;
+  --color-borde-fuerte: #cbd5e1;   /* campos de formulario */
+
+  --color-tinta: #0f172a;          /* texto principal */
+  --color-tinta-suave: #475569;    /* texto secundario (7,6:1) */
+  --color-tinta-tenue: #64748b;    /* ayudas y marcadores de posición (4,8:1) */
+
+  --color-primario: #1d5cff;       /* botones y enlaces (5,2:1 con texto blanco) */
+  --color-primario-hover: #1546d6;
+  --color-primario-suave: #eaf0ff;
+
+  --color-exito: #15803d;
+  --color-exito-suave: #ecfdf3;
+  --color-exito-borde: #bbf7d0;
+  --color-aviso: #92400e;
+  --color-aviso-suave: #fffbeb;
+  --color-aviso-borde: #fde68a;
+  --color-error: #b91c1c;
+  --color-error-suave: #fef2f2;
+  --color-error-borde: #fecaca;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-titulo: var(--font-jakarta), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-tarjeta: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px -12px rgb(15 23 42 / 0.12);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-fondo);
+  color: var(--color-tinta);
+}
+
+/* Foco visible para quien usa el teclado (paso 9.8). */
+:focus-visible {
+  outline: 2px solid var(--color-primario);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

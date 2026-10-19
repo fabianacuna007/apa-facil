@@ -1,17 +1,10 @@
 import type { NextConfig } from "next";
 
+// Tailwind se carga con PostCSS (postcss.config.mjs), como indica la guía de Next.js.
+// El cargador de Turbopack que traía la plantilla no recargaba globals.css al editarlo.
 const nextConfig: NextConfig = {
-  /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
-  turbopack: {
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
-    },
-  },
 };
 
 export default nextConfig;
