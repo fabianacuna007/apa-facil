@@ -198,3 +198,23 @@ Con Docker (solo el núcleo y el servidor):
 docker build -t apa-facil .
 docker run --rm -p 8000:8000 apa-facil
 ```
+
+## Web
+
+Hace falta Node.js 20 o más reciente. La primera vez, desde la carpeta del proyecto:
+
+```
+cd web
+npm install
+```
+
+Con el servidor en marcha (`uvicorn servidor.app:app`), en otra terminal:
+
+```
+cd web
+npm run dev
+```
+
+La web queda en http://localhost:3000 y llama al servidor en http://localhost:8000. Si el servidor está en otra
+dirección, cópiala en `web/.env.local` (hay un ejemplo en `web/.env.example`). El servidor solo responde a las webs
+de la variable `APA_ORIGENES` (separadas por comas; por defecto, `http://localhost:3000`).

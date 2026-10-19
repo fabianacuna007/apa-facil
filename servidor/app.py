@@ -42,6 +42,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from apa_facil import datos_portada, documento
@@ -55,6 +56,8 @@ SIMULTANEOS = int(os.environ.get("APA_SIMULTANEOS", 2))            # documentos 
 ESPERA_MAXIMA = 60                                                 # segundos en cola antes de rendirse
 TURNOS = threading.BoundedSemaphore(SIMULTANEOS)
 CARPETA_TEMPORAL = os.environ.get("APA_CARPETA_TEMPORAL")          # None: la del sistema
+# Webs que pueden llamar al servidor desde el navegador (paso 9.1), separadas por comas.
+ORIGENES = [o.strip() for o in os.environ.get("APA_ORIGENES", "http://localhost:3000").split(",") if o.strip()]
 REGISTRO = logging.getLogger("apa_facil.servidor")
 # Lo que puede ocupar la petición entera: el archivo y, como mucho, 1 MB de opciones y cabeceras.
 PETICION_MAXIMA = seguridad.TAMANO_MAXIMO + seguridad.MB
@@ -113,6 +116,10 @@ _MENSAJE_GRANDE = (f"El archivo ocupa más de {seguridad.TAMANO_MAXIMO // seguri
 _MENSAJE_FALLO = ("Ha habido un error inesperado al procesar el documento. No se ha guardado nada. "
                   "Inténtalo de nuevo o prueba con otro archivo.")
 app.add_middleware(_limitar_tamano)
+# Paso 9.1: la web está en otro origen (localhost:3000 en local, su dominio en producción),
+# y el navegador solo le deja leer la respuesta si el servidor lo permite. Va después de
+# _limitar_tamano para envolverlo: así la web también puede leer sus errores 413.
+app.add_middleware(CORSMiddleware, allow_origins=ORIGENES, allow_methods=["GET", "POST"])
 
 
 def _error(estado, mensaje):

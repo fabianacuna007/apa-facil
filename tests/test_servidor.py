@@ -280,3 +280,35 @@ def test_requisitos_del_servidor_coinciden_con_los_de_desarrollo():
     desarrollo = versiones("requirements.txt")
     for paquete, linea in versiones("requirements-servidor.txt").items():
         assert desarrollo[paquete] == linea
+
+
+# --- Paso 9.1: la web llama al servidor desde el navegador (CORS) ---------------------
+
+WEB = {"Origin": "http://localhost:3000"}
+
+
+def test_la_web_puede_leer_las_respuestas():
+    assert cliente.get("/salud", headers=WEB).headers["access-control-allow-origin"] == "http://localhost:3000"
+    with open(PRUEBAS[0], "rb") as f:
+        respuesta = cliente.post("/procesar", headers=WEB, files={"archivo": (PRUEBAS[0].name, f)})
+    assert respuesta.status_code == 200
+    assert respuesta.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
+def test_la_web_puede_leer_los_errores(tmp_path):
+    vacio = tmp_path / "a.docx"
+    vacio.write_bytes(b"")
+    with open(vacio, "rb") as f:
+        respuesta = cliente.post("/procesar", headers=WEB, files={"archivo": ("a.docx", f)})
+    assert respuesta.status_code == 422
+    assert respuesta.headers["access-control-allow-origin"] == "http://localhost:3000"
+    # También el 413, que da el limitador de tamaño antes de llegar a /procesar.
+    grande = cliente.post("/procesar", headers={**WEB, "Content-Length": str(servidor_app.PETICION_MAXIMA + 1)},
+                          content=b"")
+    assert grande.status_code == 413
+    assert grande.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
+def test_otras_webs_no_pueden_leer_las_respuestas():
+    respuesta = cliente.get("/salud", headers={"Origin": "https://otra-web.example"})
+    assert "access-control-allow-origin" not in respuesta.headers
