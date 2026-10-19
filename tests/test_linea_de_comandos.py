@@ -98,8 +98,12 @@ def test_salida_completa_de_un_documento(tmp_path, capsys):
     salida = capsys.readouterr().out
     assert salida.startswith(f"✔ {original.name} → {tmp_path.name}/{original.stem}_APA.docx\n   Lo que hemos cambiado (")
     # Encabezado, un solo subapartado, numeración, «Introducción» y la portada que se mantiene (sin datos, paso 5.3);
-    # y de las figuras (6.2), «(elaboración propia)» en un título, la línea en blanco y dónde colocarlas.
-    assert "   Lo que debes revisar tú (8):" in salida
+    # y de las figuras (6.2), «(elaboración propia)» en un título, la línea en blanco y dónde colocarlas;
+    # y de las referencias (7.5), el «&» de Campos y Vidal, con su caso debajo.
+    assert "   Lo que debes revisar tú (9):" in salida
+    assert ("     · «&» en lugar de «y» en la lista de referencias. En APA en español, el último autor va unido con «y».\n"
+            "         – En la lista de referencias: «Campos, F., & Vidal, N. (2022). Autoconsumo…»: "
+            "«Campos, F., & Vidal, N.» → «Campos, F. y Vidal, N.»") in salida
     assert f"   Informe completo: {tmp_path.name}/{original.stem}_APA.json" in salida
     assert "todavía incompleto" not in salida
     assert salida.rstrip().endswith("1 de 1 documento(s) procesado(s).")

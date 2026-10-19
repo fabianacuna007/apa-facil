@@ -167,8 +167,8 @@ def _buscar(obra, leidas, abreviaturas):
     otro_año = [r for r, comparacion in comparadas if comparacion]
     detalle = None
     if otro_año:
-        detalle = "se parece a " + " y a ".join(f"«{_referencia_corta(r)}», párrafo {r.numero}" for r in otro_año) \
-                  + ", pero no coinciden ni los autores ni el año"
+        detalle = "se parece a " + " y a ".join(f"«{referencia_corta(r)}»" for r in otro_año) \
+                  + " de la lista, pero no coinciden ni los autores ni el año"
     return Hallazgo(SIN_REFERENCIA, obra, [], detalle)
 
 
@@ -303,11 +303,11 @@ def _describir(h):
         if h.tipo == NO_RECONOCIDA:
             partes.append(f"«{textwrap.shorten(' '.join(r.texto.split()), 70, placeholder='…')}», párrafo {r.numero}")
         else:
-            partes.append(("en la lista: " if h.citas else "") + f"{_referencia_corta(r)}, párrafo {r.numero}")
+            partes.append(("en la lista: " if h.citas else "") + f"{referencia_corta(r)}, párrafo {r.numero}")
     return "; ".join(partes)
 
 
-def _referencia_corta(r):
+def referencia_corta(r):
     return f"{r.autores_escritos} ({r.año})" if r.año else f"{r.autores_escritos} (sin año)"
 
 

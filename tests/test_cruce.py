@@ -118,7 +118,7 @@ def test_un_apellido_corto_distinto_es_otro_autor(cita):
 def test_parecida_pero_de_otro_año_es_sin_referencia_con_pista():
     resultado = cruzar("(Ramirez, 2014)", "Ramírez Soto, M. (2015). Fábricas. Editorial.")
     (hallazgo,) = resultado.sin_referencia
-    assert hallazgo.detalle == ("se parece a «Ramírez Soto, M. (2015)», párrafo 10, pero no coinciden ni los "
+    assert hallazgo.detalle == ("se parece a «Ramírez Soto, M. (2015)» de la lista, pero no coinciden ni los "
                                 "autores ni el año")
 
 

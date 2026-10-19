@@ -188,8 +188,7 @@ def _errores_de_la_referencia(r):
         errores.append(error(DOI_ANTIGUO, r.doi, f"https://doi.org/{numero.group()}" if numero else None,
                              "APA pide el DOI como enlace, con la forma https://doi.org/ seguida del número."))
     if r.lugar:
-        errores.append(error(CIUDAD, r.lugar, r.fuente,
-                             f"APA 7 ya no pone la ciudad de la editorial: quita «{r.lugar}»."))
+        errores.append(error(CIUDAD, r.lugar, r.fuente, "APA 7 ya no pone la ciudad de la editorial: quítala."))
     if r.recuperado_de and not re.search(r"\d", r.recuperado_de):
         errores.append(error(RECUPERADO_DE, f"{r.recuperado_de} {r.url or r.doi}", r.url or r.doi,
                              "El enlace basta: APA no pone «Recuperado de» (solo con la fecha de consulta, "

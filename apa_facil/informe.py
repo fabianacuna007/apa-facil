@@ -24,12 +24,12 @@ from dataclasses import dataclass, field
 
 from apa_facil.documento import CambioPrevisto, ErrorDocumento
 
-VERSION = 12   # versión del formato del JSON: se sube si cambia su estructura (2 y 3: opciones de los títulos;
+VERSION = 13   # versión del formato del JSON: se sube si cambia su estructura (2 y 3: opciones de los títulos;
               # 4: datos de la portada; 5: --titulo-tal-cual; 6: --titulos-tal-cual en vez de
               # --quitar-mayusculas; 7: --mantener-portada;
               # 8: --quitar-indice; 9: --tablas-tal-cual;
               # 10: --rotulo-tal-cual; 11: --orden-tal-cual;
-              # 12: --rotulo-apendice)
+              # 12: --rotulo-apendice; 13: los casos de los avisos de citas y referencias)
 
 # Nombre legible de cada regla (el módulo de apa_facil/reglas/ que la aplica).
 NOMBRES = {
@@ -51,7 +51,9 @@ NOMBRES = {
     "orden": "Orden de las referencias",
     "apendices": "Apéndices",
     "paginacion": "Número de página",
+    "revision": "Citas y referencias",
 }
+MAXIMO_DE_CASOS_EN_LA_TERMINAL = 10   # el JSON los lleva todos
 
 GRUPOS = [  # (tipo de entrada, clave en el JSON, título en la terminal)
     ("cambio", "cambios", "Lo que hemos cambiado"),
@@ -65,6 +67,11 @@ class Entrada:
     tipo: str        # "cambio", "aviso" o "error"
     regla: str       # p. ej. "paginacion"; None si no viene de una regla
     mensaje: str
+    # Paso 7.5: los sitios concretos de un aviso, cada uno un dict con "donde" (en
+    # palabras: el apartado y el principio del párrafo), "extracto" (lo escrito),
+    # "correccion" (la forma correcta, o None), "explicacion" (o None) y "parrafo"
+    # (el número del párrafo en el original, o None en las notas).
+    casos: list = None
 
 
 @dataclass
@@ -80,8 +87,8 @@ class Informe:
     def cambio(self, mensaje):
         self.entradas.append(Entrada("cambio", self.regla, mensaje))
 
-    def aviso(self, mensaje):
-        self.entradas.append(Entrada("aviso", self.regla, mensaje))
+    def aviso(self, mensaje, casos=None):
+        self.entradas.append(Entrada("aviso", self.regla, mensaje, list(casos) if casos else None))
 
     def error(self, mensaje):
         self.entradas.append(Entrada("error", self.regla, mensaje))
@@ -110,7 +117,10 @@ class Informe:
 
     def a_dict(self):
         def entrada(e):
-            return {"regla": e.regla, "nombre": NOMBRES.get(e.regla, "General"), "mensaje": e.mensaje}
+            datos = {"regla": e.regla, "nombre": NOMBRES.get(e.regla, "General"), "mensaje": e.mensaje}
+            if e.casos:
+                datos["casos"] = [dict(caso) for caso in e.casos]
+            return datos
 
         datos = {
             "version": VERSION,
@@ -157,10 +167,26 @@ class Informe:
     def como_texto(self):
         lineas = []
         for tipo, _, titulo in GRUPOS:
-            mensajes = self._mensajes(tipo)
-            if mensajes:
-                lineas.append(f"   {titulo} ({len(mensajes)}):")
-                lineas += [f"     · {m}" for m in mensajes]
+            entradas = [e for e in self.entradas if e.tipo == tipo]
+            if entradas:
+                lineas.append(f"   {titulo} ({len(entradas)}):")
+                for e in entradas:
+                    lineas.append(f"     · {e.mensaje}")
+                    for caso in (e.casos or [])[:MAXIMO_DE_CASOS_EN_LA_TERMINAL]:
+                        lineas.append(f"         – {caso_como_texto(caso)}")
+                    if e.casos and len(e.casos) > MAXIMO_DE_CASOS_EN_LA_TERMINAL:
+                        lineas.append(f"         – y {len(e.casos) - MAXIMO_DE_CASOS_EN_LA_TERMINAL} más "
+                                      "(están todos en el informe completo).")
         if not self.cambios:
             lineas.append("   No ha hecho falta cambiar nada: el formato ya cumplía APA.")
         return "\n".join(lineas)
+
+
+def caso_como_texto(caso):
+    """«En «Introducción», en el párrafo que empieza «…»: «(Martínez 2019)» → «(Martínez, 2019)» (…)»."""
+    texto = f"{caso['donde']}: «{caso['extracto']}»"
+    if caso.get("correccion"):
+        texto += f" → «{caso['correccion']}»"
+    if caso.get("explicacion"):
+        texto += f" ({caso['explicacion']})"
+    return texto

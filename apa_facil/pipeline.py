@@ -11,6 +11,7 @@ from pathlib import Path
 from apa_facil import datos_portada, documento, estructura
 from apa_facil.documento import ErrorDocumento
 from apa_facil.informe import Informe
+from apa_facil.revision import revisar
 from apa_facil.reglas import (alineacion, apendices, avisos, citas, figuras, fuente, indice, interlineado, limpieza, margenes,
                               orden, paginacion, portada, referencias, resumen, sangria, tablas, titulos)
 
@@ -41,6 +42,10 @@ def procesar(entrada, carpeta_salida=None, opciones=None):
     # después de la regla de fuente, por ejemplo, ya no se ve qué títulos tenían
     # la letra más grande.
     clasificados = estructura.clasificar(doc)
+    # Revisión de citas y referencias (fase 7): sobre el original, antes de que las
+    # reglas lo cambien (reordenar las referencias, borrar vacíos…). Solo da avisos,
+    # que van al final del informe, detrás de los de formato.
+    revision = revisar.analizar(doc, clasificados)
     # Datos de la portada (paso 5.1): se avisa de los que faltan. La portada la pone su regla.
     if opciones.get("portada"):
         informe.regla = "portada"
@@ -48,6 +53,8 @@ def procesar(entrada, carpeta_salida=None, opciones=None):
     for regla in REGLAS:
         informe.regla = regla.__name__.rsplit(".", 1)[-1]   # cada mensaje sabe de qué regla viene
         regla.aplicar(doc, opciones, informe, clasificados)
+    informe.regla = "revision"
+    revisar.avisar(revision, informe)
     informe.regla = None
 
     documento.guardar(doc, salida)

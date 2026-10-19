@@ -161,3 +161,34 @@ def test_con_las_opciones_de_los_titulos(original, tmp_path):
                                      radiografia(docx.Document(str(salida))),
                                      [c for c in informe.cambios_previstos if c not in acciones])
     assert bool(sin_cambios_previstos) == bool(acciones), "sin anotarlos, la integridad los vería"
+
+
+# Paso 7.5: los avisos de «Citas y referencias» (la tabla de la fase 7 del ROADMAP), por el principio de su
+# mensaje y con cuántos casos. Lo que ya avisa el paso 6.5 (el orden alfabético, las referencias que son solo
+# una dirección web) no se repite. El 02 es el caso de control: ninguno.
+REVISION = {
+    "01_ensayo_basico": [("Una obra citada en el texto no está", 1), ("Ciudad de la editorial", 2),
+                         ("Año sin paréntesis", 1)],
+    "02_informe_tablas": [],
+    "03_trabajo_imagenes_listas": [("«&» en lugar de «y»", 1)],
+    "04_formato_caotico": [("2 obras citadas en el texto no están", 3), ("Falta la coma antes del año", 1),
+                           ("«et al.» mal escrito", 2), ("Fecha mal escrita", 3), ("Año sin paréntesis", 1),
+                           ("Autores separados por «;»", 1), ("Falta el punto después de la fecha", 1),
+                           ("Número de la revista con «nº»", 1), ("Referencia incompleta", 1)],
+    "05_tfg_completo": [("Una obra citada en el texto no está", 1), ("Una obra de la lista de referencias no se cita", 1),
+                        ("Falta el espacio después de «p.»", 1), ("Ciudad de la editorial", 1),
+                        ("Falta el punto después del autor", 1), ("DOI con la forma antigua", 1),
+                        ("Falta el año", 1)],
+}
+
+
+def test_avisos_de_citas_y_referencias(procesado):
+    revision = [e for e in procesado["informe"].entradas if e.regla == "revision"]
+    esperados = REVISION[procesado["original"].stem]
+    assert len(revision) == len(esperados), [e.mensaje for e in revision]
+    for entrada, (principio, casos) in zip(revision, esperados):
+        assert entrada.mensaje.startswith(principio) and len(entrada.casos) == casos, entrada.mensaje
+    datos = json.loads(procesado["salida"].with_suffix(".json").read_text(encoding="utf-8"))
+    del_json = [a for a in datos["avisos"] if a["regla"] == "revision"]
+    assert [len(a["casos"]) for a in del_json] == [casos for _, casos in esperados]
+    assert all(a["nombre"] == "Citas y referencias" for a in del_json)
