@@ -217,3 +217,51 @@ def test_el_registro_no_lleva_nombre_ni_texto(temporal, caplog, monkeypatch):
     assert "Error inesperado en el servidor (RuntimeError)" in caplog.text
     assert "Ana Pérez" not in caplog.text and texto not in caplog.text
     assert list(temporal.iterdir()) == []
+
+
+# --- Paso 8.4: más archivos inválidos y casos de la web --------------------------------
+
+@pytest.mark.parametrize("nombre, contenido, mensaje", [
+    ("trabajo.doc", b"\xd0\xcf\x11\xe0" + b"\0" * 100, "«trabajo.doc» está en el formato antiguo de Word (.doc)."),
+    ("~$trabajo.docx", b"PK", "«~$trabajo.docx» es un archivo temporal que Word crea"),
+    ("notas.txt", b"hola", "«notas.txt» no es un documento de Word."),
+    ("trabajo", b"PK", "«trabajo» no es un documento de Word."),
+])
+def test_nombres_no_validos(nombre, contenido, mensaje, tmp_path):
+    ruta = tmp_path / "archivo"
+    ruta.write_bytes(contenido)
+    respuesta = enviar(ruta, nombre=nombre)
+    assert respuesta.status_code == 422
+    assert respuesta.json()["error"].startswith(mensaje)
+
+
+def test_pdf_de_verdad_renombrado(tmp_path):
+    # Un PDF real (cabecera, objetos y final), con la extensión cambiada.
+    pdf = tmp_path / "Trabajo final.docx"
+    pdf.write_bytes(b"%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
+                    b"2 0 obj << /Type /Pages /Kids [] /Count 0 >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n")
+    respuesta = enviar(pdf)
+    assert respuesta.status_code == 422
+    assert respuesta.json() == {"error": "«Trabajo final.docx» está dañado o no es un documento de Word de verdad "
+                                         "(aunque termine en .docx)."}
+
+
+def test_nombre_con_ruta_del_navegador():
+    respuesta = enviar(PRUEBAS[0], nombre="C:\fakepath\mi trabajo.docx")
+    assert respuesta.status_code == 200
+    assert respuesta.json()["documento"]["nombre"] == "mi trabajo_APA.docx"
+    assert respuesta.json()["informe"]["archivo"] == "mi trabajo.docx"
+
+
+def test_comentarios_en_la_copia():
+    datos = enviar(PRUEBAS[0], comentarios="true").json()
+    with zipfile.ZipFile(io.BytesIO(base64.b64decode(datos["documento"]["contenido"]))) as z:
+        assert "word/comments.xml" in z.namelist()
+
+
+def test_los_errores_son_json_con_mensaje_en_espanol(tmp_path):
+    vacio = tmp_path / "a.docx"
+    vacio.write_bytes(b"")
+    for respuesta in (enviar(vacio), cliente.post("/procesar"), enviar(PRUEBAS[1], fuente="Papyrus")):
+        assert respuesta.headers["content-type"] == "application/json"
+        assert list(respuesta.json()) == ["error"]
