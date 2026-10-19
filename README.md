@@ -185,7 +185,9 @@ pytest
 uvicorn servidor.app:app
 ```
 
-En http://localhost:8000/docs se puede subir un documento a mano. Para guardar
+En http://localhost:8000/docs se puede subir un documento a mano. `POST /procesar` recibe el Word y
+`POST /procesar-texto` el trabajo pegado como texto (un párrafo por línea, empezando por el título), con las
+mismas opciones. Para guardar
 lo que devuelve (copia corregida, informe y resumen) en `salida/`:
 
 ```
@@ -215,6 +217,8 @@ cd web
 npm run dev
 ```
 
-La web queda en http://localhost:3000 y llama al servidor en http://localhost:8000. Si el servidor está en otra
+La web queda en http://localhost:3000 y llama al servidor en http://localhost:8000. Tiene la página de
+inicio, la herramienta (`/formatear`: subir el Word o pegar el texto, rellenar la portada, elegir las opciones y
+descargar el resultado con su informe) y las páginas de privacidad y condiciones de uso. Si el servidor está en otra
 dirección, cópiala en `web/.env.local` (hay un ejemplo en `web/.env.example`). El servidor solo responde a las webs
 de la variable `APA_ORIGENES` (separadas por comas; por defecto, `http://localhost:3000`).
