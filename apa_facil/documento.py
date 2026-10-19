@@ -156,6 +156,14 @@ def _notas(documento, nombre_parte, etiqueta):
     return []
 
 
+def notas(documento):
+    """(«Nota al pie 1», elemento w:footnote) de cada nota al pie y luego al final, en orden."""
+    for tipo, parte, etiqueta in (("Nota al pie", "/word/footnotes.xml", "footnote"),
+                                  ("Nota al final", "/word/endnotes.xml", "endnote")):
+        for n, nota in enumerate(_notas(documento, parte, etiqueta), start=1):
+            yield f"{tipo} {n}", nota
+
+
 def radiografia(documento):
     """Texto y recuento de elementos de un documento abierto con python-docx."""
     cuerpo = documento.element.body
@@ -166,11 +174,8 @@ def radiografia(documento):
         propias = sum(1 for el in p.iter(w("drawing"), w("pict")) if next(el.iterancestors(w("p")), None) is p)
         if propias:
             r.imagenes_en[i] = propias
-    for tipo, parte, etiqueta in (("Nota al pie", "/word/footnotes.xml", "footnote"),
-                                  ("Nota al final", "/word/endnotes.xml", "endnote")):
-        for n, nota in enumerate(_notas(documento, parte, etiqueta), start=1):
-            texto = "\n".join(texto_parrafo(p) for p in nota.iter(w("p")))
-            r.textos.append((f"{tipo} {n}", texto))
+    for ubicacion, nota in notas(documento):
+        r.textos.append((ubicacion, "\n".join(texto_parrafo(p) for p in nota.iter(w("p")))))
 
     r.tablas = sum(1 for _ in cuerpo.iter(w("tbl")))
     r.imagenes = sum(1 for _ in cuerpo.iter(w("drawing"), w("pict")))

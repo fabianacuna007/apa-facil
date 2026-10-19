@@ -8,6 +8,7 @@ Línea de comandos:
                         [--datos datos.json] [--titulo "…"] [--autor "…"] … [--fecha 16/10/2026]
                         [--titulo-tal-cual] [--mantener-portada]
     python -m apa_facil mi_trabajo.docx --diagnostico
+    python -m apa_facil mi_trabajo.docx --citas
 
 Guarda cada copia en salida/ como nombre_APA.docx y muestra un resumen de lo
 que se ha cambiado y de lo que el estudiante debe revisar.
@@ -17,6 +18,9 @@ sueltas (--titulo, --autor…), que mandan sobre el archivo dato a dato.
 
 Con --diagnostico no se genera ninguna copia: solo se muestra qué es cada
 párrafo (título, cuerpo, lista…) según el clasificador, para revisarlo.
+
+Con --citas tampoco se genera ninguna copia: se muestran las citas que hay en
+el texto (autores, año, páginas), tal como se han reconocido.
 """
 
 import argparse
@@ -28,6 +32,7 @@ from pathlib import Path
 from apa_facil import datos_portada, documento, estructura, pipeline
 from apa_facil.documento import ErrorDocumento
 from apa_facil.reglas import fuente
+from apa_facil.revision import citas
 
 EJEMPLO = "python -m apa_facil mi_trabajo.docx"
 FUENTES = ", ".join(list(fuente.RECOMENDADAS)[:-1]) + " o " + list(fuente.RECOMENDADAS)[-1]
@@ -132,6 +137,9 @@ def crear_ordenes():
     ordenes.add_argument("--diagnostico", action="store_true",
                          help="no genera ninguna copia: muestra qué es cada párrafo (título, cuerpo, lista…), "
                               "con qué confianza y por qué, para revisar cómo se ha entendido el documento")
+    ordenes.add_argument("--citas", action="store_true",
+                         help="no genera ninguna copia: muestra las citas que hay en el texto (autores, año y "
+                              "páginas) tal como se han reconocido")
     ordenes.add_argument("-h", "--help", action="help", help="muestra esta ayuda")
     return ordenes
 
@@ -171,23 +179,41 @@ def expandir_comodines(archivos):
 def diagnosticar(archivos, ancho=None):
     """Muestra la clasificación de los párrafos de cada documento, sin generar copias."""
     ancho = ancho or shutil.get_terminal_size((100, 24)).columns - 1
+
+    def mostrar(doc, nombre):
+        clasificados = estructura.clasificar(doc)
+        print(f"\nDiagnóstico de {nombre} ({len(clasificados)} párrafos)\n")
+        print(estructura.como_texto(clasificados, ancho))
+    return _sin_copias(archivos, mostrar, "diagnosticado(s)")
+
+
+def mostrar_citas(archivos, ancho=None):
+    """Muestra las citas del texto de cada documento, sin generar copias (paso 7.1)."""
+    ancho = ancho or shutil.get_terminal_size((100, 24)).columns - 1
+
+    def mostrar(doc, nombre):
+        print(f"\nCitas en el texto de {nombre}\n")
+        print(citas.como_texto(citas.detectar(doc), ancho))
+    return _sin_copias(archivos, mostrar, "revisado(s)")
+
+
+def _sin_copias(archivos, mostrar, hecho):
+    """Abre cada documento y lo muestra con `mostrar(doc, nombre)`, sin generar copias."""
     bien = 0
     for archivo in archivos:
         nombre = Path(archivo).name
         try:
-            clasificados = estructura.clasificar(documento.abrir(archivo))
+            mostrar(documento.abrir(archivo), nombre)
         except ErrorDocumento as e:
             print(f"✘ {nombre}: {e}")
             continue
         except Exception as e:  # un fallo inesperado no debe parar los demás archivos
             print(f"✘ {nombre}: error inesperado al leerlo ({type(e).__name__}: {e}).")
             continue
-        print(f"\nDiagnóstico de {nombre} ({len(clasificados)} párrafos)\n")
-        print(estructura.como_texto(clasificados, ancho))
         bien += 1
 
     total = len(archivos)
-    print(f"\n{bien} de {total} documento(s) diagnosticado(s). No se ha generado ninguna copia.")
+    print(f"\n{bien} de {total} documento(s) {hecho}. No se ha generado ninguna copia.")
     return 0 if bien == total else 1
 
 
@@ -209,7 +235,8 @@ def main(argv=None, carpeta_salida=None):
             opciones[opcion] = True
 
     archivos = expandir_comodines(args.archivos)
-    if args.diagnostico:
+    if args.diagnostico or args.citas:
+        modo = "el modo diagnóstico" if args.diagnostico else "la revisión de citas"
         for nombre, usada in (("--fuente", args.fuente), ("--quitar-numeracion", args.quitar_numeracion),
                               ("--titulos-tal-cual", args.titulos_tal_cual),
                               ("--mantener-portada", args.mantener_portada),
@@ -221,10 +248,11 @@ def main(argv=None, carpeta_salida=None):
                               ("--quitar-introduccion", args.quitar_introduccion),
                               ("--titulo-tal-cual", args.titulo_tal_cual)):
             if usada:
-                print(f"Aviso: la opción {nombre} no se usa en el modo diagnóstico, que no cambia nada.")
+                print(f"Aviso: la opción {nombre} no se usa en {modo}, que no cambia nada.")
         if args.datos or any(v is not None for v in opciones_de_portada(args).values()):
-            print("Aviso: los datos de la portada no se usan en el modo diagnóstico, que no cambia nada.")
-        return diagnosticar(archivos)
+            print(f"Aviso: los datos de la portada no se usan en {modo}, que no cambia nada.")
+        resultado = diagnosticar(archivos) if args.diagnostico else 0
+        return max(resultado, mostrar_citas(archivos)) if args.citas else resultado
 
     try:
         portada = datos_portada.combinar(args.datos, opciones_de_portada(args))
