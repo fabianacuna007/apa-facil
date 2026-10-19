@@ -24,7 +24,7 @@ import pytest
 
 from apa_facil import estructura, pipeline
 from apa_facil.documento import Estilos, comparar, radiografia
-from herramientas.verificar import (ALINEACION, INDICE, PORTADA_PROPIA, TEXTO_TITULOS, TITULO_TRABAJO, mostrar,
+from herramientas.verificar import (ALINEACION, CITAS, INDICE, PORTADA_PROPIA, TEXTO_TITULOS, TITULO_TRABAJO, mostrar,
                                    verificar)
 
 CARPETA = Path(__file__).resolve().parent.parent / "pruebas"
@@ -49,7 +49,8 @@ EXCEPCIONES = {
                        # «4.2.» y «5.» van uno más allá desde el 6.1: el título de la tabla 1 va en su propio párrafo
                        | {(TEXTO_TITULOS, n) for n in (20, 23, 24, 26, 27, 29, 31, 35, 37, 38, 64, 66)}
                        | {(TITULO_TRABAJO, 20), (PORTADA_PROPIA, 2)}          # «1. Introducción»; la portada
-                       | {(INDICE, 16)},                                      # el índice (paso 5.4)
+                       | {(INDICE, 16)}                                       # el índice (paso 5.4)
+                       | {(CITAS, 33)},                                       # la cita, con sus comillas (6.3)
 }
 
 

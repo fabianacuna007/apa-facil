@@ -11,7 +11,7 @@ from pathlib import Path
 from apa_facil import datos_portada, documento, estructura
 from apa_facil.documento import ErrorDocumento
 from apa_facil.informe import Informe
-from apa_facil.reglas import (alineacion, avisos, figuras, fuente, indice, interlineado, limpieza, margenes,
+from apa_facil.reglas import (alineacion, avisos, citas, figuras, fuente, indice, interlineado, limpieza, margenes,
                               paginacion, portada, resumen, sangria, tablas, titulos)
 
 # En este orden. Los avisos van primero: después la regla de fuente lo iguala todo.
@@ -21,7 +21,7 @@ from apa_facil.reglas import (alineacion, avisos, figuras, fuente, indice, inter
 # títulos: sus títulos llevan las mayúsculas de APA, como los de los apartados. Las figuras, detrás de las
 # tablas: un solo recordatorio de dónde colocarlas, que amplía el de las tablas.
 REGLAS = [avisos, limpieza, margenes, fuente, interlineado, alineacion, sangria, titulos, resumen, tablas,
-          figuras, portada, indice, paginacion]
+          figuras, citas, portada, indice, paginacion]
 
 
 def procesar(entrada, carpeta_salida=None, opciones=None):

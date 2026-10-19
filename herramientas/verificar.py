@@ -43,6 +43,7 @@ from apa_facil.reglas import (alineacion, fuente, interlineado, margenes, pagina
                                titulos)
 from apa_facil.reglas import portada as regla_portada  # noqa: E402
 from apa_facil.reglas import resumen as resumen_regla  # noqa: E402
+from apa_facil.reglas import citas as regla_citas  # noqa: E402
 from apa_facil.reglas import leyendas  # noqa: E402
 from apa_facil.reglas import tablas as regla_tablas  # noqa: E402
 
@@ -64,9 +65,10 @@ INDICE = "5.4 Índice"
 RESUMEN = "5.5 Resumen"
 TABLAS = "6.1 Tablas"
 FIGURAS = "6.2 Figuras"
+CITAS = "6.3 Citas en bloque"
 REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS, TEXTO_TITULOS,
           TITULO_TRABAJO, TITULOS_EN_LINEA, MAYUSCULAS_TITULOS, PORTADA, PORTADA_PROPIA, INDICE, RESUMEN, TABLAS,
-          FIGURAS]
+          FIGURAS, CITAS]
 SIN_LINEA = (None, "nil", "none")
 SIN_FONDO = (None, "auto", "FFFFFF", "ffffff")
 
@@ -175,7 +177,7 @@ class Verificacion:
                              self.sangria, self.paginacion, self.titulos, self.formato_de_titulos,
                              self.texto_de_titulos, self.titulo_del_trabajo, self.titulos_en_linea,
                              self.mayusculas_de_titulos, self.portada, self.indice, self.resumen, self.tablas,
-                             self.figuras):
+                             self.figuras, self.citas):
             comprobacion()
         return self.resultado
 
@@ -371,6 +373,8 @@ class Verificacion:
                 continue   # el problema es la alineación (1.4); con ella corregida, se vería su sangría
             elif self._titulo_con_sangria(p):
                 continue   # los títulos de nivel 4 y 5 la llevan: la pone su estilo (se comprueba en 4.1)
+            elif self._sigue_a_una_cita(p):
+                continue   # el segundo párrafo de una cita en bloque y los siguientes la llevan (se comprueba en 6.3)
             elif motivo == "tabulador":
                 self.excepcion_en(SANGRIA, info, "Empieza con un tabulador o espacios usados como sangría: "
                                                  "no se le pone sangría (se avisa en el informe).")
@@ -939,6 +943,49 @@ class Verificacion:
         return any(b.get(w("val")) not in SIN_LINEA for tc in tbl.iter(w("tc"))
                    for lado in ("left", "right", "start", "end")
                    for b in tc.findall(f"{w('tcPr')}/{w('tcBorders')}/{w(lado)}"))
+
+    # --- 6.3 Citas en bloque ----------------------------------------------------------------------
+
+    def citas(self):
+        """
+        Cada cita en bloque (párrafos con sangría a la izquierda seguidos, de 40
+        palabras o más entre todos), como la describe la web oficial de APA
+        (Quotations): todo el bloque sangrado 1,27 cm a la izquierda, nada a la
+        derecha, sin sangría de primera línea (salvo en los párrafos segundo y
+        siguientes, que llevan 1,27 cm más) y sin cursiva en todo el texto. Las
+        comillas no se quitan (cambiaría el texto): son una excepción admitida.
+        """
+        for bloque in regla_citas.bloques_de_cita(self.clasificados):
+            if regla_citas.palabras(bloque) < estructura.PALABRAS_DE_CITA_EN_BLOQUE:
+                continue
+            for n, c in enumerate(bloque):
+                p, info = c.elemento, self.por_elemento[c.elemento]
+                problemas = []
+                izquierda = max(_entero(self.estilos.parrafo(p, "ind", a)) for a in ("left", "start"))
+                if izquierda != regla_citas.SANGRIA or _entero(self.estilos.parrafo(p, "ind", "leftChars")):
+                    problemas.append("todo el bloque no está sangrado 1,27 cm a la izquierda")
+                if any(_entero(self.estilos.parrafo(p, "ind", a)) for a in ("right", "end", "rightChars")):
+                    problemas.append("tiene sangría a la derecha")
+                esperada = 0 if n == 0 else regla_citas.SANGRIA
+                if self._primera_linea(p) != esperada or sangria._sangria(self.estilos, p, "hanging"):
+                    problemas.append("la primera línea no lleva sangría" if n == 0 else
+                                     "la primera línea de este párrafo no lleva 1,27 cm más que el resto")
+                for problema in problemas:
+                    self.fallo_en(CITAS, info, f"Cita en bloque: {problema}.")
+            if regla_citas._cursiva_en_todo(self.estilos, bloque):
+                self.fallo_en(CITAS, self.por_elemento[bloque[0].elemento], "Cita en bloque: va toda en cursiva.")
+            if regla_citas.entre_comillas(bloque):
+                self.excepcion_en(CITAS, self.por_elemento[bloque[0].elemento],
+                                  "Cita en bloque entre comillas: APA no las pone, pero quitarlas cambiaría el texto "
+                                  "(se avisa en el informe).")
+
+    def _sigue_a_una_cita(self, p):
+        """¿Es el párrafo segundo o siguiente de una cita en bloque? (lleva sangría de primera línea: 6.3)"""
+        for bloque in regla_citas.bloques_de_cita(self.clasificados):
+            if regla_citas.palabras(bloque) >= estructura.PALABRAS_DE_CITA_EN_BLOQUE and \
+                    any(c.elemento is p for c in bloque[1:]):
+                return True
+        return False
 
     def _con_estilo_title(self, p):
         estilo = self.estilos.por_id.get(self.estilos.estilo_de(p))

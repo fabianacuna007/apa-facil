@@ -92,6 +92,12 @@ Como las describe la web oficial de APA (las tablas y las figuras se presentan i
 
 Una figura es un párrafo con solo una imagen; la imagen no se toca. Si falta la línea en blanco entre la tabla o figura y el texto, si no tiene título, si la numeración no va seguida o si el título lleva «(elaboración propia)» (que APA pone en una nota), solo se avisa. Si una tabla es demasiado ancha, el aviso propone ponerla en una página horizontal.
 
+### Citas en bloque
+
+Una cita de 40 palabras o más que va en su propio párrafo con sangría a la izquierda se pone como pide la web oficial de APA: todo el bloque sangrado 1,27 cm desde el margen izquierdo, sin sangría a la derecha ni en la primera línea (si tiene varios párrafos, la primera línea del segundo y los siguientes lleva 1,27 cm más), a doble espacio y sin la cursiva que vaya en todo el texto (la de una parte, como el título de un libro, se respeta).
+
+Lo que cambiaría el texto solo se avisa: las comillas (APA no las pone en una cita en bloque), un punto después del paréntesis de la fuente, un párrafo con sangría de menos de 40 palabras (si es una cita, va dentro del texto y entre comillas) y una cita de 40 palabras o más escrita entre comillas dentro de un párrafo.
+
 ### Qué hace (formato básico, títulos y limpieza)
 
 - **Márgenes** de 2,54 cm en todas las secciones; las páginas horizontales siguen horizontales.

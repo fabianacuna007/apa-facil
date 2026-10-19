@@ -44,6 +44,7 @@ NOMBRES = {
     "titulos": "Títulos",
     "tablas": "Tablas",
     "figuras": "Figuras",
+    "citas": "Citas en bloque",
     "paginacion": "Número de página",
 }
 
