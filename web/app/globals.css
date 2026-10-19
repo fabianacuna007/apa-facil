@@ -18,7 +18,7 @@
 
   --color-tinta: #0f172a;          /* texto principal */
   --color-tinta-suave: #475569;    /* texto secundario (7,6:1) */
-  --color-tinta-tenue: #64748b;    /* ayudas y marcadores de posición (4,8:1) */
+  --color-tinta-tenue: #5b6b80;    /* ayudas y marcadores de posición (4,9:1 también sobre los grises) */
 
   --color-primario: #1d5cff;       /* botones y enlaces (5,2:1 con texto blanco) */
   --color-primario-hover: #1546d6;

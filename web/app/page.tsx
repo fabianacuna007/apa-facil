@@ -30,10 +30,10 @@ export default function Inicio() {
           Tu trabajo en formato APA, sin pelearte con Word
         </h1>
         <p className="max-w-2xl text-lg text-pretty text-tinta-suave">
-          Sube tu trabajo en Word y descárgalo con el formato APA 7 de estudiante aplicado. Solo cambiamos el
-          formato: tu texto se queda tal cual.
+          Sube tu trabajo en Word y descárgalo con el formato APA 7 de estudiante aplicado. Tu texto no se
+          toca: los pocos retoques que pide APA, como las mayúsculas de los títulos, te los contamos en el informe.
         </p>
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="flex w-full max-w-xs flex-col gap-3 sm:w-auto sm:max-w-none sm:flex-row">
           <BotonEnlace href="/formatear" tamano="grande">
             Empezar <ArrowRight className="size-5" aria-hidden />
           </BotonEnlace>

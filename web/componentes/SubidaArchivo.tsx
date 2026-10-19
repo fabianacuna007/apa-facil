@@ -99,7 +99,11 @@ export default function SubidaArchivo({ archivo, onChange, desactivada }: {
           <FileUp className="size-5" />
         </span>
         <span className="text-sm font-semibold">
-          Arrastra aquí tu trabajo o <span className="text-primario underline underline-offset-4">elígelo</span>
+          {/* En el móvil no se arrastra: se toca. */}
+          <span className="sm:hidden">Toca aquí para <span className="text-primario underline underline-offset-4">elegir tu trabajo</span></span>
+          <span className="hidden sm:inline">
+            Arrastra aquí tu trabajo o <span className="text-primario underline underline-offset-4">elígelo</span>
+          </span>
         </span>
         <span className="text-xs text-tinta-suave">Documento de Word (.docx), hasta {TAMANO_MAXIMO_MB} MB</span>
         <input

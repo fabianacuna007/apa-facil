@@ -11,7 +11,7 @@ const jakarta = Plus_Jakarta_Sans({ variable: "--font-jakarta", subsets: ["latin
 export const metadata: Metadata = {
   title: { default: "APA Fácil: formato APA 7 para tu trabajo en Word", template: "%s · APA Fácil" },
   description: "Sube tu trabajo en Word y descárgalo con el formato APA 7 de estudiante: márgenes, fuente, " +
-    "interlineado, títulos, portada, tablas y referencias. Sin cambiar tu texto.",
+    "interlineado, títulos, portada, tablas y referencias.",
 };
 
 export const viewport: Viewport = { themeColor: "#f6f8fb" };
