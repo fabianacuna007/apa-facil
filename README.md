@@ -178,3 +178,16 @@ python herramientas\a_pdf.py salida\*.docx
 ```
 pytest
 ```
+
+## Servidor
+
+```
+uvicorn servidor.app:app
+```
+
+En http://localhost:8000/docs se puede subir un documento a mano. Para guardar
+lo que devuelve (copia corregida, informe y resumen) en `salida/`:
+
+```
+python herramientas/probar_servidor.py pruebas/01_ensayo_basico.docx
+```
