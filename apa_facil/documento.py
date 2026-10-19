@@ -42,15 +42,7 @@ def abrir(ruta):
         raise ErrorDocumento(f"No se encuentra el archivo «{ruta.name}». Comprueba el nombre y la carpeta.")
     if ruta.is_dir():
         raise ErrorDocumento(f"«{ruta.name}» es una carpeta, no un documento.")
-    if ruta.name.startswith("~$"):
-        raise ErrorDocumento(f"«{ruta.name}» es un archivo temporal que Word crea mientras "
-                             "un documento está abierto. No es tu trabajo: elige el otro archivo.")
-    extension = ruta.suffix.lower()
-    if extension == ".doc":
-        raise ErrorDocumento(f"«{ruta.name}» está en el formato antiguo de Word (.doc). Ábrelo en Word "
-                             "y usa «Guardar como» → «Documento de Word (.docx)».")
-    if extension != ".docx":
-        raise ErrorDocumento(f"«{ruta.name}» no es un documento de Word. Solo se admiten archivos .docx.")
+    comprobar_nombre(ruta)
 
     # Un .docx es en realidad un archivo ZIP con varios archivos XML dentro.
     try:
@@ -64,6 +56,20 @@ def abrir(ruta):
     except (PackageNotFoundError, KeyError, ValueError, zipfile.BadZipFile, etree.XMLSyntaxError) as e:
         raise ErrorDocumento(f"«{ruta.name}» está dañado o no es un documento de Word de verdad "
                              "(aunque termine en .docx).") from e
+
+
+def comprobar_nombre(ruta):
+    """Por el nombre: un .docx que no sea el temporal de Word. Si no, un ErrorDocumento que explica qué hacer."""
+    ruta = Path(ruta)
+    if ruta.name.startswith("~$"):
+        raise ErrorDocumento(f"«{ruta.name}» es un archivo temporal que Word crea mientras "
+                             "un documento está abierto. No es tu trabajo: elige el otro archivo.")
+    extension = ruta.suffix.lower()
+    if extension == ".doc":
+        raise ErrorDocumento(f"«{ruta.name}» está en el formato antiguo de Word (.doc). Ábrelo en Word "
+                             "y usa «Guardar como» → «Documento de Word (.docx)».")
+    if extension != ".docx":
+        raise ErrorDocumento(f"«{ruta.name}» no es un documento de Word. Solo se admiten archivos .docx.")
 
 
 def ruta_salida(entrada, carpeta=None):

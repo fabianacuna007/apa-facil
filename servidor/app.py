@@ -15,10 +15,17 @@ portada, y devuelve un JSON con:
 El archivo se guarda en una carpeta temporal con un nombre fijo (nunca el del
 estudiante: «con.docx» o «com1.docx» son nombres reservados de Windows), y la
 carpeta se borra al terminar, vaya bien o mal.
+
+Seguridad (paso 8.2): solo .docx de verdad, 10 MB como máximo, nada de bombas
+ZIP (servidor/seguridad.py) y un tiempo máximo por documento: el núcleo trabaja
+en un proceso aparte que se para si se pasa (servidor/trabajo.py). Como mucho se
+procesan SIMULTANEOS documentos a la vez; los demás esperan su turno.
 """
 
 import base64
+import os
 import tempfile
+import threading
 from pathlib import Path
 from typing import Annotated
 
@@ -26,14 +33,59 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from apa_facil import datos_portada, documento, pipeline
+from apa_facil import datos_portada, documento
 from apa_facil.documento import ErrorDocumento
 from apa_facil.reglas import fuente
+from servidor import seguridad, trabajo
 
 NOMBRE_TEMPORAL = "documento.docx"
+TIEMPO_MAXIMO = float(os.environ.get("APA_TIEMPO_MAXIMO", 120))   # segundos por documento
+SIMULTANEOS = int(os.environ.get("APA_SIMULTANEOS", 2))            # documentos procesándose a la vez
+ESPERA_MAXIMA = 60                                                 # segundos en cola antes de rendirse
+TURNOS = threading.BoundedSemaphore(SIMULTANEOS)
+# Lo que puede ocupar la petición entera: el archivo y, como mucho, 1 MB de opciones y cabeceras.
+PETICION_MAXIMA = seguridad.TAMANO_MAXIMO + seguridad.MB
 FUENTES = ", ".join(list(fuente.RECOMENDADAS)[:-1]) + " o " + list(fuente.RECOMENDADAS)[-1]
 
 app = FastAPI(title="APA Fácil", description="Aplica el formato APA 7 de estudiante a un documento Word.")
+
+
+class _PeticionGrande(Exception):
+    pass
+
+
+def _limitar_tamano(siguiente):
+    """
+    Corta una subida demasiado grande antes de que llegue entera: FastAPI lee el
+    formulario completo (y lo guarda en disco) antes de llamar a `procesar`.
+    """
+    async def asgi(scope, receive, send):
+        if scope["type"] != "http":
+            return await siguiente(scope, receive, send)
+        cabeceras = dict(scope.get("headers") or [])
+        largo = cabeceras.get(b"content-length", b"")
+        if largo.isdigit() and int(largo) > PETICION_MAXIMA:
+            return await _error(413, _MENSAJE_GRANDE)(scope, receive, send)
+        recibido = 0
+
+        async def contar():
+            nonlocal recibido
+            mensaje = await receive()
+            recibido += len(mensaje.get("body", b""))
+            if recibido > PETICION_MAXIMA:
+                raise _PeticionGrande
+            return mensaje
+        try:
+            await siguiente(scope, contar, send)
+        except _PeticionGrande:
+            await _error(413, _MENSAJE_GRANDE)(scope, receive, send)
+    return asgi
+
+
+_MENSAJE_GRANDE = (f"El archivo ocupa más de {seguridad.TAMANO_MAXIMO // seguridad.MB} MB, el máximo que se "
+                   "admite. Si tiene muchas imágenes, comprímelas en Word (Formato de imagen › Comprimir "
+                   "imágenes) y vuelve a subirlo.")
+app.add_middleware(_limitar_tamano)
 
 
 def _error(estado, mensaje):
@@ -112,24 +164,50 @@ def procesar(
     if portada:
         opciones["portada"] = portada
 
-    # La extensión se comprueba con el nombre original; el núcleo trabaja con el temporal.
-    extension = Path(nombre).suffix.lower()
+    # Antes de copiar nada: la extensión, con el nombre original (el núcleo trabaja con el temporal).
+    try:
+        documento.comprobar_nombre(nombre)
+    except ErrorDocumento as e:
+        return _error(422, str(e))
+
     with tempfile.TemporaryDirectory(prefix="apa_") as carpeta:
-        entrada = Path(carpeta) / (NOMBRE_TEMPORAL if extension == ".docx" else "documento" + extension)
-        with entrada.open("wb") as destino:
-            while bloque := archivo.file.read(1024 * 1024):
-                destino.write(bloque)
+        entrada = Path(carpeta) / NOMBRE_TEMPORAL
         try:
-            salida, informe = pipeline.procesar(entrada, Path(carpeta) / "salida", opciones)
-        except ErrorDocumento as e:
-            return _error(422, str(e).replace(entrada.name, nombre))
-        except Exception:   # sin detalles: podrían llevar texto del documento
+            _copiar(archivo, entrada, nombre)
+            seguridad.comprobar(entrada, nombre)
+        except seguridad.ErrorEntrada as e:
+            return _error(e.estado, str(e))
+
+        copia = f"{Path(nombre).stem}{documento.SUFIJO}.docx"
+        if not TURNOS.acquire(timeout=ESPERA_MAXIMA):
+            return _error(503, "Ahora mismo hay muchos documentos en cola. Inténtalo de nuevo dentro de un momento.")
+        try:
+            resultado = trabajo.procesar(entrada, Path(carpeta) / "salida", opciones, nombre, copia, TIEMPO_MAXIMO)
+        except trabajo.TiempoAgotado:
+            return _error(504, f"«{nombre}» ha tardado demasiado en procesarse (más de {TIEMPO_MAXIMO:g} "
+                               "segundos) y se ha detenido. No se ha guardado nada. Si es muy largo, prueba "
+                               "a dividirlo en partes.")
+        finally:
+            TURNOS.release()
+
+        if resultado[0] == "error":
+            return _error(422, resultado[1].replace(NOMBRE_TEMPORAL, nombre))
+        if resultado[0] == "fallo":   # sin detalles: podrían llevar texto del documento
             return _error(500, "Ha habido un error inesperado al procesar el documento. "
                                "No se ha guardado nada. Inténtalo de nuevo o prueba con otro archivo.")
-        contenido = salida.read_bytes()
+        _, salida, informe, resumen = resultado
+        contenido = Path(salida).read_bytes()
 
-    copia = f"{Path(nombre).stem}{documento.SUFIJO}.docx"
-    informe.archivo, informe.copia = nombre, copia
-    return {"informe": informe.a_dict(),
-            "resumen": informe.como_texto(),
+    return {"informe": informe, "resumen": resumen,
             "documento": {"nombre": copia, "contenido": base64.b64encode(contenido).decode("ascii")}}
+
+
+def _copiar(archivo, destino, nombre):
+    """Copia el archivo subido a `destino`, sin pasar del tamaño máximo."""
+    copiado = 0
+    with destino.open("wb") as f:
+        while bloque := archivo.file.read(1024 * 1024):
+            copiado += len(bloque)
+            if copiado > seguridad.TAMANO_MAXIMO:
+                raise seguridad.demasiado_grande(nombre)
+            f.write(bloque)

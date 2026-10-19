@@ -5,6 +5,8 @@ Se llama sin arrancarlo, con el cliente de pruebas de FastAPI.
 
 import base64
 import io
+import threading
+import zipfile
 from pathlib import Path
 
 import docx
@@ -12,6 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from apa_facil import documento, pipeline
+from servidor import app as servidor_app, seguridad
 from servidor.app import app
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -94,3 +97,77 @@ def test_falta_el_archivo():
     respuesta = cliente.post("/procesar", data={"fuente": "Arial"})
     assert respuesta.status_code == 422
     assert respuesta.json() == {"error": "Falta el documento: sube un archivo de Word (.docx)."}
+
+
+# --- Paso 8.2: seguridad de entrada --------------------------------------------------
+
+
+def un_zip(ruta, piezas):
+    with zipfile.ZipFile(ruta, "w", zipfile.ZIP_DEFLATED) as z:
+        for nombre, contenido in piezas.items():
+            z.writestr(nombre, contenido)
+    return ruta
+
+
+def test_archivo_vacio(tmp_path):
+    vacio = tmp_path / "trabajo.docx"
+    vacio.write_bytes(b"")
+    respuesta = enviar(vacio)
+    assert respuesta.status_code == 422
+    assert respuesta.json()["error"].startswith("«trabajo.docx» está vacío")
+
+
+def test_archivo_demasiado_grande(tmp_path):
+    grande = tmp_path / "trabajo.docx"
+    grande.write_bytes(b"PK" + b"\0" * (seguridad.TAMANO_MAXIMO + 2 * seguridad.MB))
+    respuesta = enviar(grande)
+    assert respuesta.status_code == 413
+    assert "más de 10 MB" in respuesta.json()["error"]
+
+
+def test_archivo_algo_mayor_que_el_maximo(tmp_path):
+    # Cabe en la petición (menos de 10 MB + 1 MB) pero el archivo pasa de 10 MB.
+    grande = tmp_path / "trabajo.docx"
+    grande.write_bytes(b"PK" + b"\0" * (seguridad.TAMANO_MAXIMO + 1000))
+    respuesta = enviar(grande)
+    assert respuesta.status_code == 413
+    assert respuesta.json()["error"].startswith("«trabajo.docx» ocupa más de 10 MB")
+
+
+def test_bomba_zip(tmp_path):
+    bomba = un_zip(tmp_path / "trabajo.docx", {"[Content_Types].xml": "<Types/>",
+                                                "word/document.xml": b"\0" * (50 * seguridad.MB)})
+    assert bomba.stat().st_size < seguridad.MB
+    respuesta = enviar(bomba)
+    assert respuesta.status_code == 422
+    assert "contenido comprimido anómalo" in respuesta.json()["error"]
+
+
+def test_zip_que_no_es_word(tmp_path):
+    respuesta = enviar(un_zip(tmp_path / "fotos.docx", {"foto.txt": "hola"}))
+    assert respuesta.status_code == 422
+    assert "«fotos.docx» está dañado" in respuesta.json()["error"]
+
+
+def test_word_con_contrasena(tmp_path):
+    ole = tmp_path / "trabajo.docx"
+    ole.write_bytes(seguridad.OLE + b"\0" * 1000)
+    respuesta = enviar(ole)
+    assert respuesta.status_code == 422
+    assert "contraseña" in respuesta.json()["error"]
+
+
+def test_tiempo_maximo(monkeypatch):
+    monkeypatch.setattr(servidor_app, "TIEMPO_MAXIMO", 0.01)
+    respuesta = enviar(PRUEBAS[1])
+    assert respuesta.status_code == 504
+    assert "ha tardado demasiado" in respuesta.json()["error"]
+
+
+def test_servidor_ocupado(monkeypatch):
+    monkeypatch.setattr(servidor_app, "TURNOS", threading.BoundedSemaphore(1))
+    monkeypatch.setattr(servidor_app, "ESPERA_MAXIMA", 0.01)
+    servidor_app.TURNOS.acquire()
+    respuesta = enviar(PRUEBAS[1])
+    assert respuesta.status_code == 503
+    assert "en cola" in respuesta.json()["error"]
