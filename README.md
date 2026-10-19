@@ -112,6 +112,18 @@ Las referencias se ordenan alfabéticamente, como pide APA: por los apellidos de
 
 Si hay varias listas (por ejemplo, una bibliografía y una webgrafía), no se cambia ningún rótulo ni se ordena nada, y se avisa: únelas en una sola.
 
+### Apéndices
+
+Cada apéndice empieza en una página nueva, con el rótulo y, en la línea siguiente, su título, los dos centrados y en negrita, como pide la web oficial de APA. Si van en la misma línea («Anexo I. Guion de las entrevistas»), se separan; el título lleva las mayúsculas de APA.
+
+APA los llama «Apéndice» («Apéndice A», «Apéndice B»… si hay varios), pero muchas universidades piden «Anexo», así que por defecto se deja y se avisa. Para cambiarlo:
+
+```
+python -m apa_facil pruebas_tfg_completo.docx --rotulo-apendice
+```
+
+Si las tablas o figuras de un apéndice no llevan su letra («Tabla A1»), o si los apéndices van antes de las referencias, solo se avisa.
+
 ### Qué hace (formato básico, títulos y limpieza)
 
 - **Márgenes** de 2,54 cm en todas las secciones; las páginas horizontales siguen horizontales.

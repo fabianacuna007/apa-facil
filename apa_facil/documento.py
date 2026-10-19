@@ -214,6 +214,14 @@ def rotulo_normalizado(texto):
     return " ".join(texto.split()).rstrip(":.").lower()
 
 
+# Rótulo de un apéndice (paso 6.7): la palabra («Anexo», «Apéndice»), su número o letra y, si van en la
+# misma línea, lo que lo separa del título y el título («Anexo I. Guion de las entrevistas»).
+ROTULO_DE_APENDICE = re.compile(r"^(?P<rotulo>(?P<palabra>anexos?|ap[ée]ndices?)(?:\s+(?P<numero>[A-Z]|[IVXLC]{1,6}"
+                                r"|\d{1,2}))?)(?:(?P<separador>\s*[:.\-–—]\s*)(?P<titulo>\S.*)|[.:]?\s*)$",
+                                re.IGNORECASE | re.DOTALL)
+ROTULO_APA_DE_APENDICE = re.compile(r"Apéndice( [A-Z])?")   # «Apéndice» si hay uno; «Apéndice A», «B»… si varios
+
+
 # Palabras clave del resumen (paso 5.5): «Palabras clave:» (o «Keywords:») al principio del párrafo.
 PALABRAS_CLAVE = re.compile(r"^\s*(palabras\s+clave|keywords|key\s+words)\s*(:)?\s*", re.IGNORECASE)
 
@@ -294,6 +302,13 @@ class CambioPrevisto:
         tienen que tener texto y estar seguidos (solo con párrafos vacíos en medio),
         empezando por el párrafo, pasan a ir en el orden de `desde` en los mismos
         sitios: no cambia ninguna letra (paso 6.5, orden alfabético de las referencias);
+      - "dividir_apendice": el párrafo, que tiene que ser el rótulo de un apéndice con
+        su título en la misma línea («Anexo I. Guion…»), pasa a ser dos: el rótulo
+        y, debajo, el título `nuevo` (el mismo, salvo mayúsculas y minúsculas).
+        Desaparece `quitado`, que tiene que ser justo lo que los separaba (paso 6.7);
+      - "rotulo_de_apendice": el párrafo, que tiene que ser el rótulo de un apéndice
+        sin título («Anexo I», «Apéndice 2»), pasa a ser `nuevo`, que solo puede ser
+        «Apéndice» o «Apéndice» y una letra (paso 6.7, con la opción --rotulo-apendice);
       - "rotulo_de_referencias": el párrafo, que tiene que ser un rótulo de lista de
         referencias («Bibliografía», «WEBGRAFÍA:»…: ROTULOS_DE_REFERENCIAS), pasa a ser
         `nuevo`, que solo puede ser «Referencias» o «Referencia» (paso 6.4);
@@ -411,6 +426,7 @@ def _aplicar_previstos(antes, previstos):
             continue
         donde, texto = textos[i]
         leyenda = LEYENDA_CON_NUMERO.match(texto)
+        apendice = ROTULO_DE_APENDICE.match(texto)
         destino = cambio.desde[0] - 1 if cambio.desde else -1
         if cambio.accion == "borrar" and not texto.strip():
             borrar.add(i)
@@ -447,6 +463,14 @@ def _aplicar_previstos(antes, previstos):
                 datos_portada.solo_cambian_mayusculas(leyenda["titulo"], cambio.nuevo):
             textos[i] = (donde, leyenda["numero"])
             despues.setdefault(i, []).append((f"{donde}, su título (separado)", cambio.nuevo))
+        elif cambio.accion == "dividir_apendice" and apendice and apendice["titulo"] and \
+                cambio.quitado == apendice["separador"] and \
+                datos_portada.solo_cambian_mayusculas(apendice["titulo"], cambio.nuevo):
+            textos[i] = (donde, apendice["rotulo"])
+            despues.setdefault(i, []).append((f"{donde}, su título (separado)", cambio.nuevo))
+        elif cambio.accion == "rotulo_de_apendice" and apendice and not apendice["titulo"] and \
+                ROTULO_APA_DE_APENDICE.fullmatch(cambio.nuevo):
+            textos[i] = (donde, cambio.nuevo)
         elif cambio.accion == "reordenar_referencias":
             reordenar.append(cambio)
         elif cambio.accion == "rotulo_de_referencias" and rotulo_normalizado(texto) in ROTULOS_DE_REFERENCIAS \
@@ -473,7 +497,8 @@ def _aplicar_previstos(antes, previstos):
                              "de nivel 4 y 5, añadir la portada APA con los datos del estudiante, quitar el "
                              "índice si se pide, el punto final de las palabras clave y, en las tablas y figuras, "
                              "subir su leyenda, separar el número del título, poner «Tabla» o «Figura» y añadir "
-                             "su número y «Nota.», y poner el rótulo «Referencias» y ordenar las referencias.")
+                             "su número y «Nota.», poner el rótulo «Referencias», ordenar las referencias y "
+                             "separar el rótulo de un apéndice de su título (y, si se pide, poner «Apéndice»).")
 
     if indice_quitado:
         numeros = sorted(n for _, n, _ in indice_quitado)

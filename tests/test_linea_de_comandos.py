@@ -195,6 +195,7 @@ def test_opciones_de_los_titulos(tmp_path, capsys):
                                  "quitar_introduccion": False,
                                  "titulo_tal_cual": False, "mantener_portada": False, "quitar_indice": False,
                                  "tablas_tal_cual": False, "rotulo_tal_cual": False, "orden_tal_cual": False,
+                                 "rotulo_apendice": False,
                                  "portada": None}
 
 

@@ -43,6 +43,7 @@ from apa_facil.reglas import (alineacion, fuente, interlineado, margenes, pagina
                                titulos)
 from apa_facil.reglas import portada as regla_portada  # noqa: E402
 from apa_facil.reglas import resumen as resumen_regla  # noqa: E402
+from apa_facil.reglas import apendices as regla_apendices  # noqa: E402
 from apa_facil.reglas import citas as regla_citas  # noqa: E402
 from apa_facil.reglas import leyendas  # noqa: E402
 from apa_facil.reglas import orden as regla_orden  # noqa: E402
@@ -70,9 +71,10 @@ FIGURAS = "6.2 Figuras"
 CITAS = "6.3 Citas en bloque"
 REFERENCIAS = "6.4 Referencias"
 ORDEN = "6.5 Orden alfabético"
+APENDICES = "6.7 Apéndices"
 REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS, TEXTO_TITULOS,
           TITULO_TRABAJO, TITULOS_EN_LINEA, MAYUSCULAS_TITULOS, PORTADA, PORTADA_PROPIA, INDICE, RESUMEN, TABLAS,
-          FIGURAS, CITAS, REFERENCIAS, ORDEN]
+          FIGURAS, CITAS, REFERENCIAS, ORDEN, APENDICES]
 SIN_LINEA = (None, "nil", "none")
 SIN_FONDO = (None, "auto", "FFFFFF", "ffffff")
 
@@ -182,7 +184,7 @@ class Verificacion:
                              self.texto_de_titulos, self.titulo_del_trabajo, self.titulos_en_linea,
                              self.mayusculas_de_titulos, self.portada, self.indice, self.resumen, self.tablas,
                              self.figuras, self.citas, self.referencias,
-                             self.orden):
+                             self.orden, self.apendices):
             comprobacion()
         return self.resultado
 
@@ -1049,6 +1051,43 @@ class Verificacion:
                     self.fallo_en(ORDEN, self.por_elemento[c.elemento],
                                   "Referencia fuera del orden alfabético (va antes que la anterior).")
                     break
+
+    # --- 6.7 Apéndices ------------------------------------------------------------------------------
+
+    def apendices(self):
+        """
+        Cada apéndice, como lo describe la web oficial de APA (Appendices setup): en
+        una página nueva, con el rótulo y, en la línea siguiente, el título, los dos
+        centrados y en negrita. «Anexo» en lugar de «Apéndice» es una excepción
+        admitida (se avisa; --rotulo-apendice lo cambia).
+        """
+        todos = regla_apendices.apendices(self.clasificados)
+        for n, (rotulo, titulo) in enumerate(todos):
+            p, info = rotulo.elemento, self.por_elemento[rotulo.elemento]
+            texto = texto_parrafo(p).strip()
+            if regla_apendices.ROTULO_DE_APENDICE.match(texto)["titulo"]:
+                self.fallo_en(APENDICES, info, "El rótulo y el título del apéndice van en la misma línea.")
+                continue
+            if texto != regla_apendices.rotulo_apa(n, len(todos)):
+                self.excepcion_en(APENDICES, info, f"Rótulo «{texto}» en lugar de "
+                                                   f"«{regla_apendices.rotulo_apa(n, len(todos))}»: se deja (se avisa en "
+                                                   "el informe; --rotulo-apendice lo cambia).")
+            anterior = next((i for i in reversed(self.principales) if i.numero < info.numero), None)
+            if not alineacion._salto_antes(self.estilos, p) and \
+                    not (anterior is not None and regla_portada._termina_en_salto(anterior.p)):
+                self.fallo_en(APENDICES, info, "El apéndice no empieza en una página nueva.")
+            if titulo is None:
+                self.fallo_en(APENDICES, info, "El apéndice no tiene título en la línea siguiente al rótulo.")
+            for q, que in ((p, "El rótulo"), (titulo.elemento if titulo is not None else None, "El título")):
+                if q is None:
+                    continue
+                problemas = []
+                if self._alineacion(q) != "center":
+                    problemas.append("no está centrado")
+                if any(not _activado(self._de_texto(r, q, "b")) for r in titulos.fragmentos_con_letras(q)):
+                    problemas.append("no va en negrita")
+                if problemas:
+                    self.fallo_en(APENDICES, self.por_elemento[q], f"{que} del apéndice: {'; '.join(problemas)}.")
 
     def _con_estilo_title(self, p):
         estilo = self.estilos.por_id.get(self.estilos.estilo_de(p))

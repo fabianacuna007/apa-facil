@@ -35,7 +35,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Optional
 
-from apa_facil.documento import (LEYENDA_CON_NUMERO, MC, ROTULOS_DE_INDICE, ROTULOS_DE_REFERENCIAS, WP, Estilos,
+from apa_facil.documento import (LEYENDA_CON_NUMERO, MC, ROTULO_DE_APENDICE, ROTULOS_DE_INDICE, ROTULOS_DE_REFERENCIAS,
+                                 WP, Estilos,
                                  texto_parrafo, w)
 from apa_facil.reglas.alineacion import _salto_antes, _salto_en
 
@@ -604,6 +605,10 @@ class _Clasificador:
         if n in ROTULOS_DE_REFERENCIAS:
             return "referencias", ("titulo_referencias", ALTA,
                                    f"rótulo de la lista de referencias («{r.texto}»)", None)
+        rotulo = ROTULO_DE_APENDICE.match(r.anterior.texto) if r.anterior and zona == "anexos" else None
+        if rotulo and not rotulo["titulo"] and not ANEXO.match(r.texto) and r.palabras < PALABRAS_DE_TITULO:
+            # El título que va debajo de «Apéndice A» (como lo deja el paso 6.7).
+            return "anexos", ("anexo", ALTA, f"título del apéndice: va justo debajo de «{r.anterior.texto}»", None)
         if ANEXO.match(r.texto) and r.palabras < PALABRAS_DE_TITULO and \
                 (r.nivel_de_word or _parece_titulo(r) or r.alineacion == "center"):
             return "anexos", ("anexo", ALTA, f"rótulo de un anexo o apéndice («{_extracto(r.texto)}»)", None)

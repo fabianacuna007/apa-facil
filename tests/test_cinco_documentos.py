@@ -23,8 +23,8 @@ import docx
 import pytest
 
 from apa_facil import estructura, pipeline
-from apa_facil.documento import Estilos, comparar, radiografia
-from herramientas.verificar import (ALINEACION, CITAS, INDICE, PORTADA_PROPIA, TEXTO_TITULOS, TITULO_TRABAJO, mostrar,
+from apa_facil.documento import ROTULO_DE_APENDICE, Estilos, comparar, radiografia
+from herramientas.verificar import (ALINEACION, APENDICES, CITAS, INDICE, PORTADA_PROPIA, TEXTO_TITULOS, TITULO_TRABAJO, mostrar,
                                    verificar)
 
 CARPETA = Path(__file__).resolve().parent.parent / "pruebas"
@@ -50,7 +50,8 @@ EXCEPCIONES = {
                        | {(TEXTO_TITULOS, n) for n in (20, 23, 24, 26, 27, 29, 31, 35, 37, 38, 64, 66)}
                        | {(TITULO_TRABAJO, 20), (PORTADA_PROPIA, 2)}          # «1. Introducción»; la portada
                        | {(INDICE, 16)}                                       # el índice (paso 5.4)
-                       | {(CITAS, 33)},                                       # la cita, con sus comillas (6.3)
+                       | {(CITAS, 33)}                                        # la cita, con sus comillas (6.3)
+                       | {(APENDICES, 75)},                                   # «Anexo I», no «Apéndice» (6.7)
 }
 
 
@@ -94,12 +95,17 @@ def test_la_copia_lleva_su_estructura(procesado):
         doc = docx.Document(str(ruta))
         estilos = Estilos(doc)
         # Sin el título del trabajo que el paso 4.4 añade al principio del texto (lo comprueba el verificador).
-        # Los de nivel 4 y 5 terminan en punto desde el paso 4.5, las mayúsculas cambian en el 4.6 y el rótulo de las
-        # referencias pasa a «Referencias» en el 6.4.
-        return [(c.tipo, c.nivel, "rótulo" if c.tipo == "titulo_referencias" else
-                 (c.texto.rstrip(".") if (c.nivel or 0) >= 4 else c.texto).lower())
-                for c in estructura.clasificar(doc)
+        # Los de nivel 4 y 5 terminan en punto desde el paso 4.5, las mayúsculas cambian en el 4.6, el rótulo de las
+        # referencias pasa a «Referencias» en el 6.4 y el del apéndice se separa de su título en el 6.7.
+        def texto(c):
+            if c.tipo == "titulo_referencias":
+                return "rótulo"
+            if c.tipo == "anexo":
+                return ROTULO_DE_APENDICE.match(c.texto)["rotulo"].lower()
+            return (c.texto.rstrip(".") if (c.nivel or 0) >= 4 else c.texto).lower()
+        return [(c.tipo, c.nivel, texto(c)) for c in estructura.clasificar(doc)
                 if c.tipo in ("titulo", "titulo_referencias", "anexo")
+                and not c.motivo.startswith("título del apéndice")
                 and estilos.nombre(estilos.estilo_de(c.elemento)).lower() != "title"]
     assert titulos(procesado["salida"]) == titulos(procesado["original"])
 
