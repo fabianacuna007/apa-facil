@@ -9,6 +9,7 @@ Línea de comandos:
                         [--titulo-tal-cual] [--mantener-portada]
     python -m apa_facil mi_trabajo.docx --diagnostico
     python -m apa_facil mi_trabajo.docx --citas
+    python -m apa_facil mi_trabajo.docx --referencias
 
 Guarda cada copia en salida/ como nombre_APA.docx y muestra un resumen de lo
 que se ha cambiado y de lo que el estudiante debe revisar.
@@ -20,7 +21,8 @@ Con --diagnostico no se genera ninguna copia: solo se muestra qué es cada
 párrafo (título, cuerpo, lista…) según el clasificador, para revisarlo.
 
 Con --citas tampoco se genera ninguna copia: se muestran las citas que hay en
-el texto (autores, año, páginas), tal como se han reconocido.
+el texto (autores, año, páginas), tal como se han reconocido. Con --referencias,
+las partes de cada referencia de la lista (autores, año, título, fuente…).
 """
 
 import argparse
@@ -32,7 +34,7 @@ from pathlib import Path
 from apa_facil import datos_portada, documento, estructura, pipeline
 from apa_facil.documento import ErrorDocumento
 from apa_facil.reglas import fuente
-from apa_facil.revision import citas
+from apa_facil.revision import citas, referencias
 
 EJEMPLO = "python -m apa_facil mi_trabajo.docx"
 FUENTES = ", ".join(list(fuente.RECOMENDADAS)[:-1]) + " o " + list(fuente.RECOMENDADAS)[-1]
@@ -140,6 +142,9 @@ def crear_ordenes():
     ordenes.add_argument("--citas", action="store_true",
                          help="no genera ninguna copia: muestra las citas que hay en el texto (autores, año y "
                               "páginas) tal como se han reconocido")
+    ordenes.add_argument("--referencias", action="store_true",
+                         help="no genera ninguna copia: muestra las partes de cada referencia de la lista (autores, "
+                              "año, título, fuente, DOI o URL) tal como se han leído, y las que no se han podido leer")
     ordenes.add_argument("-h", "--help", action="help", help="muestra esta ayuda")
     return ordenes
 
@@ -197,6 +202,16 @@ def mostrar_citas(archivos, ancho=None):
     return _sin_copias(archivos, mostrar, "revisado(s)")
 
 
+def mostrar_referencias(archivos, ancho=None):
+    """Muestra las partes de cada referencia de cada documento, sin generar copias (paso 7.2)."""
+    ancho = ancho or shutil.get_terminal_size((100, 24)).columns - 1
+
+    def mostrar(doc, nombre):
+        print(f"\nReferencias de {nombre}\n")
+        print(referencias.como_texto(referencias.leer(doc), ancho))
+    return _sin_copias(archivos, mostrar, "revisado(s)")
+
+
 def _sin_copias(archivos, mostrar, hecho):
     """Abre cada documento y lo muestra con `mostrar(doc, nombre)`, sin generar copias."""
     bien = 0
@@ -235,8 +250,9 @@ def main(argv=None, carpeta_salida=None):
             opciones[opcion] = True
 
     archivos = expandir_comodines(args.archivos)
-    if args.diagnostico or args.citas:
-        modo = "el modo diagnóstico" if args.diagnostico else "la revisión de citas"
+    if args.diagnostico or args.citas or args.referencias:
+        modo = ("el modo diagnóstico" if args.diagnostico else "la revisión de citas" if args.citas
+                else "la revisión de referencias")
         for nombre, usada in (("--fuente", args.fuente), ("--quitar-numeracion", args.quitar_numeracion),
                               ("--titulos-tal-cual", args.titulos_tal_cual),
                               ("--mantener-portada", args.mantener_portada),
@@ -252,7 +268,8 @@ def main(argv=None, carpeta_salida=None):
         if args.datos or any(v is not None for v in opciones_de_portada(args).values()):
             print(f"Aviso: los datos de la portada no se usan en {modo}, que no cambia nada.")
         resultado = diagnosticar(archivos) if args.diagnostico else 0
-        return max(resultado, mostrar_citas(archivos)) if args.citas else resultado
+        resultado = max(resultado, mostrar_citas(archivos)) if args.citas else resultado
+        return max(resultado, mostrar_referencias(archivos)) if args.referencias else resultado
 
     try:
         portada = datos_portada.combinar(args.datos, opciones_de_portada(args))
