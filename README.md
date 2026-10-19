@@ -98,6 +98,18 @@ Una cita de 40 palabras o más que va en su propio párrafo con sangría a la iz
 
 Lo que cambiaría el texto solo se avisa: las comillas (APA no las pone en una cita en bloque), un punto después del paréntesis de la fuente, un párrafo con sangría de menos de 40 palabras (si es una cita, va dentro del texto y entre comillas) y una cita de 40 palabras o más escrita entre comillas dentro de un párrafo.
 
+### Lista de referencias
+
+Como la describe la web oficial de APA: empieza en una página nueva, con el rótulo «Referencias» («Referencia» si solo hay una) centrado y en negrita (con el estilo «Título 1» de Word), y cada referencia con sangría francesa de 1,27 cm. Los enlaces (DOI y URL) se dejan como estén.
+
+APA no admite «Bibliografía», «Webgrafía» ni «Lista de referencias», así que el rótulo pasa a «Referencias». Si tu universidad pide otro, déjalo como está con:
+
+```
+python -m apa_facil pruebas_tfg_completo.docx --rotulo-tal-cual
+```
+
+Si hay varias listas (por ejemplo, una bibliografía y una webgrafía), no se cambia ningún rótulo y se avisa.
+
 ### Qué hace (formato básico, títulos y limpieza)
 
 - **Márgenes** de 2,54 cm en todas las secciones; las páginas horizontales siguen horizontales.

@@ -303,10 +303,10 @@ def test_aviso_de_tabulador():
 # 04: «Más información en…» es texto (paso 3.4) y sus 3 párrafos con tabulador se limpian (paso 3.5).
 CON_SANGRIA = {"01": 8, "02": 8, "03": 6, "04": 7, "05": 13}
 EMPIEZAN_POR = {   # algunos párrafos que NO deben llevar sangría, con el motivo
-    "01": [("BIBLIOGRAFÍA", "rótulo de referencias"), ("Ramírez Soto", "referencia"), ("1. Cambios", "título")],
+    "01": [("Referencias", "rótulo de referencias"), ("Ramírez Soto", "referencia"), ("1. Cambios", "título")],
     "02": [("Este informe analiza", "primer párrafo del resumen"), ("Castro, P.", "referencia")],
     "03": [("Mejorar el aislamiento", "lista"), ("Herrero, C.", "referencia")],
-    "04": [("•", "lista"), ("Webgrafía", "rótulo de referencias"), ("Martínez, J.", "referencia"),
+    "04": [("•", "lista"), ("Referencias", "rótulo de referencias"), ("Martínez, J.", "referencia"),
            ("Efectos sobre", "título")],
     "05": [("Este trabajo analiza", "primer párrafo del resumen"), ('"El turismo rural', "cita en bloque"),
            ("Nota. Fuente:", "leyenda de tabla"), ("1. ¿Desde", "lista"), ("Molina, R.", "referencia")],

@@ -94,8 +94,10 @@ def test_la_copia_lleva_su_estructura(procesado):
         doc = docx.Document(str(ruta))
         estilos = Estilos(doc)
         # Sin el título del trabajo que el paso 4.4 añade al principio del texto (lo comprueba el verificador).
-        # Los de nivel 4 y 5 terminan en punto desde el paso 4.5, y las mayúsculas cambian en el 4.6.
-        return [(c.tipo, c.nivel, (c.texto.rstrip(".") if (c.nivel or 0) >= 4 else c.texto).lower())
+        # Los de nivel 4 y 5 terminan en punto desde el paso 4.5, las mayúsculas cambian en el 4.6 y el rótulo de las
+        # referencias pasa a «Referencias» en el 6.4.
+        return [(c.tipo, c.nivel, "rótulo" if c.tipo == "titulo_referencias" else
+                 (c.texto.rstrip(".") if (c.nivel or 0) >= 4 else c.texto).lower())
                 for c in estructura.clasificar(doc)
                 if c.tipo in ("titulo", "titulo_referencias", "anexo")
                 and estilos.nombre(estilos.estilo_de(c.elemento)).lower() != "title"]

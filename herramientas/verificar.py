@@ -45,6 +45,7 @@ from apa_facil.reglas import portada as regla_portada  # noqa: E402
 from apa_facil.reglas import resumen as resumen_regla  # noqa: E402
 from apa_facil.reglas import citas as regla_citas  # noqa: E402
 from apa_facil.reglas import leyendas  # noqa: E402
+from apa_facil.reglas import referencias as regla_referencias  # noqa: E402
 from apa_facil.reglas import tablas as regla_tablas  # noqa: E402
 
 MARGENES = "1.1 Márgenes"
@@ -66,9 +67,10 @@ RESUMEN = "5.5 Resumen"
 TABLAS = "6.1 Tablas"
 FIGURAS = "6.2 Figuras"
 CITAS = "6.3 Citas en bloque"
+REFERENCIAS = "6.4 Referencias"
 REGLAS = [MARGENES, FUENTE, INTERLINEADO, ALINEACION, SANGRIA, PAGINACION, TITULOS, FORMATO_TITULOS, TEXTO_TITULOS,
           TITULO_TRABAJO, TITULOS_EN_LINEA, MAYUSCULAS_TITULOS, PORTADA, PORTADA_PROPIA, INDICE, RESUMEN, TABLAS,
-          FIGURAS, CITAS]
+          FIGURAS, CITAS, REFERENCIAS]
 SIN_LINEA = (None, "nil", "none")
 SIN_FONDO = (None, "auto", "FFFFFF", "ffffff")
 
@@ -177,7 +179,7 @@ class Verificacion:
                              self.sangria, self.paginacion, self.titulos, self.formato_de_titulos,
                              self.texto_de_titulos, self.titulo_del_trabajo, self.titulos_en_linea,
                              self.mayusculas_de_titulos, self.portada, self.indice, self.resumen, self.tablas,
-                             self.figuras, self.citas):
+                             self.figuras, self.citas, self.referencias):
             comprobacion()
         return self.resultado
 
@@ -986,6 +988,42 @@ class Verificacion:
                     any(c.elemento is p for c in bloque[1:]):
                 return True
         return False
+
+    # --- 6.4 Referencias ----------------------------------------------------------------------------
+
+    def referencias(self):
+        """
+        La lista de referencias, como la describe la web oficial de APA (Reference
+        list setup): empieza en una página nueva, con el rótulo «Referencias» (o
+        «Referencia») centrado y en negrita, y cada referencia con sangría francesa de
+        1,27 cm. Otro rótulo («Bibliografía») no es un incumplimiento sino una
+        excepción admitida: se deja con --rotulo-tal-cual o si hay varias listas, y se
+        avisa en el informe.
+        """
+        for n, (rotulo, referencias) in enumerate(regla_referencias.listas(self.clasificados)):
+            p, info = rotulo.elemento, self.por_elemento[rotulo.elemento]
+            texto = texto_parrafo(p)
+            if texto not in documento.ROTULOS_APA_DE_REFERENCIAS:
+                self.excepcion_en(REFERENCIAS, info, "Rótulo distinto de «Referencias»: se ha dejado (se avisa en el "
+                                                     "informe; sin --rotulo-tal-cual y con una sola lista, se cambia).")
+            problemas = []
+            if self._alineacion(p) != "center":
+                problemas.append("no está centrado")
+            if any(not _activado(self._de_texto(r, p, "b")) for r in titulos.fragmentos_con_letras(p)):
+                problemas.append("no va en negrita")
+            anterior = next((i for i in reversed(self.principales) if i.numero < info.numero), None)
+            if n == 0 and not alineacion._salto_antes(self.estilos, p) and \
+                    not (anterior is not None and regla_portada._termina_en_salto(anterior.p)):
+                problemas.append("la lista no empieza en una página nueva")
+            for problema in problemas:
+                self.fallo_en(REFERENCIAS, info, f"Rótulo de las referencias: {problema}.")
+            for c in referencias:
+                q = c.elemento
+                izquierda = max(_entero(self.estilos.parrafo(q, "ind", a)) for a in ("left", "start"))
+                francesa = _entero(self.estilos.parrafo(q, "ind", "hanging"))
+                if izquierda != regla_referencias.SANGRIA or francesa != regla_referencias.SANGRIA or \
+                        _entero(self.estilos.parrafo(q, "ind", "firstLine")):
+                    self.fallo_en(REFERENCIAS, self.por_elemento[q], "Referencia sin la sangría francesa de 1,27 cm.")
 
     def _con_estilo_title(self, p):
         estilo = self.estilos.por_id.get(self.estilos.estilo_de(p))

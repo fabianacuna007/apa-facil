@@ -201,6 +201,19 @@ def es_parte_de_un_indice(texto):
             or bool(LINEA_DE_INDICE.match(limpio)))
 
 
+# Rótulos de la lista de referencias (pasos 3.1 y 6.4), sin los dos puntos ni el punto del final y en minúsculas.
+ROTULOS_DE_REFERENCIAS = {"referencias", "referencia", "referencias bibliográficas",
+                          "referencias bibliograficas", "bibliografía", "bibliografia", "webgrafía",
+                          "webgrafia", "fuentes", "fuentes consultadas", "bibliografía y webgrafía",
+                          "bibliografia y webgrafia", "obras citadas", "lista de referencias",
+                          "references", "bibliography"}
+ROTULOS_APA_DE_REFERENCIAS = ("Referencias", "Referencia")   # «Referencia» si la lista tiene una sola
+
+
+def rotulo_normalizado(texto):
+    return " ".join(texto.split()).rstrip(":.").lower()
+
+
 # Palabras clave del resumen (paso 5.5): «Palabras clave:» (o «Keywords:») al principio del párrafo.
 PALABRAS_CLAVE = re.compile(r"^\s*(palabras\s+clave|keywords|key\s+words)\s*(:)?\s*", re.IGNORECASE)
 
@@ -277,6 +290,9 @@ class CambioPrevisto:
       - "cambiar_rotulo": la palabra del principio de una leyenda con número
         (`quitado`: «Cuadro», «Gráfico», «Imagen»…) pasa a ser `nuevo`, que solo
         puede ser la de APA para esa palabra («Tabla» o «Figura») (paso 6.2);
+      - "rotulo_de_referencias": el párrafo, que tiene que ser un rótulo de lista de
+        referencias («Bibliografía», «WEBGRAFÍA:»…: ROTULOS_DE_REFERENCIAS), pasa a ser
+        `nuevo`, que solo puede ser «Referencias» o «Referencia» (paso 6.4);
       - "dividir_leyenda": el párrafo, que tiene que ser una leyenda de tabla o de
         figura con el número y el título en la misma línea («Tabla 1: Título»), pasa a ser
         dos: el número y, debajo, el título `nuevo` (el mismo, salvo mayúsculas y
@@ -426,6 +442,9 @@ def _aplicar_previstos(antes, previstos):
                 datos_portada.solo_cambian_mayusculas(leyenda["titulo"], cambio.nuevo):
             textos[i] = (donde, leyenda["numero"])
             despues.setdefault(i, []).append((f"{donde}, su título (separado)", cambio.nuevo))
+        elif cambio.accion == "rotulo_de_referencias" and rotulo_normalizado(texto) in ROTULOS_DE_REFERENCIAS \
+                and cambio.nuevo in ROTULOS_APA_DE_REFERENCIAS:
+            textos[i] = (donde, cambio.nuevo)
         elif cambio.accion == "cambiar_rotulo" and leyenda and cambio.quitado == leyenda["palabra"] and \
                 cambio.nuevo == PALABRAS_DE_ROTULO.get(cambio.quitado.lower()) and cambio.nuevo != cambio.quitado:
             textos[i] = (donde, cambio.nuevo + texto[len(cambio.quitado):])
@@ -447,7 +466,7 @@ def _aplicar_previstos(antes, previstos):
                              "de nivel 4 y 5, añadir la portada APA con los datos del estudiante, quitar el "
                              "índice si se pide, el punto final de las palabras clave y, en las tablas y figuras, "
                              "subir su leyenda, separar el número del título, poner «Tabla» o «Figura» y añadir "
-                             "su número y «Nota.».")
+                             "su número y «Nota.», y poner el rótulo «Referencias».")
 
     if indice_quitado:
         numeros = sorted(n for _, n, _ in indice_quitado)

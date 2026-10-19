@@ -331,12 +331,13 @@ def test_si_la_limpieza_no_anota_un_cambio_no_se_entrega_la_copia(tmp_path, monk
 # --- Los 5 documentos de prueba ---------------------------------------------------------
 
 ESPERADO = {   # (vacíos borrados, párrafos con tabulador limpiados, mensajes de limpieza)
+    # En el 05, el vacío borrado es el del salto de página de antes de las referencias (paso 6.4).
     "01": (0, 0, ["subrayado de 1 fragmento"]),
     "02": (0, 0, ["color de 2 fragmentos"]),
     "03": (0, 0, []),
     "04": (6, 3, ["eliminado 6 párrafos vacíos", "principio de 3 párrafos", "color de 2 fragmentos",
                   "fondo de color de 1 fragmento"]),
-    "05": (0, 0, []),
+    "05": (1, 0, []),
 }
 
 

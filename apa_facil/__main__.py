@@ -3,7 +3,7 @@ Línea de comandos:
 
     python -m apa_facil mi_trabajo.docx [otro.docx ...] [--fuente "Arial"]
                         [--quitar-numeracion] [--titulos-tal-cual] [--quitar-introduccion] [--quitar-indice]
-                        [--tablas-tal-cual]
+                        [--tablas-tal-cual] [--rotulo-tal-cual]
                         [--datos datos.json] [--titulo "…"] [--autor "…"] … [--fecha 16/10/2026]
                         [--titulo-tal-cual] [--mantener-portada]
     python -m apa_facil mi_trabajo.docx --diagnostico
@@ -119,6 +119,9 @@ def crear_ordenes():
                          help="deja los bordes y los colores de las tablas como están. Sin esta opción llevan el "
                               "estilo de APA: solo líneas horizontales (arriba, debajo de los encabezados y abajo), "
                               "sin bordes verticales ni colores de fondo")
+    ordenes.add_argument("--rotulo-tal-cual", action="store_true",
+                         help="deja el rótulo de la lista de referencias como está («Bibliografía», «Webgrafía»…). "
+                              "Sin esta opción pasa a ser «Referencias», como pide APA")
     ordenes.add_argument("--diagnostico", action="store_true",
                          help="no genera ninguna copia: muestra qué es cada párrafo (título, cuerpo, lista…), "
                               "con qué confianza y por qué, para revisar cómo se ha entendido el documento")
@@ -193,7 +196,8 @@ def main(argv=None, carpeta_salida=None):
     args = ordenes.parse_args(argv)
     opciones = {"fuente": args.fuente} if args.fuente else {}
     for opcion in ("quitar_numeracion", "titulos_tal_cual", "quitar_introduccion", "titulo_tal_cual",
-                   "mantener_portada", "quitar_indice", "tablas_tal_cual"):
+                   "mantener_portada", "quitar_indice", "tablas_tal_cual",
+                   "rotulo_tal_cual"):
         if getattr(args, opcion):
             opciones[opcion] = True
 
@@ -204,6 +208,7 @@ def main(argv=None, carpeta_salida=None):
                               ("--mantener-portada", args.mantener_portada),
                               ("--quitar-indice", args.quitar_indice),
                               ("--tablas-tal-cual", args.tablas_tal_cual),
+                              ("--rotulo-tal-cual", args.rotulo_tal_cual),
                               ("--quitar-introduccion", args.quitar_introduccion),
                               ("--titulo-tal-cual", args.titulo_tal_cual)):
             if usada:
