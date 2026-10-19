@@ -171,3 +171,49 @@ def test_servidor_ocupado(monkeypatch):
     respuesta = enviar(PRUEBAS[1])
     assert respuesta.status_code == 503
     assert "en cola" in respuesta.json()["error"]
+
+
+# --- Paso 8.3: privacidad ------------------------------------------------------------
+
+NOMBRE_PRIVADO = "TFG de Ana Pérez.docx"
+
+
+@pytest.fixture
+def temporal(tmp_path, monkeypatch):
+    carpeta = tmp_path / "temporal"
+    carpeta.mkdir()
+    monkeypatch.setattr(servidor_app, "CARPETA_TEMPORAL", str(carpeta))
+    return carpeta
+
+
+@pytest.mark.parametrize("caso", ["bien", "dañado", "bomba", "tiempo"])
+def test_no_queda_nada_en_la_carpeta_temporal(caso, temporal, tmp_path, monkeypatch):
+    ruta = PRUEBAS[4]
+    if caso == "dañado":
+        ruta = tmp_path / "x.docx"
+        ruta.write_bytes(b"PK no es un zip")
+    elif caso == "bomba":
+        ruta = un_zip(tmp_path / "x.docx", {"[Content_Types].xml": "<Types/>",
+                                             "word/document.xml": b"\0" * (50 * seguridad.MB)})
+    elif caso == "tiempo":
+        monkeypatch.setattr(servidor_app, "TIEMPO_MAXIMO", 0.5)
+    respuesta = enviar(ruta)
+    assert respuesta.status_code == {"bien": 200, "dañado": 422, "bomba": 422, "tiempo": 504}[caso]
+    assert list(temporal.iterdir()) == []
+
+
+def test_el_registro_no_lleva_nombre_ni_texto(temporal, caplog, monkeypatch):
+    texto = next(p.text for p in documento.abrir(PRUEBAS[4]).paragraphs if len(p.text) > 20)
+    assert texto
+    caplog.set_level("DEBUG")
+    assert enviar(PRUEBAS[4], nombre=NOMBRE_PRIVADO).status_code == 200
+
+    def falla(ruta, nombre):
+        raise RuntimeError(f"fallo con el texto {texto} de {nombre}")
+    monkeypatch.setattr(seguridad, "comprobar", falla)
+    respuesta = enviar(PRUEBAS[4], nombre=NOMBRE_PRIVADO)
+    assert respuesta.status_code == 500
+    assert texto not in respuesta.text and "RuntimeError" not in respuesta.text
+    assert "Error inesperado en el servidor (RuntimeError)" in caplog.text
+    assert "Ana Pérez" not in caplog.text and texto not in caplog.text
+    assert list(temporal.iterdir()) == []

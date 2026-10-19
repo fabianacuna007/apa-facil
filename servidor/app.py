@@ -20,12 +20,23 @@ Seguridad (paso 8.2): solo .docx de verdad, 10 MB como máximo, nada de bombas
 ZIP (servidor/seguridad.py) y un tiempo máximo por documento: el núcleo trabaja
 en un proceso aparte que se para si se pasa (servidor/trabajo.py). Como mucho se
 procesan SIMULTANEOS documentos a la vez; los demás esperan su turno.
+
+Privacidad (paso 8.3): no se guarda nada. El archivo, la copia y el informe
+viven solo en la carpeta temporal de la petición (APA_CARPETA_TEMPORAL, o la
+del sistema), que se borra al terminar, también si hay un error o se agota el
+tiempo. El registro (log) nunca lleva el nombre del archivo ni su texto: de un
+error inesperado solo se anota el tipo, y el servidor solo anota la ruta y el
+código de cada petición («POST /procesar 200»).
 """
 
 import base64
+import contextlib
+import logging
 import os
+import shutil
 import tempfile
 import threading
+import time
 from pathlib import Path
 from typing import Annotated
 
@@ -43,6 +54,8 @@ TIEMPO_MAXIMO = float(os.environ.get("APA_TIEMPO_MAXIMO", 120))   # segundos por
 SIMULTANEOS = int(os.environ.get("APA_SIMULTANEOS", 2))            # documentos procesándose a la vez
 ESPERA_MAXIMA = 60                                                 # segundos en cola antes de rendirse
 TURNOS = threading.BoundedSemaphore(SIMULTANEOS)
+CARPETA_TEMPORAL = os.environ.get("APA_CARPETA_TEMPORAL")          # None: la del sistema
+REGISTRO = logging.getLogger("apa_facil.servidor")
 # Lo que puede ocupar la petición entera: el archivo y, como mucho, 1 MB de opciones y cabeceras.
 PETICION_MAXIMA = seguridad.TAMANO_MAXIMO + seguridad.MB
 FUENTES = ", ".join(list(fuente.RECOMENDADAS)[:-1]) + " o " + list(fuente.RECOMENDADAS)[-1]
@@ -75,16 +88,30 @@ def _limitar_tamano(siguiente):
             if recibido > PETICION_MAXIMA:
                 raise _PeticionGrande
             return mensaje
+        empezada = False
+
+        async def enviar(mensaje):
+            nonlocal empezada
+            empezada = True
+            await send(mensaje)
         try:
-            await siguiente(scope, contar, send)
+            await siguiente(scope, contar, enviar)
         except _PeticionGrande:
             await _error(413, _MENSAJE_GRANDE)(scope, receive, send)
+        except Exception as e:
+            # Paso 8.3: solo el tipo del error, nunca su mensaje ni la traza (podrían llevar
+            # texto del documento). Sin esto, el servidor escribiría la traza completa en el registro.
+            REGISTRO.error("Error inesperado en el servidor (%s).", type(e).__name__)
+            if not empezada:
+                await _error(500, _MENSAJE_FALLO)(scope, receive, send)
     return asgi
 
 
 _MENSAJE_GRANDE = (f"El archivo ocupa más de {seguridad.TAMANO_MAXIMO // seguridad.MB} MB, el máximo que se "
                    "admite. Si tiene muchas imágenes, comprímelas en Word (Formato de imagen › Comprimir "
                    "imágenes) y vuelve a subirlo.")
+_MENSAJE_FALLO = ("Ha habido un error inesperado al procesar el documento. No se ha guardado nada. "
+                  "Inténtalo de nuevo o prueba con otro archivo.")
 app.add_middleware(_limitar_tamano)
 
 
@@ -170,7 +197,7 @@ def procesar(
     except ErrorDocumento as e:
         return _error(422, str(e))
 
-    with tempfile.TemporaryDirectory(prefix="apa_") as carpeta:
+    with _carpeta_temporal() as carpeta:
         entrada = Path(carpeta) / NOMBRE_TEMPORAL
         try:
             _copiar(archivo, entrada, nombre)
@@ -193,13 +220,33 @@ def procesar(
         if resultado[0] == "error":
             return _error(422, resultado[1].replace(NOMBRE_TEMPORAL, nombre))
         if resultado[0] == "fallo":   # sin detalles: podrían llevar texto del documento
-            return _error(500, "Ha habido un error inesperado al procesar el documento. "
-                               "No se ha guardado nada. Inténtalo de nuevo o prueba con otro archivo.")
+            REGISTRO.error("Error inesperado en el núcleo (%s).", resultado[1])
+            return _error(500, _MENSAJE_FALLO)
         _, salida, informe, resumen = resultado
         contenido = Path(salida).read_bytes()
 
     return {"informe": informe, "resumen": resumen,
             "documento": {"nombre": copia, "contenido": base64.b64encode(contenido).decode("ascii")}}
+
+
+@contextlib.contextmanager
+def _carpeta_temporal():
+    """
+    Paso 8.3: una carpeta con nombre aleatorio para el archivo, su copia y su informe,
+    que se borra al terminar pase lo que pase. En Windows, un archivo puede seguir
+    bloqueado un instante después de parar el proceso del núcleo: se reintenta.
+    """
+    carpeta = Path(tempfile.mkdtemp(prefix="apa_", dir=CARPETA_TEMPORAL))
+    try:
+        yield carpeta
+    finally:
+        for intento in range(10):
+            shutil.rmtree(carpeta, ignore_errors=True)
+            if not carpeta.exists():
+                break
+            time.sleep(0.2 * (intento + 1))
+        else:
+            REGISTRO.error("No se ha podido borrar la carpeta temporal %s.", carpeta.name)
 
 
 def _copiar(archivo, destino, nombre):
