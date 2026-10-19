@@ -204,7 +204,7 @@ def test_en_la_terminal_cada_caso_en_su_linea_y_como_mucho_diez():
 def test_en_el_json(tmp_path):
     salida, informe = pipeline.procesar(PRUEBAS["05"], tmp_path)
     datos = json.loads(salida.with_suffix(".json").read_text(encoding="utf-8"))
-    assert datos["version"] == 13
+    assert datos["version"] == 14
     (doi,) = [a for a in datos["avisos"] if a["mensaje"].startswith("DOI con la forma antigua")]
     assert doi["nombre"] == "Citas y referencias"
     assert doi["casos"] == [{"donde": "En la lista de referencias: «Herranz, M. Turismo rural y servicios públic…»",

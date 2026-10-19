@@ -4,7 +4,7 @@ Línea de comandos:
     python -m apa_facil mi_trabajo.docx [otro.docx ...] [--fuente "Arial"]
                         [--quitar-numeracion] [--titulos-tal-cual] [--quitar-introduccion] [--quitar-indice]
                         [--tablas-tal-cual] [--rotulo-tal-cual] [--orden-tal-cual]
-                        [--rotulo-apendice]
+                        [--rotulo-apendice] [--comentarios]
                         [--datos datos.json] [--titulo "…"] [--autor "…"] … [--fecha 16/10/2026]
                         [--titulo-tal-cual] [--mantener-portada]
     python -m apa_facil mi_trabajo.docx --diagnostico
@@ -142,6 +142,9 @@ def crear_ordenes():
     ordenes.add_argument("--rotulo-apendice", action="store_true",
                          help="cambia «Anexo I» por «Apéndice» («Apéndice A», «B»… si hay varios), como pide APA. "
                               "Sin esta opción solo se avisa, porque muchas universidades piden «Anexo»")
+    ordenes.add_argument("--comentarios", action="store_true",
+                         help="pone los avisos de citas y referencias también como comentarios de Word en la copia, "
+                              "cada uno en su sitio. Bórralos antes de entregar el trabajo")
     ordenes.add_argument("--diagnostico", action="store_true",
                          help="no genera ninguna copia: muestra qué es cada párrafo (título, cuerpo, lista…), "
                               "con qué confianza y por qué, para revisar cómo se ha entendido el documento")
@@ -283,7 +286,7 @@ def main(argv=None, carpeta_salida=None):
     opciones = {"fuente": args.fuente} if args.fuente else {}
     for opcion in ("quitar_numeracion", "titulos_tal_cual", "quitar_introduccion", "titulo_tal_cual",
                    "mantener_portada", "quitar_indice", "tablas_tal_cual",
-                   "rotulo_tal_cual", "orden_tal_cual", "rotulo_apendice"):
+                   "rotulo_tal_cual", "orden_tal_cual", "rotulo_apendice", "comentarios"):
         if getattr(args, opcion):
             opciones[opcion] = True
 
@@ -300,6 +303,7 @@ def main(argv=None, carpeta_salida=None):
                               ("--rotulo-tal-cual", args.rotulo_tal_cual),
                               ("--orden-tal-cual", args.orden_tal_cual),
                               ("--rotulo-apendice", args.rotulo_apendice),
+                              ("--comentarios", args.comentarios),
                               ("--quitar-introduccion", args.quitar_introduccion),
                               ("--titulo-tal-cual", args.titulo_tal_cual)):
             if usada:

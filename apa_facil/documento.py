@@ -6,6 +6,7 @@ algunos ajustes de sección) se hace aquí con lxml, para que el resto del
 programa no tenga que tocar el XML directamente.
 """
 
+import copy
 import difflib
 import re
 import zipfile
@@ -140,6 +141,83 @@ def texto_parrafo(p):
         elif nombre == "sym":
             partes.append(f"[símbolo {el.get(w('char'))}]")
     return "".join(partes)
+
+
+def _piezas(r):
+    return [el for el in r if el.tag != w("rPr")]
+
+
+def _largo_de_pieza(el):
+    """Cuántas letras aporta una pieza de un fragmento al texto del párrafo (como en texto_parrafo)."""
+    nombre = etree.QName(el).localname
+    if nombre in ("t", "delText"):
+        return len(el.text or "")
+    if nombre in ("tab", "br", "cr", "noBreakHyphen"):
+        return 1
+    if nombre == "sym":
+        return len(f"[símbolo {el.get(w('char'))}]")
+    return 0
+
+
+def _partir_fragmento(r, posicion):
+    """Parte el fragmento `r` en `posicion` (contada como en texto_parrafo), sin cambiar el texto. Devuelve el segundo."""
+    segundo = copy.deepcopy(r)
+    primeras, segundas = _piezas(r), _piezas(segundo)
+    hasta = 0
+    for i, pieza in enumerate(primeras):
+        largo = _largo_de_pieza(pieza)
+        if hasta + largo > posicion:
+            corte = posicion - hasta
+            if corte:   # solo un texto se puede partir por dentro
+                pieza.text, segundas[i].text = pieza.text[:corte], pieza.text[corte:]
+                for t in (pieza, segundas[i]):
+                    t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+                quitar, desde = primeras[i + 1:], segundas[:i]
+            else:
+                quitar, desde = primeras[i:], segundas[:i]
+            for el in quitar:
+                r.remove(el)
+            for el in desde:
+                segundo.remove(el)
+            r.addnext(segundo)
+            return segundo
+        hasta += largo
+    return None
+
+
+def aislar(p, inicio, fin):
+    """
+    Deja el trozo [inicio, fin) del texto del párrafo (contado como en
+    texto_parrafo) en sus propios fragmentos (w:r), partiendo los que haga falta
+    sin cambiar el texto. Devuelve (primer fragmento, último fragmento), o None si
+    el trozo está vacío o no está en el párrafo. Paso 7.6: un comentario de Word
+    solo puede marcar fragmentos enteros.
+    """
+    if not 0 <= inicio < fin:
+        return None
+    for corte in (inicio, fin):
+        hasta = 0
+        for r in _fragmentos_del_parrafo(p):
+            largo = sum(_largo_de_pieza(el) for el in _piezas(r))
+            if hasta < corte < hasta + largo:
+                _partir_fragmento(r, corte - hasta)
+                break
+            hasta += largo
+    primero = ultimo = None
+    hasta = 0
+    for r in _fragmentos_del_parrafo(p):
+        largo = sum(_largo_de_pieza(el) for el in _piezas(r))
+        if largo and hasta >= inicio and hasta + largo <= fin:
+            primero = primero if primero is not None else r
+            ultimo = r
+        hasta += largo
+    if primero is None or hasta < fin:
+        return None
+    return primero, ultimo
+
+
+def _fragmentos_del_parrafo(p):
+    return [r for r in p.iter(w("r")) if next(r.iterancestors(w("p")), None) is p]
 
 
 def _raiz_de_parte(parte):

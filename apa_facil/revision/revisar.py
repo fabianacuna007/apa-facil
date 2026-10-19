@@ -42,6 +42,18 @@ class Revision:
     cruce: object = None
     errores: list = field(default_factory=list)
     lugares: object = None
+    # Paso 7.6: (mensaje del aviso, caso, Ancla) de cada caso, para poner sus comentarios en la copia.
+    anclas: list = field(default_factory=list)
+
+
+@dataclass
+class Ancla:
+    """Dónde poner el comentario de un caso: su párrafo (el objeto, que sigue siendo el mismo en la copia) y qué texto marcar."""
+    elemento: object            # el w:p; None en las notas al pie (no llevan comentario)
+    buscar: str = None          # el texto que se marca; None: toda la referencia
+    cerca: int = None           # dónde estaba en el original (para elegir si aparece varias veces)
+    ultima: bool = False        # si aparece varias veces y no hay `cerca`, la última (la ciudad, el DOI…)
+    referencia: bool = False    # en una referencia: si no se encuentra el texto, se marca la referencia entera
 
 
 def analizar(doc, clasificacion):
@@ -65,6 +77,7 @@ class _Lugares:
     def __init__(self, doc, clasificacion):
         clasificados = {c.elemento: c for c in clasificacion}
         self.parrafos = {}   # número → (apartado, principio, nº de tabla o None)
+        self.elementos = {}  # número → el w:p (paso 7.6)
         tablas, apartado = {}, None
         for numero, p in enumerate(doc.element.body.iter(w("p")), start=1):
             c = clasificados.get(p)
@@ -75,6 +88,7 @@ class _Lugares:
                 for exterior in tabla.iterancestors(w("tbl")):
                     tabla = exterior   # una tabla dentro de otra cuenta como la de fuera
                 tablas.setdefault(tabla, len(tablas) + 1)
+            self.elementos[numero] = p
             self.parrafos[numero] = (apartado, _principio(texto_parrafo(p)),
                                      tablas[tabla] if tabla is not None else None)
 
@@ -120,31 +134,36 @@ def avisar(revision, informe):
                 años_de_las_citas.setdefault(id(r), []).append(h.citas[0].año)
 
     def casos_de_citas(hallazgos, con_detalle=False):
-        return [_caso(lugares.de_cita(c), c.fragmento, explicacion=h.detalle if con_detalle else None,
-                      parrafo=c.numero)
+        return [(_caso(lugares.de_cita(c), c.fragmento, explicacion=h.detalle if con_detalle else None,
+                       parrafo=c.numero), _ancla_de_cita(c, lugares))
                 for h in hallazgos for c in h.citas]
 
+    def aviso(mensaje, pares):
+        informe.aviso(mensaje, [caso for caso, _ in pares])
+        revision.anclas += [(mensaje, caso, ancla) for caso, ancla in pares]
+
     if cruce.sin_referencia:
-        informe.aviso(f"{_obras(len(cruce.sin_referencia), 'citada en el texto no está', 'citadas en el texto no están')} "
+        aviso(f"{_obras(len(cruce.sin_referencia), 'citada en el texto no está', 'citadas en el texto no están')} "
                       "en la lista de referencias. APA pide que cada obra citada tenga su referencia: añádela, o revisa "
                       "si el autor y el año coinciden con los de alguna de la lista.",
                       casos_de_citas(cruce.sin_referencia, con_detalle=True))
     if cruce.no_citadas:
-        informe.aviso(f"{_obras(len(cruce.no_citadas), 'de la lista de referencias no se cita', 'de la lista de referencias no se citan')} "
+        aviso(f"{_obras(len(cruce.no_citadas), 'de la lista de referencias no se cita', 'de la lista de referencias no se citan')} "
                       "en el texto. APA pide que cada referencia se cite en el texto (o en una tabla, figura, nota o "
                       "apéndice): si no has usado esa obra, quítala de la lista.",
-                      [_caso(lugares.de_referencia(r), cruzador.referencia_corta(r), parrafo=r.numero)
+                      [(_caso(lugares.de_referencia(r), cruzador.referencia_corta(r), parrafo=r.numero),
+                        Ancla(lugares.elementos.get(r.numero), referencia=True))
                        for h in cruce.no_citadas for r in h.referencias])
     años = [h for h in cruce.años_distintos if any(r.año is not None for r in h.referencias)]
     if años:   # las referencias sin año van en «falta el año», con el año de la cita como pista
-        informe.aviso("El año de la cita no coincide con el de su referencia: APA pide que sea el mismo en el texto y "
+        aviso("El año de la cita no coincide con el de su referencia: APA pide que sea el mismo en el texto y "
                       "en la lista.", casos_de_citas(años, con_detalle=True))
     if cruce.autores_distintos:
-        informe.aviso("Los autores de la cita no están escritos como en su referencia: APA pide que coincidan "
+        aviso("Los autores de la cita no están escritos como en su referencia: APA pide que coincidan "
                       "(apellidos, tildes y número de autores).", casos_de_citas(cruce.autores_distintos, True))
     ambiguas = [h for h in cruce.ambiguas if not h.detalle.startswith("hay varias referencias con los mismos")]
     if ambiguas:   # las de los mismos autores y año sin letra ya las avisa el paso 6.5
-        informe.aviso("La cita puede corresponder a varias referencias de la lista: APA pide que cada cita lleve a una "
+        aviso("La cita puede corresponder a varias referencias de la lista: APA pide que cada cita lleve a una "
                       "sola.", casos_de_citas(ambiguas, con_detalle=True))
 
     errores = [e for e in revision.errores if _hay_que_avisar(e)]
@@ -155,9 +174,10 @@ def avisar(revision, informe):
             # La explicación va en el mensaje si es la misma para todos; si no, en cada caso.
             explicaciones = {e.explicacion for e in del_tipo}
             comun = explicaciones.pop() if len(explicaciones) == 1 else None
-            casos = [_caso_de_error(e, lugares, años_de_las_citas, comun) for e in del_tipo]
+            pares = [(_caso_de_error(e, lugares, años_de_las_citas, comun), _ancla_de_error(e, lugares))
+                     for e in del_tipo]
             donde = "en las citas del texto" if en == revisor.CITA else "en la lista de referencias"
-            informe.aviso(f"{revisor.TITULOS[tipo]} {donde}." + (f" {comun}" if comun else ""), casos)
+            aviso(f"{revisor.TITULOS[tipo]} {donde}." + (f" {comun}" if comun else ""), pares)
 
 
 def _hay_que_avisar(error):
@@ -180,6 +200,22 @@ def _caso_de_error(error, lugares, años_de_las_citas, comun):
     if error.tipo in (revisor.INCOMPLETA, revisor.NO_RECONOCIDA):   # lo escrito es la referencia entera
         donde, extracto = "En la lista de referencias", error.origen.texto
     return _caso(donde, extracto, correccion, explicacion, error.numero)
+
+
+def _ancla_de_cita(cita, lugares):
+    elemento = lugares.elementos.get(cita.numero) if cita.numero is not None else None
+    return Ancla(elemento, cita.fragmento, cita.inicio)
+
+
+# Lo que va al final de la referencia: si el texto se repite, se marca la última vez.
+AL_FINAL = (revisor.CIUDAD, revisor.DOI_ANTIGUO, revisor.RECUPERADO_DE)
+
+
+def _ancla_de_error(error, lugares):
+    if error.en == revisor.CITA:
+        return _ancla_de_cita(error.origen, lugares)
+    buscar = None if error.tipo in (revisor.INCOMPLETA, revisor.NO_RECONOCIDA) else error.escrito
+    return Ancla(lugares.elementos.get(error.numero), buscar, ultima=error.tipo in AL_FINAL, referencia=True)
 
 
 def _y(partes):

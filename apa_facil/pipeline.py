@@ -11,7 +11,7 @@ from pathlib import Path
 from apa_facil import datos_portada, documento, estructura
 from apa_facil.documento import ErrorDocumento
 from apa_facil.informe import Informe
-from apa_facil.revision import revisar
+from apa_facil.revision import comentarios, revisar
 from apa_facil.reglas import (alineacion, apendices, avisos, citas, figuras, fuente, indice, interlineado, limpieza, margenes,
                               orden, paginacion, portada, referencias, resumen, sangria, tablas, titulos)
 
@@ -55,6 +55,8 @@ def procesar(entrada, carpeta_salida=None, opciones=None):
         regla.aplicar(doc, opciones, informe, clasificados)
     informe.regla = "revision"
     revisar.avisar(revision, informe)
+    if opciones.get("comentarios"):   # paso 7.6: los avisos, también como comentarios en la copia
+        comentarios.comentar(doc, revision, informe)
     informe.regla = None
 
     documento.guardar(doc, salida)
