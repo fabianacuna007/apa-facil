@@ -3,3 +3,6 @@ __pycache__/
 salida/
 ~$*
 .pytest_cache/
+
+# Material de APA con derechos de autor: no se sube al repositorio.
+student-title-page-guide.pdf
