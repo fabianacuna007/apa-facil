@@ -347,3 +347,42 @@ def test_el_verificador_ve_un_titulo_sin_cursiva(tmp_path):
     for r in _runs_propios(parrafo(doc, "Notas")):
         _poner(r, "i", False)
     assert incumplimientos(doc) == ["El título de la tabla: no va en cursiva."]
+
+
+# --- Tablas cortas enteras (decisión del propietario, 2026-10-20) ---------------------------------
+
+def _filas_xml(doc):
+    return [tr for tr in doc.tables[0]._tbl.iter(w("tr"))]
+
+
+def _entera(doc):
+    """(todas las filas sin dividir, filas con «Conservar con el siguiente» en todos sus párrafos)"""
+    filas = _filas_xml(doc)
+    sin_dividir = all(tr.find(f"{w('trPr')}/{w('cantSplit')}") is not None for tr in filas)
+    seguir = [all(p.find(f"{w('pPr')}/{w('keepNext')}") is not None for p in tr.iter(w("p"))) for tr in filas]
+    return sin_dividir, seguir
+
+
+def test_una_tabla_corta_no_se_parte(tmp_path):
+    copia, informe = procesar(trabajo(filas=4), tmp_path)
+    assert _entera(copia) == (True, [True, True, True, False])   # la última fila no se pega a lo que sigue
+    assert any("1 tabla corta no se partirá entre dos páginas" in c for c in informe.como_texto().splitlines())
+
+
+def test_una_tabla_larga_si_se_parte(tmp_path):
+    copia, informe = procesar(trabajo(filas=30), tmp_path)
+    sin_dividir, seguir = _entera(copia)
+    assert not sin_dividir and not any(seguir)
+    assert "tabla corta" not in informe.como_texto()
+
+
+def test_pocas_filas_con_mucho_texto_no_es_corta(tmp_path):
+    largo = " ".join(["palabra"] * 120)   # unas 9 líneas por celda en una tabla de 3 columnas
+    celdas = {(i, j): largo for i in range(1, 4) for j in range(3)}
+    copia, _ = procesar(trabajo(filas=4, celdas=celdas), tmp_path)
+    assert not any(_entera(copia)[1])
+
+
+def test_el_05_mantiene_su_tabla_entera(copias):
+    salida, _ = copias["05"]
+    assert _entera(docx.Document(str(salida)))[0]

@@ -98,3 +98,59 @@ def test_se_procesa_con_el_nucleo_sin_perder_texto(tmp_path):
         "Hobsbawm, E. J. (1962). The age of revolution: Europe 1789-1848. Weidenfeld & Nicolson.",
         "Thompson, E. P. (1963). The making of the English working class. Victor Gollancz."]
     assert not informe.errores
+
+
+# --- Títulos del texto pegado (decisión del propietario, 2026-10-20: interpretar si es un título) ---
+
+SIN_FORMATO = """El impacto de las redes sociales en la autoestima adolescente
+Introducción
+Las redes sociales forman parte de la vida diaria de los adolescentes. Según Pérez (2020), la mayoría las usa a diario.
+Marco teórico
+Antecedentes
+Los primeros estudios se centraron en el tiempo de uso (Gómez y Ruiz, 2018). Más tarde se estudió el tipo de uso.
+Los factores que se han estudiado son:
+La edad
+El sexo
+La frecuencia de uso
+Estos factores explican una parte de las diferencias entre adolescentes, pero no todas.
+¿Qué dicen los estudios recientes?
+Los estudios recientes apuntan a que el uso pasivo se asocia con una autoestima más baja.
+Según Gómez y Ruiz (2018)
+Esto coincide con lo observado en otros países europeos.
+Conclusiones
+El uso de las redes sociales no es bueno ni malo en sí mismo: depende de cómo se usen.
+Referencias
+Gómez, A. y Ruiz, B. (2018). Adolescentes en red. Editorial Ejemplo.
+Pérez, L. (2020). Uso de redes sociales en España. Revista de Psicología, 12(3), 45-60.
+"""
+
+
+def test_en_el_texto_pegado_se_interpretan_los_titulos(tmp_path):
+    clasificados = estructura.clasificar(crear(SIN_FORMATO, tmp_path))
+    titulos = {c.texto: (c.nivel, c.confianza) for c in clasificados if c.tipo == "titulo"}
+    assert titulos == {
+        "Introducción": (1, "media"),
+        "Marco teórico": (1, "media"),
+        "Antecedentes": (2, "media"),   # justo debajo de otro título
+        "¿Qué dicen los estudios recientes?": (1, "media"),
+        "Conclusiones": (1, "media"),
+        "La frecuencia de uso": (1, "baja"),   # final de una lista sin viñetas: solo se avisa
+        "Según Gómez y Ruiz (2018)": (1, "baja"),   # lleva una cita: no es un título
+    }
+
+
+def test_los_titulos_del_texto_pegado_reciben_su_estilo(tmp_path):
+    salida, _ = pipeline.procesar(desde_texto.crear(SIN_FORMATO, tmp_path / desde_texto.NOMBRE), tmp_path / "salida")
+    estilos = {p.text: p.style.name for p in docx.Document(str(salida)).paragraphs}
+    assert estilos["Introducción"] == estilos["Marco Teórico"] == estilos["Conclusiones"] == "Heading 1"
+    assert estilos["Antecedentes"] == "Heading 2"
+    assert estilos["La edad"] != "Heading 1" and estilos["La frecuencia de uso"] != "Heading 1"
+
+
+def test_con_formato_no_se_interpreta_por_la_forma(tmp_path):
+    # Si el documento tiene algún formato (una negrita), la forma sola no basta: como antes, confianza baja.
+    doc = crear(SIN_FORMATO, tmp_path)
+    doc.paragraphs[2].runs[0].bold = True
+    doc.save(str(tmp_path / "con_negrita.docx"))
+    clasificados = estructura.clasificar(docx.Document(str(tmp_path / "con_negrita.docx")))
+    assert {c.texto: c.confianza for c in clasificados if c.tipo == "titulo"}["Conclusiones"] == "baja"

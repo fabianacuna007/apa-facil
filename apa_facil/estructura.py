@@ -18,6 +18,14 @@ Funciona en cuatro pasos:
      si no la tienen, por su formato comparado con el de los demás títulos.
      Un título falso no puede bajar más de un nivel respecto al anterior.
 
+Documentos sin ningún formato (paso 11.5: sobre todo, el texto pegado del 9.7):
+sin negritas, tamaños, centrados ni estilos de título, una línea corta sin punto
+final solo puede reconocerse por su forma y su sitio. Se interpreta como título,
+con confianza media (se le aplica el formato), si además empieza por mayúscula,
+no lleva una cita entre paréntesis, va detrás de un párrafo que se cierra (o de
+otro título) y delante de un párrafo de texto (o de otro título seguido de
+texto). Un título justo debajo de otro va un nivel por debajo.
+
 La confianza dice de dónde sale la decisión:
   - alta: una señal explícita de Word (estilo, lista, campo, imagen) o un
     rótulo exacto ("Referencias", "Anexo I…");
@@ -59,6 +67,9 @@ LEYENDA_DE_FIGURA = re.compile(r"^(figura|gráfico|grafico|imagen|ilustración|i
 NOTA = re.compile(r"^(nota\s*\.|fuente\s*:|fuentes\s*:)", re.IGNORECASE)
 FINAL_DE_FRASE = re.compile(r"[.…:][\"'»”)]*$")
 ACABA_EN_PUNTO = re.compile(r"[.…][\"'»”)]*$")
+CIERRA_PARRAFO = re.compile(r"[.…?!][\"'»”)]*$")   # no «:», que anuncia lo que sigue
+NO_ACABA_TITULO = re.compile(r"[,;:\-–—]$")
+CITA_ENTRE_PARENTESIS = re.compile(r"\([^)]*(\d{4}|s\.\s?f\.)")
 VINETA = re.compile(r"^\s*[•·▪◦‣●○■□\-–—*]\s")
 # Numeración de apartado: "1.", "1.1.", "2.3.1", "1)", "I.", "II.", "A.", "a)"
 NUMERACION_ARABIGA = re.compile(r"^(\d{1,2}(?:\.\d{1,2})*)[.)]?\s")
@@ -443,6 +454,10 @@ class _Clasificador:
         self.portada, self.portada_con_salto = _portada(self.parrafos, self.rasgos)
         portada = set(self.portada)
         self.tamano_del_texto = _tamano_del_texto([self.rasgos[p] for p in self.parrafos if p not in portada])
+        fuera = [self.rasgos[p] for p in self.parrafos if p not in portada and self.rasgos[p].texto.strip()]
+        self.sin_formato = bool(fuera) and len({r.tamano for r in fuera}) <= 1 and not any(
+            r.negrita or r.cursiva or r.nivel_de_word or r.alineacion == "center" for r in fuera)
+        self.de_portada = {id(self.rasgos[p]) for p in self.portada}
         self.numeros = {p: i for i, p in enumerate(doc.element.body.iter(w("p")), start=1)}
         self.resultado = []
         self.falsos = {}   # posición de cada título falso → indicios que lo delatan
@@ -544,6 +559,11 @@ class _Clasificador:
             if c.posicion in self.falsos:
                 c.nivel, explicacion = self._nivel_de_titulo_falso(c, sin_letra, por_numeracion(c),
                                                                    por_formato, anclados)
+                previo = self.resultado[c.posicion - 1] if c.posicion else None
+                if (self.sin_formato and anterior is not None and previo is not None and previo.tipo == "titulo"
+                        and not _numeracion(c.texto) and c.confianza != BAJA):
+                    c.nivel = min(anterior + 1, NIVEL_MAXIMO)
+                    explicacion = f"nivel {c.nivel}: va justo debajo de un título de nivel {anterior}"
                 if anterior is not None and c.nivel > anterior + 1:
                     explicacion += (f"; se sube a nivel {anterior + 1} porque el título anterior es de nivel "
                                     f"{anterior} y no se puede saltar un nivel")
@@ -722,8 +742,38 @@ class _Clasificador:
             return (BAJA, indicios + ["aunque acaba en punto"]) if r.negrita or r.mayusculas else None
         if fuertes:
             return ALTA if len(indicios) >= 3 else MEDIA, indicios
+        if self.sin_formato and "sin punto final" in debiles:
+            por_su_forma = self._titulo_por_su_forma(r)
+            if por_su_forma:
+                return MEDIA, [n for n in indicios if n != "seguido de un párrafo de texto"] + [por_su_forma]
         if "sin punto final" in debiles and (seguido or r.alineacion == "center"):
             return BAJA, indicios
+        return None
+
+    def _titulo_por_su_forma(self, r):
+        """
+        En un documento sin formato, si la línea es un título por su forma y su sitio:
+        devuelve el indicio que lo explica, o None.
+        """
+        def corta(x):
+            texto = x.texto.strip() if x is not None else ""
+            return (bool(texto) and x.palabras < PALABRAS_DE_TITULO and (texto[0].isupper() or texto[0] in "¿¡")
+                    and not FINAL_DE_FRASE.search(texto) and not NO_ACABA_TITULO.search(texto)
+                    and not CITA_ENTRE_PARENTESIS.search(texto) and not URL.search(texto)
+                    and not LISTA_A_MANO.match(texto))
+
+        def cierra(x):   # el principio del documento, un párrafo que se cierra o el final de la portada
+            return x is None or bool(CIERRA_PARRAFO.search(x.texto.strip())) or id(x) in self.de_portada
+
+        if not corta(r):
+            return None
+        a, s = r.anterior, r.siguiente
+        if not (cierra(a) or (corta(a) and cierra(a.anterior))):
+            return None   # p. ej., la última línea de una lista sin viñetas
+        if _seguido_de_texto(r):
+            return "va entre párrafos de texto, en un documento sin formato"
+        if corta(s) and _seguido_de_texto(s):
+            return "va encima de otro título, en un documento sin formato"
         return None
 
     def _leyenda(self, r):

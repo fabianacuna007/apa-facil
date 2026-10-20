@@ -260,9 +260,19 @@ def test_vineta_en_negrita_no_es_titulo():
 
 
 def test_linea_sin_formato_seguida_de_texto_es_titulo_dudoso():
+    # Si el documento tiene formato en otro sitio, una línea sin él no se reconoce por la forma.
     doc = documento_con_portada()
+    negrita(doc, "Método")
+    parrafo(doc, TEXTO)
     p = titulo_y_texto(doc, "Introducción")
     assert (de(doc, p).tipo, de(doc, p).confianza) == ("titulo", BAJA)
+
+
+def test_en_un_documento_sin_formato_la_linea_es_titulo():
+    # Decisión del propietario (2026-10-20): sin ningún formato (el texto pegado), se interpreta por la forma.
+    doc = documento_con_portada()
+    p = titulo_y_texto(doc, "Introducción")
+    assert (de(doc, p).tipo, de(doc, p).confianza) == ("titulo", MEDIA)
 
 
 def test_linea_sin_formato_entre_lineas_cortas_no_es_titulo():

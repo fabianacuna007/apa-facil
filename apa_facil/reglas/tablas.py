@@ -10,6 +10,10 @@ indentation):
   de la tabla, otra debajo de los encabezados y otra debajo de los encabezados
   que abarcan varias columnas;
 - si ocupa más de una página, la fila de encabezados se repite en cada una;
+- una tabla corta, que cabe en una página, no se parte entre dos (decisión del
+  propietario, 2026-10-20): todas sus filas menos la última llevan «Conservar con
+  el siguiente» y ninguna fila se divide, así que si no cabe al final de una
+  página pasa entera a la siguiente;
 - si es demasiado ancha, va en una página horizontal (lo avisa el paso 1.1).
 
 El estilo de tabla APA se aplica por defecto: --tablas-tal-cual deja los bordes
@@ -19,7 +23,7 @@ sola celda (un recuadro) ni las que llevan imágenes (las figuras son del 6.2).
 
 from docx.oxml import OxmlElement
 
-from apa_facil.documento import Estilos, w
+from apa_facil.documento import Estilos, texto_parrafo, w
 from apa_facil.estructura import clasificar
 from apa_facil.reglas import leyendas
 from apa_facil.reglas.fuente import _runs_propios
@@ -34,6 +38,12 @@ DESPUES_DE_TCBORDERS = ("shd", "noWrap", "tcMar", "textDirection", "tcFitText", 
                         "headers", "cellIns", "cellDel", "cellMerge", "tcPrChange")
 DESPUES_DE_SHD = DESPUES_DE_TCBORDERS[1:]
 DESPUES_DE_TBLHEADER = ("tblCellSpacing", "jc", "hidden", "ins", "del", "trPrChange")
+DESPUES_DE_CANTSPLIT = ("trHeight", "tblHeader") + DESPUES_DE_TBLHEADER
+# Una tabla es corta si cabe holgadamente en una página: unas 25 líneas (el interior va a espacio
+# sencillo) contando, en cada fila, la celda con más líneas; una línea de la página tiene unos 85
+# caracteres, que se reparten entre las columnas.
+LINEAS_DE_TABLA_CORTA = 25
+CARACTERES_POR_LINEA = 85
 LADOS = ("top", "left", "bottom", "right", "insideH", "insideV")
 
 
@@ -105,6 +115,43 @@ def _repetir_encabezados(tbl):
     return cambiado
 
 
+def _lineas(tbl):
+    """Cuántas líneas ocupa la tabla, más o menos: en cada fila, las de la celda que más tiene."""
+    total = 0
+    for tr in _filas(tbl):
+        celdas = _celdas(tr)
+        ancho = max(CARACTERES_POR_LINEA // max(len(celdas), 1), 1)
+        total += max([sum(max(-(-len(texto_parrafo(p)) // ancho), 1) for p in tc.iter(w("p"))) for tc in celdas]
+                     or [1])
+    return total
+
+
+def _mantener_entera(tbl):
+    """Si la tabla es corta, que Word no la parta entre dos páginas. Devuelve si cambia algo."""
+    filas = _filas(tbl)
+    if len(filas) < 2 or _lineas(tbl) > LINEAS_DE_TABLA_CORTA:
+        return False
+    cambiado = False
+    for i, tr in enumerate(filas):
+        trpr = tr.get_or_add_trPr()
+        marca = trpr.find(w("cantSplit"))
+        if marca is None:
+            _insertar_en_orden(trpr, OxmlElement("w:cantSplit"), DESPUES_DE_CANTSPLIT)
+            cambiado = True
+        elif marca.get(w("val")) in ("0", "false", "off"):
+            marca.attrib.pop(w("val"))
+            cambiado = True
+        if i == len(filas) - 1:
+            continue
+        for p in tr.iter(w("p")):
+            ppr = p.get_or_add_pPr()
+            seguir = ppr.find(w("keepNext"))
+            if seguir is None or seguir.get(w("val")) in ("0", "false", "off"):
+                ppr.get_or_add_keepNext().attrib.pop(w("val"), None)
+                cambiado = True
+    return cambiado
+
+
 def _colores_del_estilo(doc, tbl):
     """¿Pone color al texto el estilo de tabla de Word que usa la tabla?"""
     estilo = tbl.find(f"{w('tblPr')}/{w('tblStyle')}")
@@ -172,10 +219,14 @@ def aplicar(doc, opciones, informe, estructura=None):
         return
     leyendas.tratar(doc, opciones, informe, clasificados, tablas, TABLA)
     encabezados = sum(_repetir_encabezados(t.elemento) for t in tablas)
+    enteras = sum(_mantener_entera(t.elemento) for t in tablas)
     con_estilo = 0 if opciones.get("tablas_tal_cual") else sum(_estilo_apa(doc, t.elemento) for t in tablas)
     if encabezados:
         informe.cambio(f"Tablas: la fila de encabezados de {_plural(encabezados, 'tabla')} se repetirá en cada "
                        "página si la tabla ocupa más de una, como pide APA.")
+    if enteras:
+        informe.cambio(f"Tablas: {_plural(enteras, 'tabla corta', 'tablas cortas')} no se partirá{'n' if enteras > 1 else ''} entre "
+                       "dos páginas: si no cabe al final de una, pasa entera a la siguiente.")
     if con_estilo:
         informe.cambio(f"Tablas: {_plural(con_estilo, 'tabla')} lleva{'n' if con_estilo > 1 else ''} ahora el "
                        "estilo de APA: solo líneas horizontales (arriba, debajo de los encabezados y abajo), sin "
