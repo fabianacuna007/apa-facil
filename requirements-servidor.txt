@@ -4,3 +4,5 @@ lxml==6.1.3
 fastapi==0.148.0
 uvicorn==0.54.0
 python-multipart==0.0.32
+# Avisos de errores del servidor, sin el contenido de los documentos (paso 11.3)
+sentry-sdk==2.71.0

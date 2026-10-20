@@ -8,18 +8,25 @@ temporal, que el servidor lee y borra.
 
 Paso 10.5: también devuelve lo que ha costado el documento (segundos y memoria
 máxima del proceso), para saber cuántos documentos aguanta el servidor.
+
+Paso 11.3: de un error inesperado devuelve el tipo y los sitios del código por
+los que ha pasado (archivo, línea y función), nunca su mensaje ni sus variables,
+para poder avisar con Sentry sin el contenido del documento (servidor/errores.py).
 """
 
 import ctypes
 import multiprocessing
 import sys
 import time
+import traceback
+from pathlib import Path
 
 from apa_facil import pipeline
 from apa_facil.documento import ErrorDocumento
 
 # «spawn» en todos los sistemas: un proceso nuevo y limpio, igual en Windows que en Linux (Docker).
 CONTEXTO = multiprocessing.get_context("spawn")
+RAIZ = Path(__file__).resolve().parent.parent
 
 
 class TiempoAgotado(Exception):
@@ -61,16 +68,32 @@ def _trabajar(entrada, carpeta_salida, opciones, nombre, copia, conexion):
         conexion.send(("bien", str(salida), informe.a_dict(), informe.como_texto(), coste))
     except ErrorDocumento as e:
         conexion.send(("error", str(e)))
-    except Exception as e:   # solo el tipo: el mensaje podría llevar texto del documento
-        conexion.send(("fallo", type(e).__name__))
+    except Exception as e:   # solo el tipo y los sitios: el mensaje podría llevar texto del documento
+        conexion.send(("fallo", type(e).__name__, marcos(e)))
     finally:
         conexion.close()
+
+
+def marcos(excepcion):
+    """Los sitios del código por los que ha pasado un error: [(archivo, línea, función)], del más
+    externo al más interno. El archivo va relativo al proyecto o a site-packages (sin rutas del equipo)."""
+    sitios = []
+    for marco in traceback.extract_tb(excepcion.__traceback__):
+        ruta = Path(marco.filename)
+        if ruta.is_relative_to(RAIZ):
+            archivo = ruta.relative_to(RAIZ).as_posix()
+        elif "site-packages" in ruta.parts:
+            archivo = "/".join(ruta.parts[ruta.parts.index("site-packages") + 1:])
+        else:
+            archivo = ruta.name
+        sitios.append((archivo, marco.lineno, marco.name))
+    return sitios
 
 
 def procesar(entrada, carpeta_salida, opciones, nombre, copia, tiempo_maximo):
     """
     Ejecuta pipeline.procesar en otro proceso. Devuelve ("bien", ruta, informe, resumen, coste),
-    ("error", mensaje) o ("fallo", tipo). Si tarda más de `tiempo_maximo` segundos,
+    ("error", mensaje) o ("fallo", tipo, marcos). Si tarda más de `tiempo_maximo` segundos,
     para el proceso y lanza TiempoAgotado.
     """
     recibir, enviar = CONTEXTO.Pipe(duplex=False)
@@ -84,7 +107,7 @@ def procesar(entrada, carpeta_salida, opciones, nombre, copia, tiempo_maximo):
         try:
             return recibir.recv()
         except EOFError:   # el proceso murió sin responder (por ejemplo, sin memoria)
-            return ("fallo", "EOFError")
+            return ("fallo", "EOFError", [])
     finally:
         recibir.close()
         if proceso.is_alive():

@@ -30,6 +30,9 @@ del sistema), que se borra al terminar, también si hay un error o se agota el
 tiempo. El registro (log) nunca lleva el nombre del archivo ni su texto: de un
 error inesperado solo se anota el tipo, y el servidor solo anota la ruta y el
 código de cada petición («POST /procesar 200»).
+
+Errores (paso 11.3): si existe SENTRY_DSN, los errores inesperados (los 500) se
+avisan con Sentry, solo con su tipo y su sitio en el código (servidor/errores.py).
 """
 
 import base64
@@ -51,7 +54,7 @@ from fastapi.responses import JSONResponse
 from apa_facil import datos_portada, desde_texto, documento
 from apa_facil.documento import ErrorDocumento
 from apa_facil.reglas import fuente
-from servidor import limites, seguridad, trabajo
+from servidor import errores, limites, seguridad, trabajo
 
 NOMBRE_TEMPORAL = "documento.docx"
 TIEMPO_MAXIMO = float(os.environ.get("APA_TIEMPO_MAXIMO", 120))   # segundos por documento
@@ -74,6 +77,8 @@ if not REGISTRO.handlers:   # paso 10.5: que se vea en la terminal lo que cuesta
 # Lo que puede ocupar la petición entera: el archivo y, como mucho, 1 MB de opciones y cabeceras.
 PETICION_MAXIMA = seguridad.TAMANO_MAXIMO + seguridad.MB
 FUENTES = ", ".join(list(fuente.RECOMENDADAS)[:-1]) + " o " + list(fuente.RECOMENDADAS)[-1]
+
+errores.activar()   # paso 11.3: solo si hay SENTRY_DSN
 
 app = FastAPI(title="APA Fácil", description="Aplica el formato APA 7 de estudiante a un documento Word.")
 
@@ -117,6 +122,7 @@ def _limitar_tamano(siguiente):
             # Paso 8.3: solo el tipo del error, nunca su mensaje ni la traza (podrían llevar
             # texto del documento). Sin esto, el servidor escribiría la traza completa en el registro.
             REGISTRO.error("Error inesperado en el servidor (%s).", type(e).__name__)
+            errores.avisar(e)
             if not empezada:
                 await _error(500, _MENSAJE_FALLO)(scope, receive, send)
     return asgi
@@ -334,8 +340,11 @@ def _procesar_con_turno(carpeta, entrada, nombre, opciones):
 
     if resultado[0] == "error":
         return _error(422, resultado[1].replace(NOMBRE_TEMPORAL, nombre))
-    if resultado[0] == "fallo":   # sin detalles: podrían llevar texto del documento
-        REGISTRO.error("Error inesperado en el núcleo (%s).", resultado[1])
+    if resultado[0] == "fallo":   # sin el mensaje: podría llevar texto del documento
+        _, tipo, marcos = resultado
+        donde = f", en {marcos[-1][0]}:{marcos[-1][1]}" if marcos else ""
+        REGISTRO.error("Error inesperado en el núcleo (%s%s).", tipo, donde)
+        errores.avisar_fallo_nucleo(tipo, marcos)
         return _error(500, _MENSAJE_FALLO)
     _, salida, informe, resumen, coste = resultado
     contenido = Path(salida).read_bytes()

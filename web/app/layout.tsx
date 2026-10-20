@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import Cabecera from "@/componentes/Cabecera";
 import Pie from "@/componentes/Pie";
@@ -29,6 +30,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Cabecera />
         <div id="contenido" className="flex flex-1 flex-col">{children}</div>
         <Pie />
+        {/* Paso 11.3: visitas por página, sin cookies (ver /privacidad). Solo envía datos en Vercel. */}
+        <Analytics />
       </body>
     </html>
   );

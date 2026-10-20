@@ -9,5 +9,7 @@ fastapi==0.148.0
 uvicorn==0.54.0
 # Recibir archivos subidos en FastAPI
 python-multipart==0.0.32
+# Avisos de errores del servidor, sin el contenido de los documentos (paso 11.3)
+sentry-sdk==2.71.0
 # Llamar al servidor desde las pruebas y desde herramientas/probar_servidor.py
 httpx==0.28.1

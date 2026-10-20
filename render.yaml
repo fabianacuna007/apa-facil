@@ -23,3 +23,5 @@ services:
       # /limite enseña las cabeceras de IP de quien pregunta. Solo para volver a medir.
       - key: APA_DIAGNOSTICO_IP
         value: "0"
+      # Paso 11.3: avisos de errores con Sentry (servidor/errores.py). La clave (DSN) se pone a mano
+      # en el panel de Render (Environment > SENTRY_DSN), no aquí. Sin ella, no se envía nada.
