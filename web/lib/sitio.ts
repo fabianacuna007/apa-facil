@@ -7,8 +7,8 @@ export const DESCRIPCION_DEL_SITIO =
   "interlineado, títulos, portada, tablas y referencias según las normas APA de estudiante. Sin registro.";
 
 // Código de la etiqueta HTML de Google Search Console (Configuración › Verificación de la propiedad).
-// Vacío hasta que el propietario dé de alta la propiedad.
-export const VERIFICACION_DE_GOOGLE = "";
+// Propiedad «Prefijo de URL» de https://apa-facil-nine.vercel.app (dada de alta por el propietario, 2026-10-20).
+export const VERIFICACION_DE_GOOGLE = "zID9VcRisf-jHTVD5RYgtn5JNvbkPfP9sJ30Gvnhk8I";
 
 // Las páginas que se dan a conocer a los buscadores (sitemap.xml), de la más a la menos importante.
 export const PAGINAS: { ruta: string; prioridad: number }[] = [
