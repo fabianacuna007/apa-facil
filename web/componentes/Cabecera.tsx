@@ -19,7 +19,10 @@ export default function Cabecera() {
             No guardamos tu trabajo
           </Pastilla>
         </span>
-        <nav aria-label="Principal" className="ml-auto">
+        <nav aria-label="Principal" className="ml-auto flex items-center gap-4">
+          <Link href="/guias" className="hidden text-sm font-semibold text-tinta-suave underline-offset-4 hover:text-tinta hover:underline sm:block">
+            Guías
+          </Link>
           <BotonEnlace href="/formatear" tamano="pequeno" className="whitespace-nowrap">
             <span className="sm:hidden">Empezar</span>
             <span className="hidden sm:inline">Formatear mi trabajo</span>

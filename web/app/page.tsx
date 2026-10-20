@@ -1,6 +1,8 @@
 import { ArrowRight, ClipboardPaste, Download, FileUp, ListChecks, PenLine, ShieldCheck, TriangleAlert } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { BotonEnlace, Pastilla, Tarjeta } from "@/componentes/ui";
+import { GUIAS } from "@/lib/guias";
 import { DESCRIPCION_DEL_SITIO, NOMBRE_DEL_SITIO, URL_DEL_SITIO } from "@/lib/sitio";
 
 export const metadata: Metadata = { alternates: { canonical: "/" } };
@@ -108,6 +110,24 @@ export default function Inicio() {
             Nunca inventamos datos de una fuente: si falta algo, te lo señalamos.
           </p>
         </Tarjeta>
+      </section>
+
+      {/* Paso 13.2: las guías, para quien quiere entender las normas (y para los buscadores). */}
+      <section aria-labelledby="guias" className="flex flex-col gap-6">
+        <div className="flex flex-col items-center gap-2 text-center">
+          <h2 id="guias" className="font-titulo text-2xl font-bold">Guías de APA 7</h2>
+          <p className="max-w-2xl text-tinta-suave">Las normas explicadas en corto y con ejemplos, por si quieres entenderlas o hacerlo a mano.</p>
+        </div>
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {GUIAS.map((g) => (
+            <li key={g.slug}>
+              <Link href={`/guias/${g.slug}`}
+                    className="flex h-full items-center justify-between gap-3 rounded-xl border border-borde bg-superficie px-4 py-3 font-medium text-tinta hover:border-primario">
+                {g.corto} <ArrowRight className="size-4 shrink-0 text-primario" aria-hidden />
+              </Link>
+            </li>
+          ))}
+        </ul>
       </section>
     </main>
   );
