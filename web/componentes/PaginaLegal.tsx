@@ -1,7 +1,6 @@
-import { TriangleAlert } from "lucide-react";
 import { Tarjeta } from "@/componentes/ui";
 
-/** Formato común de las páginas legales (paso 9.8). */
+/** Formato común de las páginas legales (pasos 9.8 y 11.2). */
 export default function PaginaLegal({ titulo, actualizada, children }: {
   titulo: string; actualizada: string; children: React.ReactNode;
 }) {
@@ -11,11 +10,6 @@ export default function PaginaLegal({ titulo, actualizada, children }: {
         <h1 className="font-titulo text-3xl font-extrabold tracking-tight sm:text-4xl">{titulo}</h1>
         <p className="text-sm text-tinta-suave">Última actualización: {actualizada}</p>
       </div>
-      <p className="flex gap-2.5 rounded-xl border border-aviso-borde bg-aviso-suave p-4 text-sm text-aviso">
-        <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-        Versión provisional. Antes del lanzamiento se completarán los datos del responsable, el contacto y los
-        proveedores de alojamiento (paso 11.2 de la hoja de ruta).
-      </p>
       <Tarjeta className="p-6 sm:p-8">
         <div className="flex flex-col gap-4 text-[15px] leading-relaxed text-tinta-suave">{children}</div>
       </Tarjeta>

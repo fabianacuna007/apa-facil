@@ -1,24 +1,34 @@
 import type { Metadata } from "next";
 import PaginaLegal, { Apartado } from "@/componentes/PaginaLegal";
+import { CORREO_CONTACTO, RESPONSABLE } from "@/lib/legal";
 
 export const metadata: Metadata = { title: "Privacidad" };
 
-// Paso 9.8. Describe lo que hace de verdad el servidor (pasos 8.2 y 8.3): si cambia, hay que cambiar esto.
+// Pasos 9.8 y 11.2. Describe lo que hace de verdad el servidor (pasos 8.2, 8.3 y 10.5) y el despliegue del 11.1
+// (Vercel, Cloudflare y Render): si cambia algo de eso, o se añade analítica (11.3), hay que cambiar esto.
+// Plazos de los registros comprobados en la documentación de cada proveedor el 20 de octubre de 2026.
 export default function Privacidad() {
+  const enlace = "font-medium text-primario underline underline-offset-4";
   return (
-    <PaginaLegal titulo="Política de privacidad" actualizada="19 de octubre de 2026">
+    <PaginaLegal titulo="Política de privacidad" actualizada="20 de octubre de 2026">
       <p>
-        APA Fácil está pensada para que tu trabajo siga siendo solo tuyo. Esta página explica qué datos
-        tratamos, para qué y durante cuánto tiempo.
+        APA Fácil está pensada para que tu trabajo siga siendo solo tuyo. Esta página explica quién trata tus datos,
+        cuáles, para qué y durante cuánto tiempo.
       </p>
+      <Apartado titulo="Responsable">
+        <p>
+          {RESPONSABLE}. Para cualquier pregunta sobre tus datos, escribe a{" "}
+          <a href={`mailto:${CORREO_CONTACTO}`} className={enlace}>{CORREO_CONTACTO}</a>.
+        </p>
+      </Apartado>
       <Apartado titulo="Qué datos tratamos">
         <ul className="list-disc space-y-1 pl-5">
           <li>El documento de Word que subes o el texto que pegas.</li>
           <li>Los datos de portada que escribas (título, autores, universidad, asignatura, profesor y fecha).</li>
           <li>Las opciones que elijas.</li>
           <li>
-            Datos técnicos de cada petición: la dirección IP desde la que llega, la página pedida y si ha ido
-            bien (por ejemplo, «POST /procesar 200»). Nunca el nombre del archivo ni su contenido.
+            Datos técnicos de cada petición: la dirección IP desde la que llega, la página pedida, el navegador y si ha
+            ido bien (por ejemplo, «POST /procesar 200»). Nunca el nombre del archivo ni su contenido.
           </li>
         </ul>
         <p>No hay cuentas de usuario: no te pedimos ni correo ni contraseña.</p>
@@ -30,29 +40,67 @@ export default function Privacidad() {
       </Apartado>
       <Apartado titulo="Para qué">
         <p>
-          Solo para aplicar el formato APA a tu trabajo y devolverte la copia y el informe. No usamos tu trabajo
-          para nada más: ni para entrenar sistemas de inteligencia artificial, ni para publicidad, ni lo
-          compartimos con nadie. La base legal es la prestación del servicio que nos pides (artículo 6.1.b del
-          Reglamento General de Protección de Datos).
+          Solo para aplicar el formato APA a tu trabajo y devolverte la copia y el informe. No usamos tu trabajo para
+          nada más: ni para entrenar sistemas de inteligencia artificial, ni para publicidad, ni lo compartimos con
+          nadie aparte de los proveedores que se indican abajo. La herramienta no usa inteligencia artificial: tu
+          trabajo no se envía a ningún proveedor de IA.
+        </p>
+        <p>
+          La base legal es la prestación del servicio que nos pides (artículo 6.1.b del Reglamento General de
+          Protección de Datos). Los datos técnicos y el límite diario se basan en nuestro interés legítimo en mantener
+          el servicio seguro y disponible para todos (artículo 6.1.f).
+        </p>
+      </Apartado>
+      <Apartado titulo="Proveedores que tratan tus datos">
+        <p>Para funcionar, APA Fácil usa tres proveedores, que tratan los datos solo por cuenta nuestra:</p>
+        <ul className="list-disc space-y-2 pl-5">
+          <li>
+            <strong className="text-tinta">Vercel Inc.</strong> (Estados Unidos) aloja la web, es decir, las páginas que
+            ves. Recibe los datos técnicos de cada visita, pero no tu trabajo: el documento va directamente de tu
+            navegador al servidor.
+          </li>
+          <li>
+            <strong className="text-tinta">Cloudflare, Inc.</strong> (Estados Unidos) es la red por la que pasan las
+            peticiones al servidor antes de llegar a Render. Transmite tu trabajo cifrado y los datos técnicos, sin
+            guardar el trabajo.
+          </li>
+          <li>
+            <strong className="text-tinta">Render Services, Inc.</strong> (Estados Unidos) aloja el servidor que da
+            formato a tu trabajo, en un centro de datos de Fráncfort (Alemania, Unión Europea).
+          </li>
+        </ul>
+        <p>
+          Las tres empresas son estadounidenses, así que puede haber transferencias de datos fuera de la Unión
+          Europea. Vercel y Cloudflare están adheridas al Marco de Privacidad de Datos UE-EE. UU., que la Comisión
+          Europea considera adecuado, y Render se compromete en su contrato con las cláusulas contractuales tipo de
+          la Comisión Europea.
         </p>
       </Apartado>
       <Apartado titulo="Cuánto tiempo">
         <p>
-          Tu documento se guarda en una carpeta temporal del servidor solo mientras se procesa, y la carpeta se
-          borra en cuanto termina, también si hay un error o se pasa del tiempo máximo. No guardamos copias ni
-          del original ni del resultado. La copia corregida y el informe se envían a tu navegador, que es donde
-          se descargan; al cerrar la página, desaparecen.
+          Tu documento se guarda en una carpeta temporal del servidor solo mientras se procesa (unos segundos), y la
+          carpeta se borra en cuanto termina, también si hay un error o se pasa del tiempo máximo. No guardamos copias
+          ni del original ni del resultado. La copia corregida y el informe se envían a tu navegador, que es donde se
+          descargan; al cerrar la página, desaparecen.
         </p>
-        <p>Los datos técnicos de las peticiones se guardan en los registros del servidor durante el tiempo que fije el proveedor de alojamiento.</p>
+        <p>
+          Los datos técnicos quedan en los registros de los proveedores: 7 días en Render y 1 hora en Vercel.
+          Cloudflare los conserva según su propia política de privacidad.
+        </p>
       </Apartado>
       <Apartado titulo="Cookies">
-        <p>No usamos cookies ni herramientas de analítica.</p>
+        <p>
+          No usamos cookies ni herramientas de analítica, así que no hay nada que aceptar. Las fuentes de letra se
+          sirven desde nuestra propia web, sin llamadas a Google.
+        </p>
       </Apartado>
       <Apartado titulo="Tus derechos">
         <p>
-          Puedes pedir el acceso, la rectificación o la supresión de tus datos, y oponerte a su tratamiento.
-          Como no guardamos tus documentos, en la práctica no hay nada que borrar después de procesarlos. También
-          puedes reclamar ante la Agencia Española de Protección de Datos (aepd.es).
+          Puedes pedir el acceso, la rectificación o la supresión de tus datos, la limitación de su tratamiento, y
+          oponerte a él, escribiendo a{" "}
+          <a href={`mailto:${CORREO_CONTACTO}`} className={enlace}>{CORREO_CONTACTO}</a>. Como no guardamos tus
+          documentos, en la práctica no hay nada que borrar después de procesarlos. Si crees que no hemos atendido
+          bien tu petición, puedes reclamar ante la Agencia Española de Protección de Datos (aepd.es).
         </p>
       </Apartado>
     </PaginaLegal>

@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import PaginaLegal, { Apartado } from "@/componentes/PaginaLegal";
+import { CORREO_CONTACTO, RESPONSABLE } from "@/lib/legal";
 
 export const metadata: Metadata = { title: "Condiciones de uso" };
 
 export default function Condiciones() {
   return (
-    <PaginaLegal titulo="Condiciones de uso" actualizada="19 de octubre de 2026">
+    <PaginaLegal titulo="Condiciones de uso" actualizada="20 de octubre de 2026">
       <Apartado titulo="Qué es APA Fácil">
         <p>
           Una herramienta gratuita que aplica a tu trabajo en Word el formato de la 7.ª edición de las normas
@@ -46,6 +47,12 @@ export default function Condiciones() {
         <p>
           APA Fácil no está relacionada con la American Psychological Association ni cuenta con su aval. «APA» se
           usa solo para nombrar las normas que aplica.
+        </p>
+      </Apartado>
+      <Apartado titulo="Quién está detrás">
+        <p>
+          APA Fácil es un proyecto de {RESPONSABLE}. Para cualquier duda o problema, escribe a{" "}
+          <a href={`mailto:${CORREO_CONTACTO}`} className="font-medium text-primario underline underline-offset-4">{CORREO_CONTACTO}</a>.
         </p>
       </Apartado>
     </PaginaLegal>
