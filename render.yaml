@@ -16,9 +16,10 @@ services:
       # Con 512 MB, un documento cada vez.
       - key: APA_SIMULTANEOS
         value: "1"
-      # Proxies de Render delante del servidor (ver servidor/limites.py). Se ajusta tras el diagnóstico.
+      # Proxies delante del servidor (ver servidor/limites.py). Medido con APA_DIAGNOSTICO_IP
+      # (2026-10-20): X-Forwarded-For llega como «[inventadas], estudiante, Cloudflare, Render».
       - key: APA_PROXIES
-        value: "0"
-      # Temporal: /limite enseña las cabeceras de IP para ajustar APA_PROXIES. Quitar después.
+        value: "3"
+      # /limite enseña las cabeceras de IP de quien pregunta. Solo para volver a medir.
       - key: APA_DIAGNOSTICO_IP
-        value: "1"
+        value: "0"
