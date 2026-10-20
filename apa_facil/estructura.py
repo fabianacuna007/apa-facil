@@ -44,6 +44,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from apa_facil.documento import (LEYENDA_CON_NUMERO, MC, ROTULO_DE_APENDICE, ROTULOS_DE_INDICE, ROTULOS_DE_REFERENCIAS,
+                                 NO_CIERRAN_PARRAFO, SUBROTULOS_DE_INDICE,
                                  WP, Estilos,
                                  texto_parrafo, w)
 from apa_facil.reglas.alineacion import _salto_antes, _salto_en
@@ -129,6 +130,7 @@ class _Rasgos:
     # Los párrafos con texto de justo antes y justo después (None si hay una tabla o una imagen).
     anterior: Optional["_Rasgos"] = field(default=None, repr=False)
     siguiente: Optional["_Rasgos"] = field(default=None, repr=False)
+    base: int = 0            # la sangría izquierda normal del texto en su sección (ver _sangrias_base)
 
 
 def _capa(estilos, p, etiqueta):
@@ -309,6 +311,43 @@ def _tamano_del_texto(rasgos):
     return letras.most_common(1)[0][0] if letras else None
 
 
+# Dos sangrías izquierdas que difieren menos que esto son la misma (los PDF convertidos dan 501, 502…).
+MARGEN_DE_SANGRIA = 60
+# Un PDF convertido a Word (por Word, Acrobat o un conversor en línea) hace una sección por página:
+# muchas secciones con pocos párrafos cada una. Un trabajo escrito en Word tiene una o unas pocas.
+# En esos documentos la sangría sale de la posición del texto en cada página del PDF (cambia de una
+# página a otra, y hasta a mitad de página), así que no dice nada: no se buscan citas en bloque por ella.
+SECCIONES_DE_PDF = 10
+PARRAFOS_POR_SECCION_DE_PDF = 20
+
+
+def _sangrias_base(bloques, rasgos):
+    """
+    Anota en cada párrafo la sangría izquierda «normal» del texto de su sección (`base`, en twips):
+    la menor de los párrafos de texto (de 15 palabras o más) de la sección. En un documento normal
+    es 0, y solo es una cita en bloque lo que tiene más sangría que eso. Devuelve si el documento
+    parece un PDF convertido a Word (ver PARRAFOS_POR_SECCION_DE_PDF).
+    """
+    secciones, actual = [], []
+    for el in bloques:
+        if el.tag == w("p"):
+            actual.append(el)
+            if el.find(f"{w('pPr')}/{w('sectPr')}") is not None:
+                secciones.append(actual)
+                actual = []
+    secciones.append(actual)
+    for seccion in secciones:
+        texto = [rasgos[p].izquierda for p in seccion if rasgos[p].palabras >= PALABRAS_DE_TITULO
+                 and rasgos[p].francesa == 0 and not rasgos[p].lista_de_word]
+        base = min(texto) if texto else 0
+        if sum(1 for x in texto if abs(x - base) <= MARGEN_DE_SANGRIA) < 2:
+            base = 0   # una sola cita larga no hace «normal» su sangría
+        for p in seccion:
+            rasgos[p].base = base
+    con_texto = sum(1 for p in rasgos if rasgos[p].texto)
+    return len(secciones) >= SECCIONES_DE_PDF and con_texto <= PARRAFOS_POR_SECCION_DE_PDF * len(secciones)
+
+
 # --- 2. Portada -----------------------------------------------------------------------
 
 def _normalizar(texto):
@@ -454,6 +493,7 @@ class _Clasificador:
         self.portada, self.portada_con_salto = _portada(self.parrafos, self.rasgos)
         portada = set(self.portada)
         self.tamano_del_texto = _tamano_del_texto([self.rasgos[p] for p in self.parrafos if p not in portada])
+        self.convertido_de_pdf = _sangrias_base(bloques, self.rasgos)
         fuera = [self.rasgos[p] for p in self.parrafos if p not in portada and self.rasgos[p].texto.strip()]
         self.sin_formato = bool(fuera) and len({r.tamano for r in fuera}) <= 1 and not any(
             r.negrita or r.cursiva or r.nivel_de_word or r.alineacion == "center" for r in fuera)
@@ -622,6 +662,8 @@ class _Clasificador:
             return "indice", ("indice", ALTA, motivo, None)
         if n in ROTULOS_DE_INDICE and r.palabras < PALABRAS_DE_TITULO:
             return "indice", ("indice", ALTA, f"rótulo del índice («{r.texto}»)", None)
+        if zona == "indice" and n in SUBROTULOS_DE_INDICE:
+            return "indice", ("indice", ALTA, f"rótulo de una parte del índice («{r.texto}»)", None)
         if n in ROTULOS_DE_REFERENCIAS:
             return "referencias", ("titulo_referencias", ALTA,
                                    f"rótulo de la lista de referencias («{r.texto}»)", None)
@@ -691,7 +733,7 @@ class _Clasificador:
             if _en_serie(r):
                 motivo += ", igual que la línea de al lado"
             return "lista", MEDIA, motivo, None
-        if r.izquierda > 0 and r.francesa == 0:
+        if r.izquierda > r.base + MARGEN_DE_SANGRIA and r.francesa == 0 and not self.convertido_de_pdf:
             if r.palabras >= PALABRAS_DE_CITA_EN_BLOQUE:
                 return "cita_bloque", ALTA, f"tiene sangría a la izquierda y {r.palabras} palabras", None
             return "cita_bloque", MEDIA, (f"tiene sangría a la izquierda, pero solo {r.palabras} palabras "
@@ -717,6 +759,10 @@ class _Clasificador:
             return None
         if _en_serie(r):
             return None   # una línea más de una lista numerada a mano
+        if not FINAL_DE_FRASE.search(r.texto) and (
+                (r.siguiente is not None and r.siguiente.texto.strip()[:1].islower())
+                or r.texto.split()[-1].lower() in NO_CIERRAN_PARRAFO):
+            return None   # la frase sigue en el párrafo de después (p. ej., partida por un salto de sección)
         seguido = _seguido_de_texto(r)
         numeracion = _numeracion(r.texto)
         # "1. Marco teórico" seguido directamente de "1.1. Antecedentes" también es un apartado.
@@ -813,9 +859,10 @@ class Clasificacion(list):
     tienen Parrafo; después de borrar párrafos ya no se puede contar).
     """
 
-    def __init__(self, parrafos=(), tablas=None):
+    def __init__(self, parrafos=(), tablas=None, convertido_de_pdf=False):
         super().__init__(parrafos)
         self.tablas = dict(tablas or {})
+        self.convertido_de_pdf = convertido_de_pdf   # ver SECCIONES_DE_PDF
 
 
 def clasificar(doc, estilos=None):
@@ -830,7 +877,7 @@ def clasificar(doc, estilos=None):
         primero = tabla.find(f".//{w('p')}")
         if primero is not None:
             tablas[tabla] = clasificador.numeros[primero]
-    return Clasificacion(parrafos, tablas)
+    return Clasificacion(parrafos, tablas, clasificador.convertido_de_pdf)
 
 
 # --- Modo diagnóstico (paso 3.3) ------------------------------------------------------

@@ -13,15 +13,21 @@ también en la portada. En APA de estudiante el encabezado solo lleva eso.
 - En los pies se quitan los números de página. Un párrafo que solo sirve para
   numerar ("- 3 -", "Página 3 de 9") se quita entero; si tiene otro texto, el
   texto se conserva y se avisa.
+- El encabezado y el pie quedan al menos a 1,25 cm del borde (lo que pone Word
+  por defecto) si estaban más cerca: un PDF convertido a Word los deja a 0 y el
+  número de página se pegaba al borde (revisión del propietario, 2026-10-20).
 """
 
 import re
 
 from docx.oxml import OxmlElement
+from docx.shared import Twips
 
 from apa_facil.documento import poner_espaciado, texto_legible, w
 
 CAMPOS_DE_PAGINA = ("PAGE", "NUMPAGES", "SECTIONPAGES")
+DISTANCIA = 708          # 1,25 cm en twips: la distancia del encabezado y del pie al borde que pone Word
+DISTANCIA_MINIMA = 284   # 0,5 cm: más cerca, el número queda pegado al borde (o fuera de lo que imprime)
 MARCAS_DE_CAMPO = re.compile(r"\[(nº de página|total de páginas|páginas de la sección)\]")
 SOLO_NUMERACION = re.compile(r"^[\s\-–—/|·.:,()\[\]]*((p[aá]g(ina)?s?|page|de|of|\d+)[\s\-–—/|·.:,()\[\]]*)*$",
                              re.IGNORECASE)
@@ -177,7 +183,19 @@ def aplicar(doc, opciones, informe, estructura=None):
     _parrafo_numero(secciones[0].header)
     reinicios, romanos = _numeracion_continua(doc)
 
+    # 4. Encabezado y pie a una distancia razonable del borde.
+    cerca = 0
+    for seccion in secciones:
+        for nombre in ("header_distance", "footer_distance"):
+            distancia = getattr(seccion, nombre)
+            if distancia is None or distancia.twips < DISTANCIA_MINIMA:
+                setattr(seccion, nombre, Twips(DISTANCIA))
+                cerca += 1
+
     _informar(informe, eliminado, quitados, conservados, reinicios, romanos)
+    if cerca:
+        informe.cambio("El encabezado (con el número de página) estaba pegado al borde de la hoja en alguna "
+                       "sección: ahora está a 1,25 cm, como pone Word por defecto.")
 
 
 def _informar(informe, eliminado, quitados, conservados, reinicios, romanos):

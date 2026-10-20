@@ -165,6 +165,15 @@ class Verificacion:
         self.principales = [i for i in self.parrafos if not i.en_tabla and not i.en_cuadro]
         self.clasificados = estructura.clasificar(doc, self.estilos)
         self.clasificado_de = {c.elemento: c for c in self.clasificados}
+        # La portada propia que se mantiene (la de la universidad) conserva su diseño: fuente, tamaño,
+        # interlineado, alineación y márgenes (revisión del propietario, 2026-10-20). No se comprueban.
+        propia = regla_portada.portada_existente(self.clasificados)
+        self.portada_propia = frozenset() if not propia or self._es_portada_apa(propia) else             regla_portada.parrafos_de(self.clasificados)
+
+    def _es_portada_apa(self, portada):
+        """¿Es la portada APA que genera el paso 5.2? (líneas en blanco y después un párrafo con el estilo «Title»)"""
+        blancos = next((n for n, c in enumerate(portada) if c.tipo != "vacio"), len(portada))
+        return 0 < blancos < len(portada) and self._con_estilo_title(portada[blancos].elemento)
 
     def fallo(self, regla, mensaje, donde, extracto="", seccion=None, parrafo=None):
         self.resultado.incumplimientos.append(Hallazgo(regla, mensaje, donde, extracto, seccion, parrafo))
@@ -191,7 +200,10 @@ class Verificacion:
     # --- 1.1 Márgenes -------------------------------------------------------------
 
     def margenes(self):
+        por_seccion = documento.bloques_por_seccion(self.doc)
         for numero, seccion in enumerate(self.doc.sections, start=1):
+            if margenes._solo_portada(por_seccion[numero - 1], self.portada_propia):
+                continue
             lados = (("superior", seccion.top_margin), ("inferior", seccion.bottom_margin),
                      ("izquierdo", seccion.left_margin), ("derecho", seccion.right_margin))
             mal = [f"{nombre} {cm(valor.twips)} cm" if valor is not None else f"{nombre} sin indicar"
@@ -241,7 +253,7 @@ class Verificacion:
         # La fuente del documento es la que tiene más letras en el cuerpo.
         letras = {}
         de_codigo = {i.numero for i in codigo}
-        cuerpo = [i for i in self.parrafos if i.numero not in de_codigo]
+        cuerpo = [i for i in self.parrafos if i.numero not in de_codigo and i.p not in self.portada_propia]
         for info in cuerpo:
             for r, nombre, tamano in self._runs_con_texto(info.p):
                 letras[(nombre, tamano)] = letras.get((nombre, tamano), 0) + fuente._letras(r)
@@ -303,7 +315,7 @@ class Verificacion:
 
     def interlineado(self):
         for info in self.parrafos:
-            if info.en_cuadro:
+            if info.en_cuadro or info.p in self.portada_propia:
                 continue
             linea, regla, antes, despues = interlineado._efectivo(self.estilos, info.p)
             problemas = []
@@ -331,6 +343,8 @@ class Verificacion:
         portada = set(alineacion.parece_portada([i.p for i in self.principales], self.estilos))
         for info in self.parrafos:
             jc = self._alineacion(info.p)
+            if info.p in self.portada_propia and jc not in alineacion.A_LA_DERECHA:
+                continue
             if jc in alineacion.JUSTIFICADOS:
                 self.fallo_en(ALINEACION, info, "Texto justificado (debe ir a la izquierda).")
             elif jc in alineacion.A_LA_DERECHA and not info.en_tabla and not info.en_cuadro:
@@ -730,14 +744,16 @@ class Verificacion:
         --mantener-portada o sin datos) es una excepción admitida, y también tiene que
         dejar el texto en una página nueva.
         """
-        portada = [c for c in self.clasificados if c.zona == "portada"]
-        if not any(c.texto for c in portada):
+        portada = regla_portada.portada_existente(self.clasificados)
+        if not portada:
             return
         blancos = next((n for n, c in enumerate(portada) if c.tipo != "vacio"), len(portada))
-        if not blancos or blancos == len(portada) or not self._con_estilo_title(portada[blancos].elemento):
-            primera = next(c for c in portada if c.texto)
-            self.excepcion_en(PORTADA_PROPIA, self.por_elemento[primera.elemento],
-                              "Portada propia, no la de estudiante de APA: se ha mantenido (se avisa en el informe).")
+        if not self._es_portada_apa(portada):
+            primera = next((p for p in sorted(self.portada_propia, key=lambda p: self.por_elemento[p].numero)
+                            if texto_parrafo(p).strip()), portada[0].elemento)
+            self.excepcion_en(PORTADA_PROPIA, self.por_elemento[primera],
+                              "Portada propia, no la de estudiante de APA: se ha mantenido con su diseño (fuente, "
+                              "tamaño, interlineado, alineación y márgenes) y se avisa en el informe.")
             self._texto_en_pagina_nueva(PORTADA_PROPIA, portada)
             return
         titulo, debajo = portada[blancos], portada[blancos + 1:]

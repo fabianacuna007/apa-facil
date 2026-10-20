@@ -17,6 +17,8 @@ from apa_facil import pipeline
 from apa_facil.documento import Estilos, editar_partes_de_texto, w
 from apa_facil.informe import Informe
 from apa_facil.reglas import interlineado
+from apa_facil.estructura import clasificar
+from apa_facil.reglas import portada as regla_portada
 from apa_facil.reglas.interlineado import _efectivo
 
 PRUEBAS = sorted((Path(__file__).resolve().parent.parent / "pruebas").glob("*.docx"))
@@ -34,13 +36,13 @@ def espaciado(doc, p):
     return _efectivo(Estilos(doc), p._p if hasattr(p, "_p") else p)
 
 
-def cuerpo(doc):
+def cuerpo(doc, sin=frozenset()):
     return [p for p in doc.element.body.iter(w("p"))
-            if next(p.iterancestors(w("tc"), w("txbxContent")), None) is None]
+            if next(p.iterancestors(w("tc"), w("txbxContent")), None) is None and p not in sin]
 
 
-def celdas(doc):
-    return [p for p in doc.element.body.iter(w("p")) if next(p.iterancestors(w("tc")), None) is not None]
+def celdas(doc, sin=frozenset()):
+    return [p for p in doc.element.body.iter(w("p")) if next(p.iterancestors(w("tc")), None) is not None and p not in sin]
 
 
 def parrafo(doc, texto, linea=None, regla=None, antes=None, despues=None):
@@ -201,8 +203,9 @@ def test_documentos_de_prueba(original, tmp_path):
     salida, informe = pipeline.procesar(original, tmp_path)
     copia = docx.Document(str(salida))
 
-    assert {espaciado(copia, p) for p in cuerpo(copia)} == {DOBLE}
-    lineas = {espaciado(copia, p)[0] for p in celdas(copia)}
+    portada = regla_portada.parrafos_de(clasificar(copia))   # la portada propia se mantiene con su diseño
+    assert {espaciado(copia, p) for p in cuerpo(copia, portada)} == {DOBLE}
+    lineas = {espaciado(copia, p)[0] for p in celdas(copia, portada)}
     assert lineas == TABLAS.get(original.name[:2], set())
     assert _otras_partes(copia) == otras_antes, "las notas no cambian (encabezados y pies, del paso 1.6)"
     assert any(c.startswith("Interlineado:") for c in informe.cambios)

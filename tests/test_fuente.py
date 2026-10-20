@@ -17,6 +17,8 @@ from apa_facil import pipeline
 from apa_facil.documento import Estilos, w
 from apa_facil.informe import Informe
 from apa_facil.reglas import fuente
+from apa_facil.estructura import clasificar
+from apa_facil.reglas import portada as regla_portada
 
 PRUEBAS = sorted((Path(__file__).resolve().parent.parent / "pruebas").glob("*.docx"))
 
@@ -37,9 +39,15 @@ def documento(*fragmentos):
 
 
 def fuentes_que_se_ven(doc):
-    """(fuente, tamaño) → letras, con el formato efectivo de cada fragmento del cuerpo."""
+    """
+    (fuente, tamaño) → letras, con el formato efectivo de cada fragmento del cuerpo. Sin la portada
+    propia, que se mantiene con su diseño (revisión del propietario, 2026-10-20).
+    """
     estilos, cuenta = Estilos(doc), Counter()
+    portada = regla_portada.parrafos_de(clasificar(doc))
     for p in doc.element.body.iter(w("p")):
+        if p in portada:
+            continue
         for r in p.iter(w("r")):
             letras = sum(len(t.text or "") for t in r.iter(w("t")))
             if letras:

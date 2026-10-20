@@ -6,6 +6,8 @@ Regla 1.1: márgenes de 2,54 cm en los cuatro lados, en todas las secciones.
 - El margen de encuadernación se pone a 0, porque Word lo suma a uno de los
   márgenes y entonces ese margen mediría más de 2,54 cm.
 - La distancia del encabezado y del pie al borde no se toca (es del paso 1.6).
+- La sección que es solo la portada que se mantiene conserva sus márgenes
+  (revisión del propietario, 2026-10-20: la portada no se toca).
 
 Al cambiar los márgenes cambia el espacio para el texto. Si una tabla o una
 imagen ya no cabe, se avisa, pero no se cambia su tamaño.
@@ -45,9 +47,19 @@ def _es_horizontal(seccion):
     return ancho is not None and alto is not None and ancho > alto
 
 
+def _solo_portada(bloques, intactos):
+    """¿La sección es solo la portada que se mantiene? Entonces conserva sus márgenes."""
+    parrafos = [p for b in bloques for p in b.iter(w("p"))]
+    return bool(intactos) and bool(parrafos) and all(p in intactos for p in parrafos)
+
+
 def aplicar(doc, opciones, informe, estructura=None):
     cambios = {}   # mensaje → secciones a las que se aplica (para no repetirlo)
+    intactos = getattr(estructura, "intactos", frozenset())   # la portada que se mantiene
+    por_seccion = documento.bloques_por_seccion(doc)
     for numero, seccion in enumerate(doc.sections, start=1):
+        if _solo_portada(por_seccion[numero - 1], intactos):
+            continue
         antes = tuple(_twips(m) for m in (seccion.top_margin, seccion.bottom_margin,
                                           seccion.left_margin, seccion.right_margin))
         encuadernacion = _twips(seccion.gutter) or 0

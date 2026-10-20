@@ -4,5 +4,8 @@ salida/
 ~$*
 .pytest_cache/
 
+# Trabajos reales que manda el propietario para revisar: llevan datos personales.
+revisar/
+
 # Material de APA con derechos de autor: no se sube al repositorio.
 student-title-page-guide.pdf

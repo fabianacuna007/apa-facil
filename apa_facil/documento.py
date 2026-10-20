@@ -279,8 +279,18 @@ def _extracto(texto, desde=0, largo=60):
 # Índice (paso 5.4): su rótulo y sus líneas («1. Introducción……3», «Método\t5»): texto, un
 # separador de índice (tabulador, puntos o varios espacios) y el número de página.
 ROTULOS_DE_INDICE = {"índice", "indice", "índice general", "indice general", "contenido", "contenidos",
-                     "tabla de contenido", "tabla de contenidos", "sumario", "table of contents"}
-LINEA_DE_INDICE = re.compile(r"^\S.*?(?:\t+|\s*(?:[.·_]{2,}|…+)\s*|\s{2,})(\d{1,4}|[ivxlcdm]{1,7})$", re.IGNORECASE)
+                     "tabla de contenido", "tabla de contenidos", "sumario", "table of contents",
+                     # Los índices de tablas y figuras (revisión del propietario, 2026-10-20).
+                     *(f"{indice} de {cosas}" for indice in ("índice", "indice", "lista", "relación", "relacion")
+                       for cosas in ("tablas", "figuras", "tablas y figuras", "figuras y tablas", "ilustraciones",
+                                     "gráficos", "graficos", "cuadros", "imágenes", "imagenes")),
+                     "tabla de ilustraciones", "list of tables", "list of figures"}
+# Dentro de un índice, los subrótulos de sus partes («TABLAS», «FIGURAS»), aunque usen un estilo de título.
+SUBROTULOS_DE_INDICE = {"tablas", "figuras", "ilustraciones", "gráficos", "graficos", "cuadros", "imágenes",
+                        "imagenes", "tables", "figures"}
+# Texto, un separador (tabuladores, puntos, guiones o varios espacios) y el número de página.
+LINEA_DE_INDICE = re.compile(r"^\S.*?(?:\t+|\s*(?:[.·_\-–—]{2,}|…+)\s*|\s{2,})(\d{1,4}|[ivxlcdm]{1,7})$",
+                             re.IGNORECASE)
 
 
 def es_parte_de_un_indice(texto):
@@ -338,6 +348,25 @@ NUMERO_NUEVO = re.compile(r"(Tabla|Figura) [1-9]\d{0,2}")   # el que se añade s
 # Una nota de tabla que no empieza por «Nota.»: delante se añade «Nota. ».
 NOTA_SIN_ROTULO = re.compile(r"^\s*fuentes?\s*:", re.IGNORECASE)
 ROTULO_DE_NOTA = "Nota. "
+
+
+# Párrafos partidos por un salto de sección (revisión del propietario, 2026-10-20): el primero no acaba
+# como un párrafo (ni en dos puntos, que anuncian lo que sigue, ni en un guion, que parte una palabra)
+# y el segundo empieza en minúscula, o el primero acaba en una palabra con la que nunca acaba un
+# párrafo («…se encuentra en el» | «S.XXI con…»).
+NO_CIERRAN_PARRAFO = {"el", "la", "los", "las", "un", "una", "unos", "unas", "lo", "al", "del", "de", "en", "a",
+                      "con", "por", "para", "sin", "sobre", "entre", "hacia", "hasta", "desde", "según", "y", "e",
+                      "o", "u", "ni", "que", "como", "pero", "su", "sus", "se", "mi", "mis", "tu", "tus", "nuestro",
+                      "nuestra", "nuestros", "nuestras", "este", "esta", "estos", "estas", "ese", "esa", "cuyo",
+                      "cuya", "muy", "más", "the", "of", "and", "to", "in"}
+ACABA_PARRAFO = re.compile(r"[.…?!:;\-–—][\"'»”)\]]*\s*$")
+
+
+def partidos(antes, despues, entre=()):
+    """¿Son `antes` y `despues` (textos) un párrafo partido en dos, con solo `entre` (textos vacíos) en medio?"""
+    ultima = antes.split()[-1].lower() if antes.split() else ""
+    return (bool(antes.strip()) and bool(despues) and (despues[0].islower() or ultima in NO_CIERRAN_PARRAFO)
+            and not ACABA_PARRAFO.search(antes) and not antes[-1].isspace() and all(not t.strip() for t in entre))
 
 
 @dataclass
@@ -424,7 +453,13 @@ class CambioPrevisto:
         párrafo pasa a ser `nuevo`: una corrección de forma de una cita o una
         referencia («(Martínez 2019)» → «(Martínez, 2019)»), que solo puede quitar
         unas pocas palabras y añadir las de APA (correccion_de_forma_permitida)
-        (paso 7.7, sin la opción --citas-tal-cual).
+        (paso 7.7, sin la opción --citas-tal-cual);
+      - "unir_parrafos": el párrafo `desde[0]`, posterior, se une a este con un
+        espacio en medio; entre los dos solo puede haber párrafos sin texto (un
+        salto de sección), el primero no puede acabar como un párrafo y el segundo
+        tiene que empezar en minúscula (`partidos`: un párrafo que un PDF
+        convertido a Word partió entre dos páginas; revisión del propietario,
+        2026-10-20).
     Si un párrafo tiene varios, se comprueban en el orden en que se anotaron.
     """
     parrafo: int     # número del párrafo en el original: desde 1, contando los de las tablas
@@ -624,6 +659,9 @@ def _aplicar_previstos(antes, previstos):
             notas.append(i)   # justo detrás de su tabla o imagen: se comprueba al final
         elif cambio.accion == "corregir_forma" and _con_correccion_de_forma(texto, cambio) is not None:
             textos[i] = (donde, _con_correccion_de_forma(texto, cambio))
+        elif cambio.accion == "unir_parrafos" and len(cambio.desde) == 1 and i < destino < len(textos)                 and destino not in borrar and textos[destino][0].startswith(f"Párrafo {cambio.desde[0]}")                 and not en_tabla(i) and not en_tabla(destino) and all(sin_texto(k) for k in range(i + 1, destino))                 and partidos(texto, textos[destino][1], [textos[k][1] for k in range(i + 1, destino)]):
+            textos[i] = (donde, texto + " " + textos[destino][1])
+            borrar.add(destino)
         else:
             problemas.append(f"{donde}: una regla anotó «{cambio.accion}», pero eso cambiaría el texto "
                              f"(«{_extracto(texto)}»). Solo se pueden borrar párrafos vacíos y el rótulo "
@@ -634,7 +672,8 @@ def _aplicar_previstos(antes, previstos):
                              "índice si se pide, el punto final de las palabras clave y, en las tablas y figuras, "
                              "subir su leyenda, separar el número del título, poner «Tabla» o «Figura» y añadir "
                              "su número y «Nota.», poner el rótulo «Referencias», ordenar las referencias y "
-                             "separar el rótulo de un apéndice de su título (y, si se pide, poner «Apéndice»).")
+                             "separar el rótulo de un apéndice de su título (y, si se pide, poner «Apéndice») "
+                             "y unir un párrafo que un salto de sección partió en dos.")
 
     if indice_quitado:
         numeros = sorted(n for _, n, _ in indice_quitado)

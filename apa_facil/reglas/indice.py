@@ -19,8 +19,18 @@ avisa (decisión del propietario). Con --quitar-indice se quita:
 No se quita, y se avisa, si algo no parece de un índice (una línea sin número de
 página, una tabla, una imagen, una nota…): el índice escrito a mano se reconoce
 por su rótulo, y el clasificador podría haber metido en él texto del trabajo.
+
+Si se mantiene, las líneas de un índice escrito a mano («Tabla 1. …⇥22») llevan
+un solo tabulador, alineado al margen derecho y con el relleno que usaban
+(guiones o puntos), como el índice automático de Word: con los márgenes de APA
+el texto es más estrecho, y con su tabulador fijo el número de página saltaba a
+la línea siguiente (revisión del propietario, 2026-10-20).
 """
 
+import re
+from collections import Counter
+
+from apa_facil import documento
 from apa_facil.documento import es_parte_de_un_indice, texto_parrafo, w
 from apa_facil.estructura import clasificar
 
@@ -80,6 +90,54 @@ def _vacio_con_salto(bloque):
             and not _salto_de_seccion(bloque) and any(b.get(w("type")) == "page" for b in bloque.iter(w("br"))))
 
 
+TABULADOR_Y_PAGINA = re.compile(r"	\s*(\d{1,4}|[ivxlcdm]{1,7})\s*$", re.IGNORECASE)
+
+
+def _ancho_del_texto(doc):
+    """Para cada párrafo del cuerpo, el ancho del texto de su sección (papel menos márgenes), en twips."""
+    ancho = {}
+    for seccion, bloques in zip(doc.sections, documento.bloques_por_seccion(doc)):
+        if None in (seccion.page_width, seccion.left_margin, seccion.right_margin):
+            continue
+        texto = seccion.page_width.twips - seccion.left_margin.twips - seccion.right_margin.twips
+        for bloque in bloques:
+            for p in bloque.iter(w("p")):
+                ancho[p] = texto
+    return ancho
+
+
+def _lineas_a_mano(doc, del_indice, informe):
+    """Un tabulador a la derecha del todo en las líneas de un índice escrito a mano (ver arriba)."""
+    lineas = [c.elemento for c in del_indice if TABULADOR_Y_PAGINA.search(texto_parrafo(c.elemento))
+              and next(c.elemento.iterancestors(w("sdt")), None) is None
+              and next(c.elemento.iter(w("fldChar"), w("fldSimple")), None) is None]
+    rellenos = Counter(t.get(w("leader")) for p in lineas for t in p.iter(w("tab"))
+                       if t.getparent().tag == w("tabs") and t.get(w("leader")) not in (None, "none"))
+    relleno = rellenos.most_common(1)[0][0] if rellenos else "dot"
+    ancho = _ancho_del_texto(doc)
+    ajustadas = 0
+    for p in lineas:
+        if p not in ancho:
+            continue
+        ppr = p.get_or_add_pPr()
+        viejos = ppr.find(w("tabs"))
+        if viejos is not None:
+            ppr.remove(viejos)
+        tabulador = ppr.get_or_add_tabs().add_tab()
+        tabulador.set(w("val"), "right")
+        tabulador.set(w("leader"), relleno)
+        tabulador.set(w("pos"), str(ancho[p]))
+        ind = ppr.find(w("ind"))
+        if ind is not None:
+            for atributo in ("right", "rightChars", "end", "endChars"):
+                ind.attrib.pop(w(atributo), None)
+        ajustadas += 1
+    if ajustadas:
+        informe.cambio(f"Índice: {ajustadas} línea{'s' if ajustadas > 1 else ''} del índice escrito a mano "
+                       f"lleva{'n' if ajustadas > 1 else ''} ahora el número de página alineado al margen derecho, "
+                       "para que no salte a la línea siguiente.")
+
+
 def _queda_algun_indice(doc):
     cuerpo = doc.element.body
     return (any((t.text or "").split()[:1] == ["TOC"] for t in cuerpo.iter(w("instrText")))
@@ -92,6 +150,7 @@ def aplicar(doc, opciones, informe, estructura=None):
     if not del_indice:
         return
     if not opciones.get("quitar_indice"):
+        _lineas_a_mano(doc, del_indice, informe)
         informe.aviso("Tu trabajo tiene un índice. APA no lo pide en los trabajos de estudiante, pero muchas "
                       "universidades lo exigen, así que se ha dejado. Si la tuya no lo pide, usa la opción "
                       "--quitar-indice.")

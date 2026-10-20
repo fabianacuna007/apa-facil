@@ -21,6 +21,8 @@ from apa_facil import pipeline
 from apa_facil.documento import Estilos, texto_legible, w
 from apa_facil.informe import Informe
 from apa_facil.reglas import paginacion
+from apa_facil.estructura import clasificar
+from apa_facil.reglas import portada as regla_portada
 
 PRUEBAS = sorted((Path(__file__).resolve().parent.parent / "pruebas").glob("*.docx"))
 PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
@@ -216,7 +218,8 @@ def test_documentos_de_prueba(original, tmp_path):
     estilos = Estilos(copia)
     p = copia.sections[0].header.paragraphs[0]._p
     run = p.find(w("r"))
-    cuerpo = next(q for q in copia.paragraphs if q.text.strip())
+    portada = regla_portada.parrafos_de(clasificar(copia))   # se mantiene con su diseño
+    cuerpo = next(q for q in copia.paragraphs if q.text.strip() and q._p not in portada)
     assert estilos.fuente(run, p) == estilos.fuente(cuerpo.runs[0]._r, cuerpo._p)
     assert estilos.parrafo(p, "spacing", "line") == "240"
     assert estilos.parrafo(p, "ind", "firstLine") == "0"

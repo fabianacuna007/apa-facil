@@ -73,7 +73,8 @@ def _dentro_de(p, *etiquetas):
 def aplicar(doc, opciones, informe, estructura=None):
     estilos = Estilos(doc)
     cuerpo = [p for p in doc.element.body.iter(w("p")) if not _dentro_de(p, w("tc"), w("txbxContent"))]
-    portada = set(parece_portada(cuerpo, estilos))
+    intactos = getattr(estructura, "intactos", frozenset())   # la portada que se mantiene
+    portada = set(parece_portada(cuerpo, estilos)) | intactos
 
     # 1. Antes de cambiar nada: qué hay justificado y a la derecha.
     justificados = sum(1 for p in doc.element.body.iter(w("p"))
@@ -108,7 +109,7 @@ def aplicar(doc, opciones, informe, estructura=None):
         if nombre.startswith(PARTES_QUE_NO_SE_TOCAN):
             return
         for p in raiz.iter(w("p")):
-            if _jc_propio(p.find(w("pPr"))) in JUSTIFICADOS:
+            if _jc_propio(p.find(w("pPr"))) in JUSTIFICADOS and p not in intactos:
                 _alinear(p.find(w("pPr")), "left")
     documento.editar_partes_de_texto(doc, en_parte)
 

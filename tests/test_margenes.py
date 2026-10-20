@@ -19,6 +19,9 @@ from apa_facil.__main__ import main
 from apa_facil.documento import w
 from apa_facil.informe import Informe
 from apa_facil.reglas import margenes
+from apa_facil.estructura import clasificar
+from apa_facil.reglas import portada as regla_portada
+from apa_facil.documento import bloques_por_seccion
 
 PRUEBAS = sorted((Path(__file__).resolve().parent.parent / "pruebas").glob("*.docx"))
 APA = 1440   # 2,54 cm en twips
@@ -200,7 +203,11 @@ def test_documentos_de_prueba(original, tmp_path):
     copia = docx.Document(str(salida))
 
     assert len(copia.sections) == len(orig.sections)
-    for antes, despues in zip(orig.sections, copia.sections):
+    portada = regla_portada.parrafos_de(clasificar(copia))
+    for antes, despues, bloques in zip(orig.sections, copia.sections, bloques_por_seccion(copia)):
+        if margenes._solo_portada(bloques, portada):   # la sección de la portada propia conserva sus márgenes
+            assert margenes_de(despues) == margenes_de(antes)
+            continue
         assert margenes_de(despues) == (APA,) * 4
         assert despues.gutter.twips == 0
         assert (despues.orientation, despues.page_width, despues.page_height) == \

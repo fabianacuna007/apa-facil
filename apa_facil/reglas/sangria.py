@@ -12,6 +12,11 @@ los de tipo "cuerpo", salvo
   - los centrados o alineados a la derecha (la regla 1.4 no los toca);
   - los que empiezan con un tabulador o espacios usados como sangría: se
     dejan sin ella y se avisa.
+
+Los párrafos de texto van además pegados al margen: sin sangría a la izquierda
+ni a la derecha. Un párrafo de texto con sangría izquierda propia sería una
+cita en bloque (el clasificador lo decide); la que queda es la que un PDF
+convertido a Word pone a todos los párrafos (estructura._sangria_base).
 """
 
 from apa_facil import documento
@@ -58,8 +63,10 @@ def motivos_sin_sangria(doc, estilos=None, estructura=None):
 
 def _poner_sangria(ppr):
     ind = ppr.get_or_add_ind()
-    for atributo in ("hanging", "hangingChars", "firstLineChars"):
+    for atributo in ("hanging", "hangingChars", "firstLineChars", "leftChars", "start", "startChars",
+                     "right", "rightChars", "end", "endChars"):
         ind.attrib.pop(w(atributo), None)
+    ind.set(w("left"), "0")
     ind.set(w("firstLine"), str(SANGRIA))
 
 
@@ -76,7 +83,8 @@ def aplicar(doc, opciones, informe, estructura=None):
     clasificados = motivos_sin_sangria(doc, estilos, estructura)
     con_sangria = [p for p, motivo in clasificados if motivo is None]
     ya_estaban = sum(1 for p in con_sangria if _sangria(estilos, p, "firstLine") == SANGRIA
-                     and _sangria(estilos, p, "hanging") == 0)
+                     and _sangria(estilos, p, "hanging") == 0 and _sangria(estilos, p, "left") == 0
+                     and _sangria(estilos, p, "right") == 0)
     con_tabulador = [p for p, motivo in clasificados if motivo == "tabulador"]
 
     # Ninguna sangría de primera línea "heredada": solo la llevan los párrafos de texto.

@@ -127,10 +127,12 @@ def es_codigo(p, estilos):
     return bool(PARECE_CODIGO.search(texto_parrafo(p)))
 
 
-def _analizar(doc, estilos):
+def _analizar(doc, estilos, intactos=frozenset()):
     """Letras por familia de fuente y por tamaño en el cuerpo, y párrafos de código."""
     familias, tamanos, codigo = Counter(), Counter(), []
     for numero, p in enumerate(doc.element.body.iter(w("p")), start=1):
+        if p in intactos:   # la portada que se mantiene (reglas/portada.py)
+            continue
         if es_codigo(p, estilos):
             codigo.append((numero, p))
             continue
@@ -194,11 +196,13 @@ def _aplicar_en_numeracion(doc, nombre, puntos):
         _cambiar(rpr, nombre, puntos)
 
 
-def _aplicar_en_texto(doc, estilos, nombre, puntos):
+def _aplicar_en_texto(doc, estilos, nombre, puntos, intactos=frozenset()):
     def en_parte(nombre_parte, raiz):
         es_nota = nombre_parte.startswith(PARTES_DE_NOTAS)
         tamano = None if es_nota else puntos
         for p in raiz.iter(w("p")):
+            if p in intactos:
+                continue
             codigo = es_codigo(p, estilos)
             marca = p.find(f"{w('pPr')}/{w('rPr')}")   # formato de la marca de párrafo
             if marca is not None and not codigo:
@@ -217,7 +221,8 @@ def _aplicar_en_texto(doc, estilos, nombre, puntos):
 
 def aplicar(doc, opciones, informe, estructura=None):
     estilos = Estilos(doc)
-    familias, tamanos, codigo = _analizar(doc, estilos)
+    intactos = getattr(estructura, "intactos", frozenset())
+    familias, tamanos, codigo = _analizar(doc, estilos, intactos)
     principal = familias.most_common(1)[0][0] if familias else None
     nombre, puntos, como = _elegir(principal, opciones, informe)
 
@@ -229,7 +234,7 @@ def aplicar(doc, opciones, informe, estructura=None):
     ya_cumplia = set(familias) <= {nombre} and set(tamanos) <= {puntos}
     _aplicar_en_estilos(doc, nombre_en_word, puntos)
     _aplicar_en_numeracion(doc, nombre_en_word, puntos)
-    _aplicar_en_texto(doc, estilos, nombre_en_word, puntos)
+    _aplicar_en_texto(doc, estilos, nombre_en_word, puntos, intactos)
 
     if not ya_cumplia:
         informe.cambio(_mensaje(familias, tamanos, principal, nombre, puntos, como))

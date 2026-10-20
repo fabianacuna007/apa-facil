@@ -68,6 +68,7 @@ def _dentro_de(p, *etiquetas):
 def aplicar(doc, opciones, informe, estructura=None):
     estilos = Estilos(doc)
     cuerpo = doc.element.body
+    intactos = getattr(estructura, "intactos", frozenset())   # la portada que se mantiene
 
     # 1. Antes de cambiar nada: cómo está ahora el cuerpo (para el informe) y las tablas.
     antes_cuerpo = [_efectivo(estilos, p) for p in cuerpo.iter(w("p"))
@@ -77,6 +78,8 @@ def aplicar(doc, opciones, informe, estructura=None):
     # 2. Fijar lo que no debe heredar el doble espacio: tablas, cuadros de texto,
     #    encabezados, pies y notas. Se hace antes de cambiar los estilos.
     for p in cuerpo.iter(w("p")):
+        if p in intactos:
+            continue
         if _dentro_de(p, w("txbxContent")):
             poner_espaciado(p.get_or_add_pPr(), *_efectivo(estilos, p))
         elif _dentro_de(p, w("tc")):
@@ -104,7 +107,7 @@ def aplicar(doc, opciones, informe, estructura=None):
                 and (nombre is None or nombre.get(w("val"), "").lower() not in ESTILOS_QUE_NO_SE_TOCAN)):
             poner_espaciado(estilo.find(w("pPr")), DOBLE)
     for p in cuerpo.iter(w("p")):
-        if _dentro_de(p, w("tc"), w("txbxContent")):
+        if _dentro_de(p, w("tc"), w("txbxContent")) or p in intactos:
             continue
         ppr = p.find(w("pPr"))
         if ppr is not None and ppr.find(w("spacing")) is not None:

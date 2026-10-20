@@ -112,9 +112,32 @@ BLOQUES = (w("p"), w("tbl"), w("sdt"))
 
 
 def portada_existente(clasificados):
-    """Los párrafos de la portada que ya tenía el documento (vacíos e imágenes incluidos), o []."""
+    """
+    Los párrafos de la portada que ya tenía el documento (vacíos e imágenes incluidos), o []. Cuenta
+    también el texto de las tablas que haya entre ellos: hay portadas maquetadas con tablas, con
+    todo su texto dentro (revisión del propietario, 2026-10-20).
+    """
     portada = [c for c in clasificados if c.zona == "portada"]
-    return portada if any(c.texto for c in portada) else []
+    if any(c.texto for c in portada):
+        return portada
+    return portada if _textos(portada) else []
+
+
+def _tramo(portada):
+    """Los bloques del cuerpo desde el primer párrafo de la portada hasta el último (con las tablas de en medio)."""
+    if not portada:
+        return []
+    primero, ultimo = portada[0].elemento, portada[-1].elemento
+    if primero.getparent() is not ultimo.getparent():
+        return [c.elemento for c in portada]
+    hijos = list(primero.getparent())
+    # La portada empieza al principio del documento: también si lo primero es una tabla.
+    return hijos[:hijos.index(ultimo) + 1]
+
+
+def _textos(portada):
+    """Los textos de la portada, también los de sus tablas, en orden."""
+    return [t for b in _tramo(portada) for p in b.iter(w("p")) if (t := texto_parrafo(p).strip())]
 
 
 def _por_que_no_se_puede_quitar(portada):
@@ -151,6 +174,48 @@ def que_hacer(opciones, clasificados):
     return ("mantener", motivo) if motivo else ("sustituir", None)
 
 
+def intactos(opciones, clasificados):
+    """
+    Los párrafos (w:p) de la portada que se mantiene, también los de sus tablas y cuadros de texto:
+    las reglas de formato no los tocan (revisión del propietario, 2026-10-20: una portada de
+    universidad maquetada con tablas perdía sus tamaños, sus espacios y sus márgenes). Vacío si la
+    portada se sustituye o no hay. El pipeline lo calcula una vez y lo guarda en la clasificación.
+    """
+    if que_hacer(opciones, clasificados)[0] != "mantener":
+        return frozenset()
+    return parrafos_de(clasificados)
+
+
+def parrafos_de(clasificados):
+    """Todos los párrafos (w:p) de la portada que tiene el documento, también los de sus tablas (o ninguno)."""
+    return frozenset(p for bloque in _tramo(portada_existente(clasificados)) for p in bloque.iter(w("p")))
+
+
+def congelar(doc, parrafos):
+    """
+    Escribe en cada párrafo, como formato propio, el que se ve ahora (espaciado, alineación,
+    sangrías, fuente y tamaño): así no cambia cuando las reglas cambian los estilos.
+    """
+    from apa_facil.documento import poner_espaciado, poner_fuente, poner_tamano
+    from apa_facil.reglas.fuente import _letras, _runs_propios
+    from apa_facil.reglas.interlineado import _efectivo
+    estilos = Estilos(doc)
+    for p in parrafos:
+        ppr = p.get_or_add_pPr()
+        poner_espaciado(ppr, *_efectivo(estilos, p))
+        ppr.get_or_add_jc().set(w("val"), estilos.parrafo(p, "jc", "val") or "left")
+        ind = ppr.get_or_add_ind()
+        for atributo in ("left", "right", "firstLine", "hanging"):
+            valor = estilos.parrafo(p, "ind", atributo)
+            if valor is not None:
+                ind.set(w(atributo), valor)
+        for r in _runs_propios(p):
+            if _letras(r):
+                rpr = r.get_or_add_rPr()
+                poner_fuente(rpr, estilos.fuente(r, p))
+                poner_tamano(rpr, estilos.tamano(r, p))
+
+
 def _termina_en_salto(p):
     """¿Acaba el párrafo en un salto de página o de sección que empieza página? (no las marcas de Word)"""
     if any(b.get(w("type")) == "page" for b in p.iter(w("br"))):
@@ -166,7 +231,7 @@ def _siguiente_bloque(el):
 
 def _mantener(doc, informe, existente, motivo, datos):
     """La portada se deja como está; el texto empieza en una página nueva («start each section on a new page»)."""
-    primera = next(c.texto for c in existente if c.texto)
+    primera = _textos(existente)[0]
     inicio = f"Se ha mantenido tu portada («{_extracto(primera, 40)}»)"
     if motivo == "pedido":
         informe.aviso(f"{inicio}, como has pedido. APA pide la portada de estudiante salvo que tu universidad o tu "

@@ -20,6 +20,8 @@ import pytest
 from apa_facil.__main__ import expandir_comodines, main, mostrar_informe
 from apa_facil.documento import Estilos, w
 from apa_facil.informe import Informe
+from apa_facil.estructura import clasificar
+from apa_facil.reglas import portada as regla_portada
 
 RAIZ = Path(__file__).resolve().parent.parent
 PRUEBAS = sorted((RAIZ / "pruebas").glob("*.docx"))
@@ -28,7 +30,10 @@ PRUEBAS = sorted((RAIZ / "pruebas").glob("*.docx"))
 def fuentes(ruta):
     doc = docx.Document(str(ruta))
     estilos, cuenta = Estilos(doc), Counter()
+    portada = regla_portada.parrafos_de(clasificar(doc))   # se mantiene con su diseño
     for p in doc.element.body.iter(w("p")):
+        if p in portada:
+            continue
         for r in p.iter(w("r")):
             if "".join(t.text or "" for t in r.iter(w("t"))).strip():
                 cuenta[(estilos.fuente(r, p), estilos.tamano(r, p))] += 1
