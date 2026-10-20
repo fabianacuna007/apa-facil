@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ClipboardPaste, FileUp, LoaderCircle, Sparkles } from "lucide-react";
 import OpcionesFormato from "@/componentes/OpcionesFormato";
@@ -9,7 +9,9 @@ import Resultado, { type Estado } from "@/componentes/Resultado";
 import SubidaArchivo from "@/componentes/SubidaArchivo";
 import TextoPegado, { MAXIMO_CARACTERES } from "@/componentes/TextoPegado";
 import { Boton, Pestanas, Tarjeta } from "@/componentes/ui";
-import { archivoDescargable, ErrorApi, procesar, procesarTexto, type DatosPortada, type Opciones } from "@/lib/api";
+import {
+  archivoDescargable, consultarLimite, ErrorApi, procesar, procesarTexto, type DatosPortada, type Limite, type Opciones,
+} from "@/lib/api";
 
 type Modo = "archivo" | "texto";
 
@@ -22,7 +24,14 @@ export default function Herramienta() {
   const [portada, setPortada] = useState<DatosPortada>({});
   const [opciones, setOpciones] = useState<Opciones>({});
   const [estado, setEstado] = useState<Estado>({ fase: "inicial" });
+  const [limite, setLimite] = useState<Limite | null>(null);
   const procesando = estado.fase === "procesando";
+  const agotado = limite?.restantes === 0;
+
+  // Paso 10.5: cuántos documentos quedan hoy (el servidor cuenta por IP).
+  useEffect(() => {
+    consultarLimite().then(setLimite);
+  }, []);
   const listo = modo === "archivo" ? archivo !== null : texto.trim() !== "" && texto.length <= MAXIMO_CARACTERES;
 
   /** «Formatear otro trabajo»: se quita el archivo y el resultado; la portada y las opciones se quedan. */
@@ -44,7 +53,9 @@ export default function Herramienta() {
         ? await procesar(archivo, opciones, portada)
         : await procesarTexto(texto, opciones, portada);
       setEstado({ fase: "hecho", resultado, enlace: URL.createObjectURL(archivoDescargable(resultado.documento)) });
+      if (resultado.limite) setLimite(resultado.limite);
     } catch (error) {
+      if (error instanceof ErrorApi && error.estado === 429) setLimite((l) => (l ? { ...l, restantes: 0 } : l));
       setEstado({ fase: "error", mensaje: error instanceof ErrorApi ? error.message : "Ha habido un error inesperado." });
     }
   }
@@ -81,11 +92,14 @@ export default function Herramienta() {
         <Seccion numero={3} titulo="Opciones">
           <OpcionesFormato opciones={opciones} onChange={setOpciones} desactivada={procesando} />
         </Seccion>
-        <Boton type="submit" tamano="grande" disabled={!listo || procesando}>
-          {procesando
-            ? <><LoaderCircle className="size-5 animate-spin" aria-hidden /> Aplicando el formato…</>
-            : <><Sparkles className="size-5" aria-hidden /> Aplicar formato APA</>}
-        </Boton>
+        <div className="flex flex-col gap-2">
+          <Boton type="submit" tamano="grande" disabled={!listo || procesando || agotado}>
+            {procesando
+              ? <><LoaderCircle className="size-5 animate-spin" aria-hidden /> Aplicando el formato…</>
+              : <><Sparkles className="size-5" aria-hidden /> Aplicar formato APA</>}
+          </Boton>
+          <Restantes limite={limite} />
+        </div>
       </form>
       <div className="bg-hundido/60 p-5 sm:p-7">
         <div className="lg:sticky lg:top-24">
@@ -93,6 +107,25 @@ export default function Herramienta() {
         </div>
       </div>
     </Tarjeta>
+  );
+}
+
+/** Paso 10.5: «Te quedan 2 de 3 documentos hoy», o que ya no quedan. */
+function Restantes({ limite }: { limite: Limite | null }) {
+  if (!limite?.maximo || limite.restantes === null) return null;
+  if (limite.restantes === 0) {
+    const usados = limite.maximo === 1 ? "tu documento" : `tus ${limite.maximo} documentos`;
+    return (
+      <p role="status" className="rounded-lg border border-aviso-borde bg-aviso-suave px-3 py-2 text-center text-sm text-aviso">
+        Has usado {usados} de hoy. Podrás procesar más mañana.
+      </p>
+    );
+  }
+  return (
+    <p className="text-center text-sm text-tinta-suave">
+      Te {limite.restantes === 1 ? "queda" : "quedan"} {limite.restantes} de {limite.maximo}{" "}
+      {limite.maximo === 1 ? "documento" : "documentos"} hoy.
+    </p>
   );
 }
 

@@ -203,6 +203,18 @@ lo que devuelve (copia corregida, informe y resumen) en `salida/`:
 python herramientas/probar_servidor.py pruebas/01_ensayo_basico.docx
 ```
 
+Cada dirección IP puede procesar 3 documentos al día (solo cuentan los que salen bien); el cuarto recibe un
+aviso en español. Se cambia con la variable `APA_LIMITE_DIARIO` (con `0`, sin límite, útil para probar en local).
+No se guarda la IP, solo una huella cifrada en memoria que se borra cada día. Para volver a empezar la cuenta en
+local, basta con reiniciar el servidor.
+
+En la terminal del servidor sale lo que ha costado cada documento (segundos y memoria), sin su nombre ni su texto.
+Para medirlo con los documentos de prueba:
+
+```
+python herramientas/medir_costes.py
+```
+
 Con Docker (solo el núcleo y el servidor):
 
 ```

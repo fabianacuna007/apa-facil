@@ -21,7 +21,7 @@ import httpx
 RAIZ = Path(__file__).resolve().parent.parent
 BANDERAS = ("quitar_numeracion", "titulos_tal_cual", "quitar_introduccion", "titulo_tal_cual",
             "mantener_portada", "quitar_indice", "tablas_tal_cual", "rotulo_tal_cual", "orden_tal_cual",
-            "rotulo_apendice", "comentarios")
+            "citas_tal_cual", "rotulo_apendice", "comentarios")
 
 
 def main(argv=None):

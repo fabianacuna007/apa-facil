@@ -22,6 +22,11 @@ export default function Privacidad() {
           </li>
         </ul>
         <p>No hay cuentas de usuario: no te pedimos ni correo ni contraseña.</p>
+        <p>
+          Para el límite de documentos al día contamos cuántos procesas desde tu dirección IP. No guardamos la IP:
+          solo una huella cifrada con una clave que cambia cada día, en la memoria del servidor, y se borra al
+          acabar el día.
+        </p>
       </Apartado>
       <Apartado titulo="Para qué">
         <p>

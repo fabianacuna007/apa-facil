@@ -4,8 +4,14 @@
 #   docker run --rm -p 8000:8000 apa-facil
 #
 # Después: http://localhost:8000/docs. Render y Railway indican el puerto con la
-# variable PORT; los límites se cambian con APA_TAMANO_MAXIMO_MB, APA_TIEMPO_MAXIMO
-# y APA_SIMULTANEOS (ver servidor/app.py).
+# variable PORT; los límites se cambian con APA_TAMANO_MAXIMO_MB, APA_TIEMPO_MAXIMO,
+# APA_SIMULTANEOS (ver servidor/app.py) y APA_LIMITE_DIARIO (documentos al día por
+# IP: 3; 0 = sin límite; ver servidor/limites.py).
+#
+# Detrás del proxy del alojamiento hay que dar FORWARDED_ALLOW_IPS con la dirección
+# de ese proxy (la indica el proveedor): si no, uvicorn ve la IP del proxy en todas
+# las peticiones y todos los estudiantes compartirían los mismos 3 documentos. No
+# vale «*»: cualquiera podría inventarse su IP y saltarse el límite (paso 11.1).
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

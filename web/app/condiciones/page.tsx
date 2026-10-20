@@ -37,8 +37,9 @@ export default function Condiciones() {
       </Apartado>
       <Apartado titulo="Uso razonable">
         <p>
-          Se admiten documentos de Word (.docx) de hasta 10 MB, o hasta 500.000 caracteres de texto pegado. No
-          intentes sobrecargar el servicio ni enviar archivos dañinos.
+          Se admiten documentos de Word (.docx) de hasta 10 MB, o hasta 500.000 caracteres de texto pegado, y un
+          número limitado de documentos al día desde cada conexión (ahora, 3; solo cuentan los que se procesan
+          bien). No intentes saltarte el límite, sobrecargar el servicio ni enviar archivos dañinos.
         </p>
       </Apartado>
       <Apartado titulo="Sin relación con la APA">

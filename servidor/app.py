@@ -43,7 +43,7 @@ import time
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, File, Form, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -51,7 +51,7 @@ from fastapi.responses import JSONResponse
 from apa_facil import datos_portada, desde_texto, documento
 from apa_facil.documento import ErrorDocumento
 from apa_facil.reglas import fuente
-from servidor import seguridad, trabajo
+from servidor import limites, seguridad, trabajo
 
 NOMBRE_TEMPORAL = "documento.docx"
 TIEMPO_MAXIMO = float(os.environ.get("APA_TIEMPO_MAXIMO", 120))   # segundos por documento
@@ -62,6 +62,12 @@ CARPETA_TEMPORAL = os.environ.get("APA_CARPETA_TEMPORAL")          # None: la de
 # Webs que pueden llamar al servidor desde el navegador (paso 9.1), separadas por comas.
 ORIGENES = [o.strip() for o in os.environ.get("APA_ORIGENES", "http://localhost:3000").split(",") if o.strip()]
 REGISTRO = logging.getLogger("apa_facil.servidor")
+LIMITE = limites.Limite()                                          # paso 10.5: documentos al día por IP
+if not REGISTRO.handlers:   # paso 10.5: que se vea en la terminal lo que cuesta cada documento (nivel INFO)
+    _salida = logging.StreamHandler()
+    _salida.setFormatter(logging.Formatter("%(levelname)s:     %(message)s"))
+    REGISTRO.addHandler(_salida)
+    REGISTRO.setLevel(logging.INFO)
 # Lo que puede ocupar la petición entera: el archivo y, como mucho, 1 MB de opciones y cabeceras.
 PETICION_MAXIMA = seguridad.TAMANO_MAXIMO + seguridad.MB
 FUENTES = ", ".join(list(fuente.RECOMENDADAS)[:-1]) + " o " + list(fuente.RECOMENDADAS)[-1]
@@ -157,6 +163,16 @@ def salud():
     return {"estado": "bien"}
 
 
+def _ip(peticion):
+    return peticion.client.host if peticion.client else ""
+
+
+@app.get("/limite")
+def limite(peticion: Request):
+    """Paso 10.5: cuántos documentos puede procesar hoy quien pregunta (restantes: null si no hay límite)."""
+    return {"maximo": LIMITE.maximo or None, "restantes": LIMITE.restantes(_ip(peticion))}
+
+
 class _Rechazo(Exception):
     """Una petición que no se procesa, con su código y el mensaje en español."""
     def __init__(self, estado, mensaje):
@@ -225,6 +241,7 @@ def _opciones(
 
 @app.post("/procesar")
 def procesar(
+    peticion: Request,
     archivo: Annotated[UploadFile, File(description="El trabajo en Word (.docx)")],
     opciones: Annotated[dict, Depends(_opciones)],
 ):
@@ -244,11 +261,12 @@ def procesar(
             seguridad.comprobar(entrada, nombre)
         except seguridad.ErrorEntrada as e:
             return _error(e.estado, str(e))
-        return _procesar(carpeta, entrada, nombre, opciones)
+        return _procesar(carpeta, entrada, nombre, opciones, _ip(peticion))
 
 
 @app.post("/procesar-texto")
 def procesar_texto(
+    peticion: Request,
     texto: Annotated[str, Form(description="El trabajo pegado como texto: un párrafo por línea")],
     opciones: Annotated[dict, Depends(_opciones)],
 ):
@@ -262,12 +280,34 @@ def procesar_texto(
         return _error(422, str(e))
     with _carpeta_temporal() as carpeta:
         entrada = desde_texto.crear(texto, Path(carpeta) / NOMBRE_TEMPORAL)
-        return _procesar(carpeta, entrada, desde_texto.NOMBRE, opciones)
+        return _procesar(carpeta, entrada, desde_texto.NOMBRE, opciones, _ip(peticion))
 
 
-def _procesar(carpeta, entrada, nombre, opciones):
-    """Llama al núcleo (en un proceso aparte, con tiempo máximo) y prepara la respuesta."""
+def _procesar(carpeta, entrada, nombre, opciones, ip):
+    """
+    Llama al núcleo (en un proceso aparte, con tiempo máximo) y prepara la respuesta.
+    Paso 10.5: antes, reserva uno de los documentos del día de esta IP; si algo sale
+    mal, lo devuelve (solo cuentan los que se procesan bien).
+    """
+    try:
+        reserva = LIMITE.reservar(ip)
+    except limites.LimiteAlcanzado as e:
+        return _error(429, str(e))
+    try:
+        respuesta = _procesar_con_turno(carpeta, entrada, nombre, opciones)
+    except BaseException:
+        LIMITE.devolver(reserva)
+        raise
+    if isinstance(respuesta, JSONResponse):   # un error
+        LIMITE.devolver(reserva)
+        return respuesta
+    respuesta["limite"] = {"maximo": LIMITE.maximo or None, "restantes": LIMITE.restantes(ip)}
+    return respuesta
+
+
+def _procesar_con_turno(carpeta, entrada, nombre, opciones):
     copia = f"{Path(nombre).stem}{documento.SUFIJO}.docx"
+    inicio = time.perf_counter()
     if not TURNOS.acquire(timeout=ESPERA_MAXIMA):
         return _error(503, "Ahora mismo hay muchos documentos en cola. Inténtalo de nuevo dentro de un momento.")
     try:
@@ -284,8 +324,12 @@ def _procesar(carpeta, entrada, nombre, opciones):
     if resultado[0] == "fallo":   # sin detalles: podrían llevar texto del documento
         REGISTRO.error("Error inesperado en el núcleo (%s).", resultado[1])
         return _error(500, _MENSAJE_FALLO)
-    _, salida, informe, resumen = resultado
+    _, salida, informe, resumen, coste = resultado
     contenido = Path(salida).read_bytes()
+    # Paso 10.5: lo que ha costado, sin el nombre ni el texto (paso 8.3).
+    memoria = f"{coste['memoria_mb']:.0f} MB" if coste["memoria_mb"] is not None else "desconocida"
+    REGISTRO.info("Documento procesado en %.1f s (%.1f s del núcleo; memoria máxima del proceso: %s; %d KB).",
+                  time.perf_counter() - inicio, coste["segundos"], memoria, Path(entrada).stat().st_size // 1024)
     return {"informe": informe, "resumen": resumen,
             "documento": {"nombre": copia, "contenido": base64.b64encode(contenido).decode("ascii")}}
 

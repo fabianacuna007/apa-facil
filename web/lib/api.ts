@@ -66,7 +66,12 @@ export type Resultado = {
   resumen: string;
   /** La copia corregida, con su contenido en base64. */
   documento: { nombre: string; contenido: string };
+  /** Paso 10.5: cuántos documentos le quedan hoy a quien lo ha enviado. */
+  limite?: Limite;
 };
+
+/** Paso 10.5: documentos al día por IP (los dos son null si el servidor no tiene límite). */
+export type Limite = { maximo: number | null; restantes: number | null };
 
 /** Un error con un mensaje en español pensado para el estudiante. */
 export class ErrorApi extends Error {
@@ -103,6 +108,15 @@ export async function salud(): Promise<boolean> {
     return datos.estado === "bien";
   } catch {
     return false;
+  }
+}
+
+/** Paso 10.5: cuántos documentos quedan hoy (null si no se ha podido saber). */
+export async function consultarLimite(): Promise<Limite | null> {
+  try {
+    return (await pedir("/limite")) as Limite;
+  } catch {
+    return null;
   }
 }
 

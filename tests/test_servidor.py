@@ -14,12 +14,18 @@ import pytest
 from fastapi.testclient import TestClient
 
 from apa_facil import documento, pipeline
-from servidor import app as servidor_app, seguridad
+from servidor import app as servidor_app, limites, seguridad
 from servidor.app import app
 
 RAIZ = Path(__file__).resolve().parent.parent
 PRUEBAS = sorted((RAIZ / "pruebas").glob("*.docx"))
 cliente = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def sin_limite_diario(monkeypatch):
+    """Estas pruebas mandan muchos documentos desde la misma IP: sin el límite del paso 10.5 (tests/test_limites.py)."""
+    monkeypatch.setattr(servidor_app, "LIMITE", limites.Limite(maximo=0))
 
 
 def enviar(ruta, nombre=None, **campos):
