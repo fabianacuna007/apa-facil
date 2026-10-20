@@ -380,6 +380,19 @@ apa-facil/
 
 ---
 
+## Fase 13: Posicionamiento y anuncios
+
+**Decisión del propietario (2026-10-20):** monetizar con anuncios (Google AdSense); se descartan las donaciones, la versión prémium, los productos, los afiliados y los acuerdos con instituciones. Sin tráfico los anuncios no dan nada, así que primero va el posicionamiento, que además es lo que AdSense pide para aprobar una web (contenido propio y suficiente). Hasta el 13.3 no se paga nada.
+
+- [ ] **13.1 SEO técnico.** Título y descripción de cada página, dirección canónica, `sitemap.xml`, `robots.txt`, imagen para compartir (Open Graph), datos estructurados (aplicación web gratuita en español) y verificación de Google Search Console (el propietario da de alta la propiedad y envía el mapa del sitio).
+- [ ] **13.2 Guías de contenido.** Páginas originales en español, basadas en la web oficial de APA, cada una con su enlace a la herramienta. El propietario elige los temas de una lista propuesta.
+- [ ] **13.3 Dominio y alojamiento comercial.** Comprar el dominio, mover la web a un alojamiento que permita anuncios (Cloudflare Pages, comprobando antes sus condiciones; o Vercel Pro) y pasar el servidor de Render al plan básico (el gratuito no es para producción y se duerme). Analítica sin cookies equivalente si se deja Vercel. Redirigir la dirección antigua y actualizar Search Console y `APA_ORIGENES`.
+- [ ] **13.4 AdSense.** Solicitud (el propietario: cuenta, pago y datos fiscales), aviso de consentimiento certificado (el de AdSense), política de privacidad y condiciones actualizadas, `ads.txt` y anuncios colocados según las normas de Google (nunca junto a los botones de subir o descargar).
+
+**Hecho cuando:** la web aparece en Google en búsquedas como «formato APA 7 automático en Word» y muestra anuncios cumpliendo el RGPD.
+
+---
+
 ## Fuera de alcance por ahora
 
 - Archivos .doc antiguos, PDF, Google Docs y LaTeX.

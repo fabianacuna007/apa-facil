@@ -1,5 +1,23 @@
 import { ArrowRight, ClipboardPaste, Download, FileUp, ListChecks, PenLine, ShieldCheck, TriangleAlert } from "lucide-react";
+import type { Metadata } from "next";
 import { BotonEnlace, Pastilla, Tarjeta } from "@/componentes/ui";
+import { DESCRIPCION_DEL_SITIO, NOMBRE_DEL_SITIO, URL_DEL_SITIO } from "@/lib/sitio";
+
+export const metadata: Metadata = { alternates: { canonical: "/" } };
+
+// Paso 13.1: datos estructurados para Google (schema.org): una aplicación web gratuita, en español.
+const DATOS_ESTRUCTURADOS = {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  name: NOMBRE_DEL_SITIO,
+  url: URL_DEL_SITIO,
+  description: DESCRIPCION_DEL_SITIO,
+  applicationCategory: "EducationalApplication",
+  operatingSystem: "Cualquiera (en el navegador)",
+  inLanguage: "es",
+  isAccessibleForFree: true,
+  offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
+};
 
 const PASOS = [
   { icono: FileUp, titulo: "Sube tu trabajo", texto: "Tu archivo de Word (.docx) o, si lo prefieres, pega el texto." },
@@ -24,6 +42,10 @@ const AVISA = [
 export default function Inicio() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-16 px-4 py-14 sm:px-6 sm:py-20">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(DATOS_ESTRUCTURADOS).replace(/</g, "\\u003c") }}
+      />
       <section className="mx-auto flex max-w-3xl flex-col items-center gap-6 text-center">
         <Pastilla>APA 7 · versión de estudiante</Pastilla>
         <h1 className="font-titulo text-4xl font-extrabold tracking-tight text-balance sm:text-6xl">

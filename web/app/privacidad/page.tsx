@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import PaginaLegal, { Apartado } from "@/componentes/PaginaLegal";
 import { CORREO_CONTACTO, RESPONSABLE } from "@/lib/legal";
 
-export const metadata: Metadata = { title: "Privacidad" };
+export const metadata: Metadata = {
+  title: "Privacidad",
+  description: "Qué datos trata APA Fácil, para qué y durante cuánto tiempo: tu trabajo se borra en cuanto se procesa.",
+  alternates: { canonical: "/privacidad" },
+};
 
 // Pasos 9.8, 11.2 y 11.3. Describe lo que hace de verdad el servidor (pasos 8.2, 8.3 y 10.5), el despliegue
 // del 11.1 (Vercel, Cloudflare y Render), los avisos de errores (Sentry, servidor/errores.py) y la analítica

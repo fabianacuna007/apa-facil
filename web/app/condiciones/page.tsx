@@ -3,7 +3,11 @@ import Link from "next/link";
 import PaginaLegal, { Apartado } from "@/componentes/PaginaLegal";
 import { CORREO_CONTACTO, RESPONSABLE } from "@/lib/legal";
 
-export const metadata: Metadata = { title: "Condiciones de uso" };
+export const metadata: Metadata = {
+  title: "Condiciones de uso",
+  description: "Condiciones de uso de APA Fácil, la herramienta gratuita que aplica el formato APA 7 a tu trabajo en Word.",
+  alternates: { canonical: "/condiciones" },
+};
 
 export default function Condiciones() {
   return (

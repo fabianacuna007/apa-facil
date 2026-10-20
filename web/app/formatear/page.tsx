@@ -2,7 +2,12 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import Herramienta from "@/componentes/Herramienta";
 
-export const metadata: Metadata = { title: "Formatear mi trabajo" };
+export const metadata: Metadata = {
+  title: "Formatear mi trabajo en APA 7",
+  description: "Sube tu trabajo en Word (.docx) o pega el texto, rellena la portada y descárgalo con el formato APA 7 " +
+    "de estudiante y un informe de lo que debes revisar. Gratis y sin registro.",
+  alternates: { canonical: "/formatear" },
+};
 
 export default function Formatear() {
   return (
