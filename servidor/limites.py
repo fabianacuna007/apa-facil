@@ -23,6 +23,22 @@ import threading
 from datetime import datetime, timezone
 
 MAXIMO = int(os.environ.get("APA_LIMITE_DIARIO", 3))
+# Paso 11.1: cuántos proxies de confianza hay delante del servidor (el del alojamiento).
+# 0 (en local): la IP es la de la conexión. N: la IP es la N-ésima de X-Forwarded-For
+# empezando por la derecha. Las de la izquierda las puede inventar el navegador, las
+# de la derecha las añade cada proxy, así que no se pueden falsificar.
+PROXIES = int(os.environ.get("APA_PROXIES", 0))
+
+
+def ip_cliente(conexion, reenviado=None, proxies=PROXIES):
+    """La IP de quien hace la petición: `conexion` es la IP que ve el servidor y
+    `reenviado`, la cabecera X-Forwarded-For (o None)."""
+    if not proxies:
+        return conexion or ""
+    saltos = [s.strip() for s in (reenviado or "").split(",") if s.strip()]
+    if len(saltos) >= proxies:
+        return saltos[-proxies]
+    return conexion or ""  # falta la cabecera: no ha pasado por el proxy
 
 
 class LimiteAlcanzado(Exception):

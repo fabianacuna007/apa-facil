@@ -1,0 +1,24 @@
+# Servidor de APA Fácil en Render (paso 11.1). En Render: New > Blueprint > este repositorio.
+# Usa el Dockerfile de la raíz. Cada commit en main se despliega solo.
+services:
+  - type: web
+    name: apa-facil-api
+    runtime: docker
+    plan: free              # 512 MB de memoria; se duerme tras 15 minutos sin uso
+    region: frankfurt       # en la UE (RGPD)
+    branch: main
+    healthCheckPath: /salud
+    autoDeployTrigger: commit
+    envVars:
+      # Dirección de la web en Vercel (p. ej. https://apa-facil.vercel.app). Render la pide al crear el servicio.
+      - key: APA_ORIGENES
+        sync: false
+      # Con 512 MB, un documento cada vez.
+      - key: APA_SIMULTANEOS
+        value: "1"
+      # Proxies de Render delante del servidor (ver servidor/limites.py). Se ajusta tras el diagnóstico.
+      - key: APA_PROXIES
+        value: "0"
+      # Temporal: /limite enseña las cabeceras de IP para ajustar APA_PROXIES. Quitar después.
+      - key: APA_DIAGNOSTICO_IP
+        value: "1"

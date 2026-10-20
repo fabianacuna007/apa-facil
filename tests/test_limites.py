@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from servidor import app as servidor_app
+from servidor import limites
 from servidor.limites import Limite, LimiteAlcanzado, mensaje
 from servidor.trabajo import memoria_maxima_mb
 
@@ -132,3 +133,20 @@ def test_el_registro_dice_lo_que_ha_costado_sin_el_nombre(cliente, caplog):
 def test_memoria_maxima():
     memoria = memoria_maxima_mb()
     assert memoria is None or 1 < memoria < 10_000
+
+
+# --- La IP real detrás del proxy del alojamiento (paso 11.1) ---------------------------
+
+def test_sin_proxies_cuenta_la_ip_de_la_conexion():
+    assert limites.ip_cliente("10.0.0.1", "1.2.3.4", proxies=0) == "10.0.0.1"
+
+
+def test_con_proxy_cuenta_la_ip_que_anade_el_proxy_y_no_la_inventada():
+    # El navegador manda «X-Forwarded-For: 6.6.6.6» y el proxy añade la IP real.
+    assert limites.ip_cliente("10.0.0.1", "6.6.6.6, 81.2.3.4", proxies=1) == "81.2.3.4"
+    assert limites.ip_cliente("10.0.0.1", "6.6.6.6, 81.2.3.4, 172.16.0.9", proxies=2) == "81.2.3.4"
+
+
+def test_sin_cabecera_cuenta_la_ip_de_la_conexion():
+    assert limites.ip_cliente("10.0.0.1", None, proxies=1) == "10.0.0.1"
+    assert limites.ip_cliente("10.0.0.1", "81.2.3.4", proxies=2) == "10.0.0.1"

@@ -63,6 +63,9 @@ CARPETA_TEMPORAL = os.environ.get("APA_CARPETA_TEMPORAL")          # None: la de
 ORIGENES = [o.strip() for o in os.environ.get("APA_ORIGENES", "http://localhost:3000").split(",") if o.strip()]
 REGISTRO = logging.getLogger("apa_facil.servidor")
 LIMITE = limites.Limite()                                          # paso 10.5: documentos al día por IP
+# Paso 11.1, temporal: /limite enseña a quien pregunta sus propias cabeceras de IP, para
+# saber cuántos proxies pone el alojamiento delante (APA_PROXIES). Apagado por defecto.
+DIAGNOSTICO_IP = os.environ.get("APA_DIAGNOSTICO_IP") == "1"
 if not REGISTRO.handlers:   # paso 10.5: que se vea en la terminal lo que cuesta cada documento (nivel INFO)
     _salida = logging.StreamHandler()
     _salida.setFormatter(logging.Formatter("%(levelname)s:     %(message)s"))
@@ -164,13 +167,23 @@ def salud():
 
 
 def _ip(peticion):
-    return peticion.client.host if peticion.client else ""
+    conexion = peticion.client.host if peticion.client else ""
+    return limites.ip_cliente(conexion, peticion.headers.get("x-forwarded-for"))
 
 
 @app.get("/limite")
 def limite(peticion: Request):
     """Paso 10.5: cuántos documentos puede procesar hoy quien pregunta (restantes: null si no hay límite)."""
-    return {"maximo": LIMITE.maximo or None, "restantes": LIMITE.restantes(_ip(peticion))}
+    respuesta = {"maximo": LIMITE.maximo or None, "restantes": LIMITE.restantes(_ip(peticion))}
+    if DIAGNOSTICO_IP:
+        respuesta["diagnostico_ip"] = {
+            "conexion": peticion.client.host if peticion.client else None,
+            "x_forwarded_for": peticion.headers.get("x-forwarded-for"),
+            "true_client_ip": peticion.headers.get("true-client-ip"),
+            "cf_connecting_ip": peticion.headers.get("cf-connecting-ip"),
+            "elegida": _ip(peticion),
+        }
+    return respuesta
 
 
 class _Rechazo(Exception):
